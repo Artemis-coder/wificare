@@ -1,0 +1,248 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ----------------------------------------
+// Utilisateurs & Authentification
+// ----------------------------------------
+model User {
+  id        String   @id @default(uuid())
+  name      String?
+  phone     String   @unique
+  role      Role     @default(CLIENT)
+  status    UserStatus @default(ACTIVE)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  clients     Client[]     @relation("ClientUsers")
+  tickets     Ticket[]     @relation("TechnicianTickets")
+  evaluations Evaluation[]
+}
+
+enum Role {
+  ADMIN
+  TECHNICIAN
+  CLIENT
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+// ----------------------------------------
+// Clients & Wi-Fi Zones
+// ----------------------------------------
+model Client {
+  id        String   @id @default(uuid())
+  name      String
+  contact   String
+  address   String?
+  latitude  Float?
+  longitude Float?
+  userId    String?
+  createdAt DateTime @default(now())
+
+  user      User?      @relation("ClientUsers", fields: [userId], references: [id])
+  wifiZones WifiZone[]
+  tickets   Ticket[]
+}
+
+model WifiZone {
+  id          String   @id @default(uuid())
+  clientId    String
+  name        String
+  location    String
+  createdAt   DateTime @default(now())
+
+  client      Client      @relation(fields: [clientId], references: [id])
+  equipments  Equipment[]
+  tickets     Ticket[]
+}
+
+model Equipment {
+  id           String   @id @default(uuid())
+  wifiZoneId   String
+  type         String   // e.g., Routeur, Switch, ONT
+  brand        String?
+  model        String?
+  serialNumber String?
+  createdAt    DateTime @default(now())
+
+  wifiZone     WifiZone @relation(fields: [wifiZoneId], references: [id])
+}
+
+// ----------------------------------------
+// Tickets & Interventions
+// ----------------------------------------
+model Ticket {
+  id           String   @id @default(uuid())
+  reference    String   @unique // e.g., #TK-2026-001
+  type         String   // Panne, Lenteur, Installation
+  priority     Priority @default(NORMAL)
+  status       TicketStatus @default(NEW)
+  scheduledFor DateTime?
+  description  String?
+  clientId     String
+  wifiZoneId   String
+  technicianId String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  client       Client       @relation(fields: [clientId], references: [id])
+  wifiZone     WifiZone     @relation(fields: [wifiZoneId], references: [id])
+  technician   User?        @relation("TechnicianTickets", fields: [technicianId], references: [id])
+  files        File[]
+  intervention Intervention?
+  quoteInvoice QuoteInvoice?
+  evaluation   Evaluation?
+}
+
+enum Priority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum TicketStatus {
+  NEW             // Nouveau
+  TO_VERIFY       // À vérifier
+  ASSIGNED        // Affecté
+  CONFIRMED       // Rendez-vous confirmé
+  EN_ROUTE        // En route
+  DIAGNOSING      // En diagnostic
+  PENDING_QUOTE   // Devis en attente
+  REPAIRING       // En réparation
+  COMPLETED       // Terminé
+  PENDING_PAYMENT // Paiement en attente
+  CLOSED          // Clôturé
+  CANCELED        // Annulé
+}
+
+// ----------------------------------------
+// Fichiers (Preuves)
+// ----------------------------------------
+model File {
+  id        String   @id @default(uuid())
+  ticketId  String
+  url       String
+  fileType  FileType // Photo, Video, Audio
+  createdAt DateTime @default(now())
+
+  ticket    Ticket   @relation(fields: [ticketId], references: [id])
+}
+
+enum FileType {
+  IMAGE
+  VIDEO
+  AUDIO
+  DOCUMENT
+}
+
+// ----------------------------------------
+// Interventions & Rapports
+// ----------------------------------------
+model Intervention {
+  id          String   @id @default(uuid())
+  ticketId    String   @unique
+  checklist   Json?    // e.g. { "router_restarted": true, "cable_checked": false }
+  diagnostic  String?
+  solution    String?
+  durationMin Int?
+  createdAt   DateTime @default(now())
+
+  ticket      Ticket   @relation(fields: [ticketId], references: [id])
+}
+
+// ----------------------------------------
+// Devis, Factures & Paiements
+// ----------------------------------------
+model QuoteInvoice {
+  id          String   @id @default(uuid())
+  ticketId    String   @unique
+  type        DocumentType
+  status      DocumentStatus @default(DRAFT)
+  totalAmount Float    @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  ticket      Ticket        @relation(fields: [ticketId], references: [id])
+  lines       InvoiceLine[]
+  payment     Payment?
+}
+
+enum DocumentType {
+  QUOTE
+  INVOICE
+}
+
+enum DocumentStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  PAID
+}
+
+model InvoiceLine {
+  id             String       @id @default(uuid())
+  quoteInvoiceId String
+  description    String
+  quantity       Int          @default(1)
+  unitPrice      Float
+  totalPrice     Float
+  
+  quoteInvoice   QuoteInvoice @relation(fields: [quoteInvoiceId], references: [id], onDelete: Cascade)
+}
+
+model Payment {
+  id             String       @id @default(uuid())
+  quoteInvoiceId String       @unique
+  amount         Float
+  channel        PaymentChannel
+  reference      String?
+  proofUrl       String?
+  status         PaymentStatus @default(PENDING)
+  createdAt      DateTime     @default(now())
+
+  quoteInvoice   QuoteInvoice @relation(fields: [quoteInvoiceId], references: [id])
+}
+
+enum PaymentChannel {
+  CASH
+  MOBILE_MONEY
+  BANK_TRANSFER
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+// ----------------------------------------
+// Évaluations
+// ----------------------------------------
+model Evaluation {
+  id        String   @id @default(uuid())
+  ticketId  String   @unique
+  clientId  String
+  rating    Int      // 1 to 5
+  comment   String?
+  createdAt DateTime @default(now())
+
+  ticket    Ticket   @relation(fields: [ticketId], references: [id])
+  client    User     @relation(fields: [clientId], references: [id])
+}
