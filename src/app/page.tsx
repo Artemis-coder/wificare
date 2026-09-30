@@ -3,6 +3,7 @@ import { TicketStatus, Priority } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
+import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,36 +13,43 @@ export default async function Dashboard() {
   if (!session) {
     redirect('/login');
   }
-  // Fetch data directly from Prisma in this Server Component
-  const openTickets = await prisma.ticket.count({
+
+  // Total Wi-Fi Zones
+  const totalZones = await prisma.wifiZone.count();
+
+  // Open Maintenance Tickets (Panne / Lenteur)
+  const openTicketsCount = await prisma.ticket.count({
     where: {
-      status: {
-        notIn: [TicketStatus.CLOSED, TicketStatus.CANCELED, TicketStatus.COMPLETED],
-      },
+      type: { notIn: ['Installation Antenne', 'Nouveau Routeur', 'Extension Couverture'] },
+      status: { notIn: [TicketStatus.CLOSED, TicketStatus.CANCELED, TicketStatus.COMPLETED] },
     },
   });
 
+  // Installation & Equipment Requests
+  const installationRequestsCount = await prisma.ticket.count({
+    where: {
+      type: { in: ['Installation Antenne', 'Nouveau Routeur', 'Extension Couverture', 'Nouvelle Installation'] },
+      status: { notIn: [TicketStatus.CLOSED, TicketStatus.CANCELED] },
+    },
+  });
+
+  // Urgent Interventions
   const urgentInterventions = await prisma.ticket.count({
     where: {
       priority: Priority.URGENT,
-      status: {
-        notIn: [TicketStatus.CLOSED, TicketStatus.CANCELED],
-      },
+      status: { notIn: [TicketStatus.CLOSED, TicketStatus.CANCELED] },
     },
   });
 
-  // Calculate pending payments
+  // Pending Payments
   const pendingInvoices = await prisma.quoteInvoice.findMany({
-    where: {
-      status: 'SENT', // Or any status representing pending payment
-    },
+    where: { status: 'SENT' },
   });
-  
   const pendingAmount = pendingInvoices.reduce((sum, inv) => sum + inv.totalAmount, 0);
 
-  // Recent interventions (tickets)
+  // Recent tickets/requests
   const recentTickets = await prisma.ticket.findMany({
-    take: 5,
+    take: 6,
     orderBy: { createdAt: 'desc' },
     include: {
       client: true,
@@ -50,88 +58,197 @@ export default async function Dashboard() {
     },
   });
 
-  const getStatusBadgeClass = (status: TicketStatus) => {
+  const isInstallationType = (type: string) => {
+    return ['Installation Antenne', 'Nouveau Routeur', 'Extension Couverture', 'Nouvelle Installation'].includes(type);
+  };
+
+  const getStatusBadge = (status: TicketStatus, type: string) => {
+    if (isInstallationType(type)) {
+      return (
+        <span className="badge badge-purple">
+          <span className="badge-dot"></span>
+          Installation ({status})
+        </span>
+      );
+    }
+
     switch (status) {
       case TicketStatus.NEW:
       case TicketStatus.TO_VERIFY:
-        return 'badge-neutral';
+        return (
+          <span className="badge badge-neutral">
+            <span className="badge-dot"></span>
+            Nouveau
+          </span>
+        );
       case TicketStatus.ASSIGNED:
       case TicketStatus.CONFIRMED:
       case TicketStatus.EN_ROUTE:
-        return 'badge-brand';
+        return (
+          <span className="badge badge-brand">
+            <span className="badge-dot"></span>
+            En cours
+          </span>
+        );
       case TicketStatus.DIAGNOSING:
       case TicketStatus.PENDING_QUOTE:
       case TicketStatus.REPAIRING:
-        return 'badge-warning';
+        return (
+          <span className="badge badge-warning">
+            <span className="badge-dot"></span>
+            Diagnostic / Reparation
+          </span>
+        );
       case TicketStatus.COMPLETED:
       case TicketStatus.CLOSED:
-        return 'badge-success';
+        return (
+          <span className="badge badge-success">
+            <span className="badge-dot"></span>
+            Terminé
+          </span>
+        );
       default:
-        return 'badge-neutral';
+        return (
+          <span className="badge badge-neutral">
+            <span className="badge-dot"></span>
+            {status}
+          </span>
+        );
     }
   };
 
   return (
     <div>
-      <div className="page-header">
+      {/* Hero Welcome Banner */}
+      <div className="hero-banner">
         <div>
-          <h1>Vue d'ensemble</h1>
-          <p className="body-m" style={{ color: 'var(--text-secondary)' }}>
-            Suivez l'activité de vos Wi-Fi Zones en temps réel.
+          <span style={{ fontSize: '13px', fontWeight: 600, color: '#a5b4fc', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Portail Administrateur WiFiCare
+          </span>
+          <h1 style={{ color: '#ffffff', margin: '6px 0 8px 0', fontSize: '28px' }}>
+            Bienvenue, {session.user?.name || 'Administrateur'} 👋
+          </h1>
+          <p style={{ color: '#c7d2fe', fontSize: '14px', maxWidth: '520px' }}>
+            Supervisez vos zones Wi-Fi, validez les demandes d'installation d'antennes et coordonnez les techniciens en temps réel.
           </p>
         </div>
-        <button className="btn btn-primary btn-lg">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Nouveau ticket
-        </button>
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <Link href="/tickets/new" className="btn btn-primary btn-lg" style={{ background: '#ffffff', color: '#312e81', boxShadow: '0 4px 14px rgba(0,0,0,0.15)' }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Nouvelle demande / Ticket
+          </Link>
+        </div>
       </div>
 
+      {/* KPI Cards Grid */}
       <div className="dashboard-grid">
         <div className="kpi-card">
-          <div className="kpi-label">Tickets ouverts</div>
-          <div className="kpi-value">{openTickets}</div>
-          <div className="kpi-trend neutral">
-            Total en cours
+          <div className="kpi-header">
+            <div className="kpi-label">Wi-Fi Zones Actives</div>
+            <div className="kpi-icon-wrapper blue">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+            </div>
           </div>
-        </div>
-        
-        <div className="kpi-card">
-          <div className="kpi-label">Interventions urgentes</div>
-          <div className="kpi-value" style={{ color: 'var(--error-600)' }}>{urgentInterventions}</div>
-          <div className="kpi-trend negative">
-            À traiter immédiatement
-          </div>
-        </div>
-
-        <div className="kpi-card">
-          <div className="kpi-label">Interventions du jour</div>
-          <div className="kpi-value">{recentTickets.length}</div>
+          <div className="kpi-value">{totalZones}</div>
           <div className="kpi-trend positive">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-            Récentes
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+            100% de disponibilité du parc
           </div>
         </div>
 
         <div className="kpi-card">
-          <div className="kpi-label">Paiements en attente</div>
-          <div className="kpi-value">{pendingAmount.toLocaleString('fr-FR')} FCFA</div>
+          <div className="kpi-header">
+            <div className="kpi-label">Demandes d'Installation</div>
+            <div className="kpi-icon-wrapper purple">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+            </div>
+          </div>
+          <div className="kpi-value">{installationRequestsCount}</div>
           <div className="kpi-trend neutral">
-            Sur {pendingInvoices.length} factures
+            Antennes & Nouveaux Routeurs
+          </div>
+        </div>
+
+        <div className="kpi-card">
+          <div className="kpi-header">
+            <div className="kpi-label">Pannes & Incidents</div>
+            <div className="kpi-icon-wrapper warning">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            </div>
+          </div>
+          <div className="kpi-value">{openTicketsCount}</div>
+          <div className="kpi-trend negative">
+            dont {urgentInterventions} urgente(s)
+          </div>
+        </div>
+
+        <div className="kpi-card">
+          <div className="kpi-header">
+            <div className="kpi-label">Factures en attente</div>
+            <div className="kpi-icon-wrapper success">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+            </div>
+          </div>
+          <div className="kpi-value" style={{ fontSize: '24px' }}>{pendingAmount.toLocaleString('fr-FR')} FCFA</div>
+          <div className="kpi-trend neutral">
+            {pendingInvoices.length} devis/facture(s) émis
           </div>
         </div>
       </div>
 
-      <div className="data-table-wrapper">
+      {/* Quick Actions Bar */}
+      <h3 style={{ marginBottom: '16px' }}>Actions Rapides</h3>
+      <div className="actions-grid">
+        <Link href="/tickets/new" className="action-card">
+          <div className="action-icon" style={{ backgroundColor: 'var(--accent-purple-light)', color: 'var(--accent-purple)' }}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          </div>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: '15px' }}>Demande d'Installation</div>
+            <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Nouvelle antenne, routeur ou extension de couverture</div>
+          </div>
+        </Link>
+
+        <Link href="/tickets/new" className="action-card">
+          <div className="action-icon" style={{ backgroundColor: 'var(--error-50)', color: 'var(--error-600)' }}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+          </div>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: '15px' }}>Signaler un Dysfonctionnement</div>
+            <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Panne totale, lenteur ou coupure de signal</div>
+          </div>
+        </Link>
+
+        <Link href="/zones" className="action-card">
+          <div className="action-icon" style={{ backgroundColor: 'var(--brand-50)', color: 'var(--brand-600)' }}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+          </div>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: '15px' }}>Déclarer une Wi-Fi Zone</div>
+            <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Enregistrer un nouvel emplacement ou client</div>
+          </div>
+        </Link>
+      </div>
+
+      {/* Main Table: Demandes & Interventions */}
+      <div className="data-table-wrapper" style={{ marginTop: '32px' }}>
         <div className="data-table-header">
-          <h3>Interventions récentes</h3>
-          <button className="btn btn-secondary btn-md">Voir tout</button>
+          <div>
+            <h3 style={{ margin: 0 }}>Dernières Demandes & Interventions</h3>
+            <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Installations d'antennes, équipements et dépannages urgents</span>
+          </div>
+          <Link href="/tickets" className="btn btn-secondary btn-md">
+            Voir tout ({recentTickets.length})
+          </Link>
         </div>
+        
         <table className="data-table">
           <thead>
             <tr>
               <th>Référence</th>
-              <th>Client / Zone</th>
-              <th>Problème</th>
+              <th>Client / Emplacement</th>
+              <th>Type de demande</th>
+              <th>Priorité</th>
               <th>Technicien</th>
               <th>Statut</th>
             </tr>
@@ -139,21 +256,45 @@ export default async function Dashboard() {
           <tbody>
             {recentTickets.map((ticket) => (
               <tr key={ticket.id}>
-                <td>{ticket.reference}</td>
+                <td style={{ fontWeight: 700, color: 'var(--brand-600)' }}>{ticket.reference}</td>
                 <td>
-                  <div style={{ fontWeight: 500 }}>{ticket.wifiZone.name}</div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{ticket.client.name}</div>
+                  <div style={{ fontWeight: 600 }}>{ticket.wifiZone.name}</div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{ticket.client.name} • {ticket.wifiZone.location}</div>
                 </td>
-                <td>{ticket.type}</td>
-                <td>{ticket.technician?.name || 'Non affecté'}</td>
-                <td><span className={`badge ${getStatusBadgeClass(ticket.status)}`}>{ticket.status}</span></td>
+                <td style={{ fontWeight: 500 }}>
+                  {isInstallationType(ticket.type) ? (
+                    <span style={{ color: 'var(--accent-purple)', fontWeight: 600 }}>📡 {ticket.type}</span>
+                  ) : (
+                    <span>🛠️ {ticket.type}</span>
+                  )}
+                </td>
+                <td>
+                  {ticket.priority === Priority.URGENT ? (
+                    <span className="badge badge-warning">🚨 URGENT</span>
+                  ) : (
+                    <span className="badge badge-neutral">{ticket.priority}</span>
+                  )}
+                </td>
+                <td>
+                  {ticket.technician ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <div style={{ width: '26px', height: '26px', borderRadius: '50%', backgroundColor: 'var(--brand-100)', color: 'var(--brand-700)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 700 }}>
+                        {ticket.technician.name?.[0] || 'T'}
+                      </div>
+                      <span style={{ fontWeight: 500 }}>{ticket.technician.name}</span>
+                    </div>
+                  ) : (
+                    <span style={{ color: 'var(--text-disabled)', fontSize: '13px' }}>Non assigné</span>
+                  )}
+                </td>
+                <td>{getStatusBadge(ticket.status, ticket.type)}</td>
               </tr>
             ))}
-            
+
             {recentTickets.length === 0 && (
               <tr>
-                <td colSpan={5} style={{ textAlign: 'center', padding: '32px' }}>
-                  Aucune intervention récente.
+                <td colSpan={6} style={{ textAlign: 'center', padding: '36px', color: 'var(--text-secondary)' }}>
+                  Aucune demande en cours.
                 </td>
               </tr>
             )}
