@@ -101,6 +101,13 @@ void main() {
   /// du suivi.
   var status = 'ASSIGNED';
 
+  // La demande peut porter un devis, ce qui change les actions proposées.
+  var hasQuote = false;
+
+  // Le statut du devis commande la réparation : `SENT` la bloque, `ACCEPTED`
+  // la débloque, `REJECTED` rend la demande au technicien.
+  var quoteStatus = 'SENT';
+
   setUp(() {
     status = 'ASSIGNED';
     notifications = _seedNotifications();
@@ -111,6 +118,12 @@ void main() {
     // installe une plateforme complète à la place.
     installAbsentLocationPlatform();
     addTearDown(removeLocationPlatform);
+
+    // Autorisation de localisation accordée par défaut : le suivi la redemande
+    // au moment du départ, et un test qui ne s'en occupe pas doit passer par
+    // là sans être bloqué par une boîte de dialogue qu'aucun écran ne montre.
+    installFakeGeolocator();
+    addTearDown(removeFakeGeolocator);
     FlutterSecureStorage.setMockInitialValues({});
     adapter = FakeHttpAdapter({
       '/auth/login': (_, _) => {
@@ -135,6 +148,11 @@ void main() {
           '#TK-2026-001',
           status,
           technicianId: 'tech-1',
+          // Un devis envoyé retire l'annulation au technicien : le client en a
+          // connaissance et doit trancher.
+          quoteInvoice: hasQuote
+              ? FakeApiData.quote(ticketId: 't-tech-1', status: quoteStatus)
+              : null,
         ),
       },
       '/tickets/t-tech-1/status': (path, body) {
@@ -219,7 +237,9 @@ void main() {
     });
   });
 
-  Widget buildApp() {
+  /// [onboardingSeen] vaut `true` par défaut : l'écran d'accueil des
+  /// autorisations est vérifié ailleurs, il ne doit pas détourner ces parcours.
+  Widget buildApp({bool onboardingSeen = true}) {
     final dio = Dio();
     dio.httpClientAdapter = adapter;
     final refreshDio = Dio()..httpClientAdapter = adapter;
@@ -234,6 +254,7 @@ void main() {
             refreshDio: refreshDio,
           ),
         ),
+        onboardingSeenProvider.overrideWithValue(onboardingSeen),
       ],
       child: const WiFiCareApp(),
     );
@@ -336,6 +357,84 @@ void main() {
     await settle(tester);
     expect(find.text('#TK-2026-001'), findsOneWidget);
     expect(find.text('#TK-2026-002'), findsNothing);
+  });
+
+  testWidgets('technicien : le devis commande les actions possibles', (
+    tester,
+  ) async {
+    FlutterSecureStorage.setMockInitialValues(Map.of(_session));
+    await pumpApp(tester);
+
+    // Sans devis, le technicien peut encore signaler une impossibilité.
+    await tester.tap(find.text('Demandes'));
+    await settle(tester);
+    await tester.tap(find.text('#TK-2026-001'));
+    await settle(tester);
+    expect(find.text('Signaler une impossibilité'), findsOneWidget);
+
+    // Devis envoyé : le client en a connaissance et doit trancher. La
+    // réparation disparaît des actions disponibles, et l'annulation avec elle.
+    hasQuote = true;
+    status = 'PENDING_QUOTE';
+    await tester.pumpWidget(buildApp());
+    await settle(tester, steps: 20);
+    await tester.tap(find.text('Demandes'));
+    await settle(tester);
+    await tester.tap(find.text('#TK-2026-001'));
+    await settle(tester, steps: 20);
+
+    expect(find.text('Signaler une impossibilité'), findsNothing);
+    expect(find.text('Passer en réparation'), findsNothing);
+    expect(
+      find.textContaining('attend la décision du client'),
+      findsOneWidget,
+      reason: 'le technicien doit comprendre pourquoi le bouton manque',
+    );
+
+    // Devis accepté : la réparation redevient possible.
+    quoteStatus = 'ACCEPTED';
+    await tester.pumpWidget(buildApp());
+    await settle(tester, steps: 20);
+    await tester.tap(find.text('Demandes'));
+    await settle(tester);
+    await tester.tap(find.text('#TK-2026-001'));
+    await settle(tester, steps: 20);
+
+    expect(find.text('Passer en réparation'), findsOneWidget);
+    expect(find.text('Signaler une impossibilité'), findsNothing);
+  });
+
+  testWidgets('technicien : le refus du devis rend la demande', (
+    tester,
+  ) async {
+    FlutterSecureStorage.setMockInitialValues(Map.of(_session));
+
+    // L'état est posé avant le premier chargement : l'application lit la
+    // demande au démarrage, la muter ensuite ne relirait pas la base.
+    hasQuote = true;
+    quoteStatus = 'REJECTED';
+    status = 'REPAIRING';
+
+    await pumpApp(tester);
+    await tester.tap(find.text('Demandes'));
+    await settle(tester);
+    await tester.tap(find.text('#TK-2026-001'));
+    await settle(tester, steps: 20);
+
+    // Un devis écarté ne lie plus personne : la demande est déjà en
+    // réparation, le technicien peut la mener à son terme, corriger son devis
+    // ou signaler une impossibilité.
+    expect(find.text('Marquer comme terminée'), findsOneWidget);
+    expect(find.text('Envoyer un devis au client'), findsOneWidget);
+
+    // Le bouton d'impossibilité est en bas de la carte d'action : il faut
+    // descendre, sinon son absence ne prouverait rien.
+    await tester.scrollUntilVisible(
+      find.text('Signaler une impossibilité'),
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(find.text('Signaler une impossibilité'), findsOneWidget);
   });
 
   testWidgets('technicien : faire avancer une demande depuis le détail', (

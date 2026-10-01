@@ -104,6 +104,16 @@ export async function POST(
       );
     }
 
+    // On ne règle pas un devis qu'on n'a pas accepté : ce serait payer pour
+    // autoriser une intervention, et le client perdrait le droit de refuser en
+    // gardant son argent. Le refus se décide avant le règlement, jamais par lui.
+    if (invoice.status !== "ACCEPTED") {
+      return NextResponse.json(
+        { error: "Acceptez le devis avant de le régler" },
+        { status: 409 }
+      );
+    }
+
     if (invoice.totalAmount <= 0) {
       return NextResponse.json(
         { error: "Ce devis ne comporte aucun montant à régler" },
@@ -128,16 +138,23 @@ export async function POST(
         data: { status: "PAID" },
       });
 
-      await tx.ticket.update({
-        where: { id },
-        data: { status: TicketStatus.CLOSED },
-      });
+      // Régler ne clôt pas la demande. Le client paie un travail qu'il a
+      // accepté ; il ne décide pas que le travail est fait, et la demande peut
+      // même être réglée avant que le technicien n'ait fini. La demande
+      // n'avance donc que si le travail était déjà déclaré terminé — sinon elle
+      // reste où elle est, et c'est le technicien qui la solde.
+      if (ticket.status === TicketStatus.COMPLETED) {
+        await tx.ticket.update({
+          where: { id },
+          data: { status: TicketStatus.PENDING_PAYMENT },
+        });
+      }
 
       return created;
     });
 
-    // Le technicien doit savoir que l'intervention est payée : c'est lui qui
-    // encaisse et qui clôt administrativement la demande.
+    // Le technicien doit savoir que le devis est réglé : c'est lui qui encaisse
+    // sur place, et lui qui solde ensuite la demande.
     if (ticket.technicianId) {
       await notify({
         userIds: [ticket.technicianId],

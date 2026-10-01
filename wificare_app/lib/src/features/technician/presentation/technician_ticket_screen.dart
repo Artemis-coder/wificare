@@ -6,6 +6,8 @@ import '../../../core/config/env.dart';
 import '../../../core/domain/enums.dart';
 import '../../../core/domain/models.dart';
 import '../../../core/network/api_exception.dart';
+import '../../../core/permissions/permissions_service.dart';
+import '../../../core/widgets/trip_map_card.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/formatters.dart';
@@ -188,9 +190,40 @@ class _TechnicianTicketScreenState
           onRetry: () =>
               ref.invalidate(technicianTicketDetailProvider(widget.ticketId)),
         ),
-        data: (ticket) {
-          final next = TicketStatus.transitionsFrom(ticket.status);
+data: (ticket) {
           final tracking = ref.watch(technicianTrackingProvider);
+
+          // Un devis est livalent sur la demande : dès qu'il existe, le client
+          // en a connaissance et tranche. Voir pourquoi plus bas.
+          final hasQuote = ticket.quoteInvoice != null;
+
+          // La réparation se décide sur un devis accepté, pas sur un devis
+          // rédigé : c'est le client qui autorise qu'on touche à son
+          // installation. Sans acceptation, le technicien peut encore corriger
+          // son devis ou annuler — pas réparer.
+          final quoteAccepted =
+              ticket.quoteInvoice?.status == DocumentStatus.accepted;
+
+          // Le refus ne laisse pas la demande coincée : il la rend au
+          // technicien, qui peut corriger son devis ou signaler une impossibilité.
+          final quoteRefused =
+              ticket.quoteInvoice?.status == DocumentStatus.rejected;
+
+          // Le devis ne retire pas au technicien la main sur sa demande : il
+          // retire seulement la réparation tant que le client n'a pas accepté.
+          // La contrainte ne porte que sur le passage depuis un devis en
+          // attente — sans devis, réparer directement reste possible, et c'est
+          // le cas courant d'une panne qui ne demande aucune pièce.
+          final awaitingQuoteDecision = ticket.status == TicketStatus.pendingQuote;
+
+          final next = TicketStatus.transitionsFrom(ticket.status)
+              .where(
+                (status) =>
+                    status != TicketStatus.repairing ||
+                    !awaitingQuoteDecision ||
+                    quoteAccepted,
+              )
+              .toList();
 
           return ListView(
             padding: const EdgeInsets.fromLTRB(
@@ -299,6 +332,18 @@ class _TechnicianTicketScreenState
                 const SizedBox(height: AppSpacing.md),
               ],
 
+              // La même carte que chez le client, vue du technicien : il voit
+              // exactement ce que voit le client, donc il ne se trompe pas sur
+              // l'état du trajet en se fiant à son propre écran.
+              if (ticket.status == TicketStatus.enRoute &&
+                  (ticket.tracking?.hasRoute ?? false)) ...[
+                TripMapCard(
+                  tracking: ticket.tracking!,
+                  technicianName: 'Vous',
+                ),
+                const SizedBox(height: AppSpacing.md),
+              ],
+
               if (ticket.files.isNotEmpty) ...[
                 AppCard(
                   child: Column(
@@ -368,6 +413,42 @@ class _TechnicianTicketScreenState
                 const SizedBox(height: AppSpacing.md),
               ],
 
+              // La réparation disparaît des actions disponibles tant que le devis
+              // n'est pas accepté. Le dire explicitement évite que le bouton
+              // manquant passe pour un défaut : l'attente est normale, elle a
+              // un auteur et une issue.
+              if (awaitingQuoteDecision && !quoteAccepted)
+                AppCard(
+                  child: Row(
+                    children: [
+                      Icon(
+                        quoteRefused
+                            ? Icons.edit_note_rounded
+                            : Icons.hourglass_top_rounded,
+                        color: quoteRefused
+                            ? colors.warning
+                            : colors.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: Text(
+                          quoteRefused
+                              ? 'Le client a refusé le devis. Corrigez-le, ou '
+                                  'signalez une impossibilité si rien ne peut '
+                                  'être fait.'
+                              : 'Le devis attend la décision du client. Vous '
+                                  'pourrez lancer la réparation dès qu\'il '
+                                  'l\'aura accepté.',
+                          style: TextStyle(
+                            color: colors.onSurface,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
               // Action principale : faire avancer la demande.
               if (next.isNotEmpty) ...[
                 const SectionHeader(title: 'Faire avancer'),
@@ -431,7 +512,15 @@ class _TechnicianTicketScreenState
                   ),
                 ),
 
-              if (ticket.status.isOpen && next.contains(TicketStatus.canceled))
+              // Le devis existe, le client en a connaissance et doit décider :
+              // une annulation depuis ici reviendrait à retirer un devis sous le
+              // nez de quelqu'un qui le lit, et à le laisser attendre une
+              // intervention qui n'a plus de raison d'être. Un devis refusé, en
+              // revanche, ne lies plus personne : le client l'a écarté et la
+              // demande lui revient.
+              if ((!hasQuote || quoteRefused) &&
+                  ticket.status.isOpen &&
+                  next.contains(TicketStatus.canceled))
                 Padding(
                   padding: const EdgeInsets.only(top: AppSpacing.sm),
                   child: AppButton(
@@ -517,6 +606,27 @@ class _TrackingCard extends StatelessWidget {
             InfoRow(
               label: 'Restant pour le client',
               value: _remaining,
+            ),
+          ],
+          // Un refus définitif ne se rattrape pas en réessayant : Android
+          // n'affichera plus de dialogue. Sans ce bouton, le technicien n'a
+          // aucun moyen de rétablir le suivi sans quitter l'application.
+          if (!state.active && state.message != null) ...[
+            const Divider(),
+            Text(
+              state.message!,
+              style: TextStyle(
+                color: context.colors.error,
+                fontSize: 13,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            AppButton(
+              label: 'Ouvrir les réglages',
+              icon: Icons.settings_outlined,
+              variant: AppButtonVariant.secondary,
+              onPressed: () => PermissionsService.openSettings(),
             ),
           ],
         ],

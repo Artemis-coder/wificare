@@ -49,4 +49,18 @@ class InvoiceRepository {
     final response = await _api.get<Map<String, dynamic>>('/quote-invoices/$id');
     return QuoteInvoice.fromJson(response['data'] as Map<String, dynamic>);
   }
+
+  /// Enregistre la décision du client sur le devis.
+  ///
+  /// Accepter et refuser sont deux gestes distincts du règlement : le client
+  /// autorise ou non le travail, puis paie. Aucun montant n'est transmis ici — le
+  /// serveur n'a pas à se demander ce que le client a compris du devis.
+  Future<QuoteInvoice> decide(String id, {required bool accept}) async {
+    final response = await _api.patch<Map<String, dynamic>>(
+      '/quote-invoices/$id/decision',
+      data: {'decision': accept ? 'ACCEPT' : 'REJECT'},
+    );
+
+    return QuoteInvoice.fromJson(response['data'] as Map<String, dynamic>);
+  }
 }

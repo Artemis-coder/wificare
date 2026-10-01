@@ -60,6 +60,10 @@ export async function GET(request: NextRequest) {
             distanceMeters: row.distanceMeters,
             recordedAt: row.recordedAt,
             technicianName: row.technician.name ?? ticket.technician?.name ?? null,
+            latitude: row.latitude,
+            longitude: row.longitude,
+            destinationLatitude: ticket.wifiZone?.latitude ?? null,
+            destinationLongitude: ticket.wifiZone?.longitude ?? null,
           }
         : null;
 

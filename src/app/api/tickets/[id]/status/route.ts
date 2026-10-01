@@ -32,7 +32,7 @@ export async function PATCH(
 
     const existing = await prisma.ticket.findUnique({
       where: { id },
-      include: { client: true, technician: true },
+      include: { client: true, technician: true, quoteInvoice: true },
     });
 
     if (!existing) {
@@ -51,6 +51,26 @@ export async function PATCH(
       return NextResponse.json(
         { error: "Seul le technicien peut faire avancer une demande" },
         { status: 403 }
+      );
+    }
+
+    // Une réparation ne démarre pas sur un devis que le client n'a pas
+    // accepté : c'est lui qui autorise qu'on touche à son installation, et le
+    // technicien qui a rédigé le devis ne peut pas s'accorder lui-même cette
+    // autorisation. Le refus ramène la demande en réparation, où il reste
+    // légitime d'intervenir — d'où la condition ci-dessous, qui ne vise que le
+    // passage depuis un devis en attente.
+    if (
+      existing.status === TicketStatus.PENDING_QUOTE &&
+      status === TicketStatus.REPAIRING &&
+      existing.quoteInvoice?.status !== "ACCEPTED"
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Le client doit accepter le devis avant que la réparation puisse commencer.",
+        },
+        { status: 409 }
       );
     }
 

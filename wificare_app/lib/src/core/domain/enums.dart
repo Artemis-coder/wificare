@@ -292,7 +292,10 @@ enum AppNotificationType {
   ticketSubmitted('TICKET_SUBMITTED', Icons.campaign_outlined),
   ticketAssigned('TICKET_ASSIGNED', Icons.assignment_ind_outlined),
   ticketStatusChanged('TICKET_STATUS_CHANGED', Icons.sync_alt_rounded),
-  ticketCanceled('TICKET_CANCELED', Icons.cancel_outlined);
+  ticketCanceled('TICKET_CANCELED', Icons.cancel_outlined),
+  quoteSent('QUOTE_SENT', Icons.request_quote_outlined),
+  quoteAccepted('QUOTE_ACCEPTED', Icons.check_circle_outline_rounded),
+  quoteRejected('QUOTE_REJECTED', Icons.cancel_outlined);
 
   const AppNotificationType(this.wire, this.icon);
 

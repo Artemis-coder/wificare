@@ -299,6 +299,10 @@ class TicketTracking {
     required this.distanceMeters,
     required this.recordedAt,
     required this.technicianName,
+    required this.latitude,
+    required this.longitude,
+    required this.destinationLatitude,
+    required this.destinationLongitude,
   });
 
   /// Le technicien partage-t-il encore sa position ?
@@ -313,12 +317,32 @@ class TicketTracking {
   final DateTime? recordedAt;
   final String? technicianName;
 
+  /// Position du technicien : le point A de la carte, l'origine du trajet.
+  final double? latitude;
+  final double? longitude;
+
+  /// Position de la zone du client : le point B, l'arrivée. `null` tant qu'il
+  /// n'a pas partagé sa position.
+  final double? destinationLatitude;
+  final double? destinationLongitude;
+
+  /// Le trajet est-il dessinéable des deux côtés ?
+  ///
+  /// Sans destination, une carte ne montrerait qu'un point immobile dans le
+  /// vide : elle n'apporterait rien et laisserait croire à un suivi cassé. La
+  /// carte n'apparaît donc que lorsque les deux points existent.
+  bool get hasRoute => latitude != null && destinationLatitude != null;
+
   factory TicketTracking.fromJson(Map<String, dynamic> json) => TicketTracking(
     active: json['active'] == true,
     etaMinutes: JsonX.integerOrNull(json['etaMinutes']),
     distanceMeters: JsonX.integerOrNull(json['distanceMeters']),
     recordedAt: JsonX.date(json['recordedAt']),
     technicianName: JsonX.strOrNull(json['technicianName']),
+    latitude: JsonX.decimalOrNull(json['latitude']),
+    longitude: JsonX.decimalOrNull(json['longitude']),
+    destinationLatitude: JsonX.decimalOrNull(json['destinationLatitude']),
+    destinationLongitude: JsonX.decimalOrNull(json['destinationLongitude']),
   );
 }
 

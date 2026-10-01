@@ -103,6 +103,10 @@ enum NotificationType {
   TICKET_CANCELED
   /// Le technicien a envoyé un devis au client.
   QUOTE_SENT
+  /// Le client a accepté le devis.
+  QUOTE_ACCEPTED
+  /// Le client a refusé le devis.
+  QUOTE_REJECTED
   /// Le client a réglé le devis.
   PAYMENT_RECEIVED
   /// Un client a déposé un avis sur l'intervention du technicien.
@@ -370,9 +374,17 @@ model QuoteInvoice {
   notes       String?
 
   /// Date d'envoi au client. Distincte de `createdAt`, qui date la rédaction.
-  sentAt    DateTime?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  sentAt DateTime?
+  /// Date de la décision du client sur le devis.
+  ///
+  /// Elle est conservée même après règlement : « envoyé le », « accepté le »
+  /// et « payé le » sont trois faits distincts, et seul le dernier clôt le
+  /// dossier. La garder évite de lire l'acceptation dans l'horodatage d'un
+  /// paiement effectué des semaines plus tard.
+  acceptedAt DateTime?
+  rejectedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
   ticket  Ticket        @relation(fields: [ticketId], references: [id])
   lines   InvoiceLine[]

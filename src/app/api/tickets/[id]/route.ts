@@ -18,6 +18,17 @@ export type TicketTrackingSummary = {
   distanceMeters: number | null;
   recordedAt: Date;
   technicianName: string | null;
+  /// Position du technicien, pour la carte de suivi.
+  ///
+  /// Le client voit déjà où se trouve le technicien qui vient vers sa zone :
+  /// c'est l'objet même de l'ETA. Les cacher ne protégeait personne, puisque la
+  /// position ne quitte jamais le trajet en cours.
+  latitude: number;
+  longitude: number;
+  /// Position de la zone du client, point d'arrivée. `null` tant qu'il n'a
+  /// jamais partagé sa position.
+  destinationLatitude: number | null;
+  destinationLongitude: number | null;
 };
 
 export async function GET(
@@ -71,6 +82,10 @@ export async function GET(
           // envoyé la position : la demande peut depuis avoir été réaffectée.
           technicianName:
             trackingRow.technician.name ?? ticket.technician?.name ?? null,
+          latitude: trackingRow.latitude,
+          longitude: trackingRow.longitude,
+          destinationLatitude: ticket.wifiZone?.latitude ?? null,
+          destinationLongitude: ticket.wifiZone?.longitude ?? null,
         }
       : null;
 

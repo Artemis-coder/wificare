@@ -12,6 +12,7 @@ import '../../../core/widgets/states.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/widgets/app_button.dart';
 import '../application/invoice_providers.dart';
+import '../../tickets/application/ticket_providers.dart';
 import 'payment_sheet.dart';
 
 final invoiceDetailProvider = FutureProvider.family<QuoteInvoice, String>((
@@ -98,6 +99,61 @@ class _Content extends ConsumerWidget {
         showAppSnackBar(
           context,
           'Paiement impossible. Réessayez.',
+          isError: true,
+        );
+      }
+    }
+  }
+
+  /// Enregistre la décision du client sur le devis.
+  ///
+  /// Le refus est demandé explicitement : il renvoie la demande en réparation
+  /// et il est définitif, il ne doit donc pas pouvoir être déclenché par un
+  /// appui imprudent sur un bouton placé à côté d'un autre.
+  Future<void> _decide(BuildContext context, WidgetRef ref, bool accept) async {
+    if (!accept) {
+      final confirmed = await confirmDialog(
+        context,
+        title: 'Refuser le devis',
+        message:
+            'Le technicien sera prévenu et pourra corriger son devis. '
+            'Votre demande reste ouverte.',
+        confirmLabel: 'Refuser',
+        cancelLabel: 'Annuler',
+        destructive: true,
+      );
+
+      if (!confirmed || !context.mounted) return;
+    }
+
+    try {
+      await ref.read(invoiceRepositoryProvider).decide(invoice.id, accept: accept);
+
+      // Le détail du devis change de statut, mais aussi la demande : c'est elle
+      // qui décide si le technicien peut réparer. Les deux sont relus, sinon le
+      // client verrait son refus confirmé alors que la demande reste bloquée.
+      ref.invalidate(invoiceDetailProvider(invoice.id));
+
+      final ticketId = invoice.ticketId;
+      if (ticketId != null) {
+        ref.invalidate(ticketDetailProvider(ticketId));
+      }
+
+      if (context.mounted) {
+        showAppSnackBar(
+          context,
+          accept
+              ? 'Devis accepté. Le technicien peut lancer la réparation.'
+              : 'Devis refusé. Le technicien peut le corriger.',
+        );
+      }
+    } on ApiException catch (error) {
+      if (context.mounted) showAppSnackBar(context, error.message, isError: true);
+    } catch (_) {
+      if (context.mounted) {
+        showAppSnackBar(
+          context,
+          'Décision impossible. Réessayez.',
           isError: true,
         );
       }
@@ -253,7 +309,34 @@ class _Content extends ConsumerWidget {
             ),
           ),
         ],
-        if (payment == null && invoice.totalAmount > 0) ...[
+        // Un devis en attente de décision ne se règle pas : régler serait
+        // accepter tacitement, et le client perdrait le droit de refuser en
+        // gardant son argent. Les deux gestes sont séparés, donc les deux
+        // boutons sont séparés.
+        if (invoice.status == DocumentStatus.sent) ...[
+          const SizedBox(height: AppSpacing.md),
+          SectionHeader(
+            title: 'Votre décision',
+            subtitle:
+                'Acceptez pour autoriser le technicien à réparer, ou '
+                'refusez pour qu\'il corrige son devis.',
+          ),
+          AppButton(
+            label: 'Accepter le devis',
+            icon: Icons.check_circle_outline_rounded,
+            onPressed: () => _decide(context, ref, true),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          AppButton(
+            label: 'Refuser le devis',
+            icon: Icons.cancel_outlined,
+            variant: AppButtonVariant.outline,
+            onPressed: () => _decide(context, ref, false),
+          ),
+        ],
+        if (payment == null &&
+            invoice.totalAmount > 0 &&
+            invoice.status == DocumentStatus.accepted) ...[
           const SizedBox(height: AppSpacing.md),
           AppButton(
             label: 'Régler le devis',
