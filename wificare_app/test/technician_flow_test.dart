@@ -425,6 +425,10 @@ void main() {
     // réparation, le technicien peut la mener à son terme, corriger son devis
     // ou signaler une impossibilité.
     expect(find.text('Marquer comme terminée'), findsOneWidget);
+
+    // Corriger son devis après un refus doit rester possible : le client a
+    // écarté un montant, pas l'intervention. Sans cela, le refus laisserait la
+    // demande sans aucune porte de sortie.
     expect(find.text('Envoyer un devis au client'), findsOneWidget);
 
     // Le bouton d'impossibilité est en bas de la carte d'action : il faut

@@ -120,9 +120,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (ticket.quoteInvoice && ticket.quoteInvoice.status !== "DRAFT") {
+    // Un devis remplace le précédent tant qu'il n'a pas été **tranché** : un
+    // brouillon n'a jamais été vu, et un devis **refusé** ne vaut plus rien. Le
+    // client a écarté ce montant, il n'a pas rejeté le principe d'une
+    // intervention : il faut donc pouvoir lui en proposer un autre, sinon le
+    // refus laisserait la demande sans aucune porte de sortie.
+    //
+    // En revanche un devis **accepté** est un engagement, et `PAID` une
+    // facture : ni l'un ni l'autre ne se réécrit.
+    const quoteSettled =
+      ticket.quoteInvoice?.status === "ACCEPTED" ||
+      ticket.quoteInvoice?.status === "PAID";
+
+    if (quoteSettled) {
       return NextResponse.json(
-        { error: "Un devis a déjà été envoyé pour cette demande" },
+        { error: "Ce devis est accepté : il ne peut plus être modifié" },
         { status: 409 }
       );
     }
@@ -180,6 +192,11 @@ export async function POST(request: NextRequest) {
             totalAmount,
             notes: typeof notes === "string" && notes.trim() ? notes.trim() : null,
             sentAt: new Date(),
+            // Le refus précédent ne vaut plus pour ce devis-ci : le laisser
+            // afficher ferait croire que le nouveau montant a lui aussi été
+            // refusé.
+            rejectedAt: null,
+            acceptedAt: null,
             lines: { create: prepared },
           },
           include: { lines: true },

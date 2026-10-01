@@ -154,10 +154,11 @@ class _TechnicianTicketScreenState
   /// Le devis se rédige une fois le diagnostic posé, ou pendant la réparation
   /// lorsque des travaux supplémentaires s'avèrent nécessaires.
   ///
-  /// `PENDING_QUOTE` en est exclu : un devis attend alors une décision du
-  /// client, et lui en proposer un autre pendant qu'il tranche le laisserait
-  /// sans savoir lequel payer. Le serveur refuse de toute façon un second
-  /// devis sur une demande qui en porte déjà un.
+  /// `PENDING_QUOTE` en est exclu : un devis y attend une décision du client, et
+  /// lui en proposer un autre pendant qu'il tranche le laisserait sans savoir
+  /// lequel payer. Un devis **refusé** en revanche autorise une correction :
+  /// le client a écarté un montant, pas l'intervention. Le serveur n'accepte
+  /// cette réécriture que si le devis précédent n'est ni accepté ni payé.
   static bool _canQuote(TicketStatus status) =>
       status == TicketStatus.diagnosing || status == TicketStatus.repairing;
 
