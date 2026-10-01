@@ -1,9 +1,10 @@
 import { prisma } from '@/lib/prisma';
-import { TicketStatus, Priority } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
+
+import TicketRow from './ticket-row';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,44 +24,6 @@ export default async function TicketsPage() {
     },
   });
 
-  const getStatusBadgeClass = (status: TicketStatus) => {
-    switch (status) {
-      case TicketStatus.NEW:
-      case TicketStatus.TO_VERIFY:
-        return 'badge-neutral';
-      case TicketStatus.ASSIGNED:
-      case TicketStatus.CONFIRMED:
-      case TicketStatus.EN_ROUTE:
-        return 'badge-brand';
-      case TicketStatus.DIAGNOSING:
-      case TicketStatus.PENDING_QUOTE:
-      case TicketStatus.REPAIRING:
-        return 'badge-warning';
-      case TicketStatus.COMPLETED:
-      case TicketStatus.CLOSED:
-        return 'badge-success';
-      case TicketStatus.CANCELED:
-      case TicketStatus.PENDING_PAYMENT:
-        return 'badge-error';
-      default:
-        return 'badge-neutral';
-    }
-  };
-
-  const getPriorityBadgeClass = (priority: Priority) => {
-    switch (priority) {
-      case Priority.LOW:
-        return 'badge-neutral';
-      case Priority.NORMAL:
-        return 'badge-brand';
-      case Priority.HIGH:
-        return 'badge-warning';
-      case Priority.URGENT:
-        return 'badge-error';
-      default:
-        return 'badge-neutral';
-    }
-  };
 
   return (
     <div>
@@ -106,29 +69,7 @@ export default async function TicketsPage() {
           </thead>
           <tbody>
             {tickets.map((ticket) => (
-              <tr key={ticket.id} style={{ cursor: 'pointer' }}>
-                <td style={{ fontWeight: 600, color: 'var(--brand-600)' }}>{ticket.reference}</td>
-                <td>{new Date(ticket.createdAt).toLocaleDateString('fr-FR')}</td>
-                <td>
-                  <div style={{ fontWeight: 500 }}>{ticket.wifiZone.name}</div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{ticket.client.name}</div>
-                </td>
-                <td>{ticket.type}</td>
-                <td><span className={`badge ${getPriorityBadgeClass(ticket.priority)}`}>{ticket.priority}</span></td>
-                <td>
-                  {ticket.technician ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <div style={{ width: '24px', height: '24px', borderRadius: '50%', backgroundColor: 'var(--brand-100)', color: 'var(--brand-600)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 600 }}>
-                        {ticket.technician.name?.[0] || 'T'}
-                      </div>
-                      {ticket.technician.name}
-                    </div>
-                  ) : (
-                    <span style={{ color: 'var(--text-disabled)' }}>Non affecté</span>
-                  )}
-                </td>
-                <td><span className={`badge ${getStatusBadgeClass(ticket.status)}`}>{ticket.status}</span></td>
-              </tr>
+              <TicketRow key={ticket.id} ticket={ticket} />
             ))}
             
             {tickets.length === 0 && (
