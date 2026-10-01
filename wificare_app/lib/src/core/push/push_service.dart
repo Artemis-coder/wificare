@@ -6,6 +6,8 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
+import 'eta_notification.dart';
+
 /// Identifiant du canal de notification Android.
 ///
 /// Doit correspondre au `channelId` envoyé par le serveur
@@ -32,6 +34,8 @@ const String kNotificationChannelId = 'wificare_notifications';
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
 
+  await handleTrackingMessage(message.data);
+
   if (message.notification != null) {
     // Dessiné par le SDK, avec son canal et son importance.
     return;
@@ -49,6 +53,51 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     body: body ?? '',
     payload: message.data['ticketId'] as String?,
   );
+}
+
+/// Traite un message de suivi de position.
+///
+/// Volontairement en amont de tout le reste : le suivi arrive en donnée seule,
+/// donc personne d'autre ne l'affichera, et une ETA qui ne s'affiche pas est
+/// silencieusement perdue — le client ne verrait qu'un technicien « en route »
+/// sans horizon.
+///
+/// La relance demandée au technicien (`TRACKING_NUDGE`) ne concerne pas le
+/// client : son téléphone ignore ce message sans bruit, sans notification vide.
+Future<void> handleTrackingMessage(Map<String, dynamic> data) async {
+  if (data['type'] != 'TRACKING_UPDATE') {
+    return;
+  }
+
+  final ticketId = data['ticketId'] as String?;
+  if (ticketId == null || ticketId.isEmpty) {
+    return;
+  }
+
+  // Une ETA vide n'a pas d'heure d'arrivée à annoncer : mieux vaut ne rien
+  // afficher que d'afficher « arrivée dans 0 min ».
+  final eta = _asInt(data['etaMinutes']);
+  if (eta == null || eta <= 0) {
+    await cancelEtaNotification(ticketId);
+    return;
+  }
+
+  await ensureEtaChannel();
+  await showEtaNotification(
+    ticketId: ticketId,
+    reference: (data['reference'] as String?)?.trim().isNotEmpty == true
+        ? data['reference'] as String
+        : 'Technicien en route',
+    etaMinutes: eta,
+    distanceMeters: _asInt(data['distanceMeters']),
+  );
+}
+
+int? _asInt(dynamic value) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  if (value is String) return int.tryParse(value);
+  return null;
 }
 
 /// Affiche une notification dans la barre d'état.
@@ -210,6 +259,10 @@ class PushService {
   /// limiterait à incrémenter une cloche — l'utilisateur voit qu'il a quelque
   /// chose à regarder, sans être tenté de le faire maintenant.
   Future<void> _onForegroundMessage(RemoteMessage message) async {
+    // Le suivi passe avant tout : c'est un message de donnée, donc personne
+    // d'autre ne l'affichera.
+    await handleTrackingMessage(message.data);
+
     final notification = message.notification;
 
     if (notification != null) {

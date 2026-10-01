@@ -10,6 +10,41 @@ import AssignTechnicianForm from './assign-technician-form';
 
 export const dynamic = 'force-dynamic';
 
+const DISTANCE_NUMBER_FORMAT = { minimumFractionDigits: 1, maximumFractionDigits: 1 } as const;
+
+// La distance est stockée en mètres, mais lue en kilomètres dès que ça vaut le coup :
+// « à 850 m » se lit mieux que « à 0,8 km ».
+function formatDistance(meters: number): string {
+  if (meters < 1000) {
+    return `à ${meters.toLocaleString('fr-FR')} m`;
+  }
+
+  return `à ${(meters / 1000).toLocaleString('fr-FR', DISTANCE_NUMBER_FORMAT)} km`;
+}
+
+// « position il y a 3 min » : la dernière position connue peut dater de la demande
+// initiale, il faut donc dire depuis quand elle est périmée.
+function formatLastPosition(recordedAt: Date): string {
+  const elapsedMinutes = Math.floor((Date.now() - recordedAt.getTime()) / 60000);
+
+  if (elapsedMinutes < 1) {
+    return 'position enregistrée à l’instant';
+  }
+
+  if (elapsedMinutes < 60) {
+    return `position il y a ${elapsedMinutes} min`;
+  }
+
+  const elapsedHours = Math.floor(elapsedMinutes / 60);
+
+  if (elapsedHours < 24) {
+    return `position il y a ${elapsedHours} h`;
+  }
+
+  const elapsedDays = Math.floor(elapsedHours / 24);
+  return `position il y a ${elapsedDays} jour${elapsedDays > 1 ? 's' : ''}`;
+}
+
 export default async function TicketDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   
@@ -47,6 +82,30 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
   // Tout l'annuaire des techniciens, pas seulement ceux en service : un compte
   // hors service reste visible, grisé, pour que la régie sache qu'il existe.
   const technicians = canAssign ? await listTechnicians() : [];
+
+  // Le suivi est lu à part : la ligne n'existe qu'à partir du premier point
+  // envoyé par le technicien. Sans elle, on n'affiche rien du tout — pas de
+  // bloc vide, pas de « non disponible » quand personne ne partage sa position.
+  const trackingRow = await prisma.technicianTracking.findUnique({
+    where: { ticketId: ticket.id },
+    select: {
+      technician: { select: { name: true } },
+      distanceMeters: true,
+      etaMinutes: true,
+      recordedAt: true,
+      stoppedAt: true,
+    },
+  });
+
+  const tracking = trackingRow
+    ? {
+        active: trackingRow.stoppedAt === null,
+        etaMinutes: trackingRow.etaMinutes,
+        distanceMeters: trackingRow.distanceMeters,
+        recordedAt: trackingRow.recordedAt,
+        technicianName: trackingRow.technician.name ?? ticket.technician?.name ?? null,
+      }
+    : null;
 
   return (
     <div style={{ maxWidth: '900px', margin: '0 auto' }}>
@@ -186,6 +245,45 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
                 <div style={{ fontWeight: 700 }}>{ticket.wifiZone.name}</div>
                 <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>📍 {ticket.wifiZone.location}</div>
               </div>
+
+              {tracking && (
+                <div style={{ paddingTop: '12px', borderTop: '1px solid var(--border-default)' }}>
+                  <div className="label">Suivi du technicien</div>
+
+                  {tracking.technicianName && (
+                    <div style={{ fontWeight: 700, marginBottom: '4px' }}>{tracking.technicianName}</div>
+                  )}
+
+                  {tracking.active ? (
+                    tracking.etaMinutes !== null ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                        <div style={{ fontWeight: 700, color: 'var(--brand-700)' }}>
+                          {tracking.etaMinutes <= 1
+                            ? 'Moins d’une minute'
+                            : `Arrivée estimée dans ${tracking.etaMinutes} min`}
+                        </div>
+                        {tracking.distanceMeters !== null && (
+                          <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                            {formatDistance(tracking.distanceMeters)}
+                          </div>
+                        )}
+                        <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                          {formatLastPosition(tracking.recordedAt)}
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                        Le technicien partage sa position, mais la zone n’a pas encore de
+                        coordonnées relevées par le client : impossible d’estimer son arrivée.
+                      </div>
+                    )
+                  ) : (
+                    <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                      Le technicien a arrêté de partager sa position.
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div style={{ paddingTop: '12px', borderTop: '1px solid var(--border-default)' }}>
                 <div className="label">Client / Propriétaire</div>

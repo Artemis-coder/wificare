@@ -85,6 +85,8 @@ class WifiZone {
     required this.name,
     required this.location,
     required this.equipments,
+    required this.latitude,
+    required this.longitude,
   });
 
   final String id;
@@ -92,6 +94,14 @@ class WifiZone {
   final String name;
   final String location;
   final List<Equipment> equipments;
+
+  /// Destination de l'intervention, relevée par le client. Absente tant qu'il ne
+  /// l'a pas partagée : l'ETA n'est alors pas calculable.
+  final double? latitude;
+  final double? longitude;
+
+  /// Les deux coordonnées doivent être présentes : une seule ne situe rien.
+  bool get hasLocation => latitude != null && longitude != null;
 
   factory WifiZone.fromJson(Map<String, dynamic> json) => WifiZone(
     id: JsonX.str(json['id']),
@@ -101,6 +111,8 @@ class WifiZone {
     equipments: JsonX.list(json['equipments'])
         .map(Equipment.fromJson)
         .toList(),
+    latitude: JsonX.decimalOrNull(json['latitude']),
+    longitude: JsonX.decimalOrNull(json['longitude']),
   );
 }
 
@@ -204,6 +216,7 @@ class Ticket {
     required this.intervention,
     required this.quoteInvoice,
     required this.evaluation,
+    required this.tracking,
   });
 
   final String id;
@@ -225,6 +238,12 @@ class Ticket {
   final Intervention? intervention;
   final QuoteInvoice? quoteInvoice;
   final Evaluation? evaluation;
+  /// Suivi de position du technicien en cours.
+  ///
+  /// `null` signifie « aucun suivi n'a jamais commencé », ce qui n'est pas la
+  /// même chose qu'un suivi arrêté : le client peut alors proposer de le
+  /// démarrer, alors qu'un suivi arrêté ne dépend plus que du technicien.
+  final TicketTracking? tracking;
 
   String get zoneName => wifiZone?.name ?? 'Zone inconnue';
   String get zoneLocation => wifiZone?.location ?? '';
@@ -261,6 +280,45 @@ class Ticket {
     evaluation: JsonX.mapOrNull(json['evaluation']) == null
         ? null
         : Evaluation.fromJson(JsonX.map(json['evaluation'])),
+    tracking: JsonX.mapOrNull(json['tracking']) == null
+        ? null
+        : TicketTracking.fromJson(JsonX.map(json['tracking'])),
+  );
+}
+
+/// Position partagée par le technicien pendant son déplacement.
+///
+/// L'ETA est calculée par le serveur : le téléphone ne fait que l'afficher.
+/// Deux raisons à cela — le même calcul ne doit pas donner deux chiffres
+/// différents selon l'appareil, et le serveur connaît déjà la destination qu'il
+/// a validée.
+class TicketTracking {
+  const TicketTracking({
+    required this.active,
+    required this.etaMinutes,
+    required this.distanceMeters,
+    required this.recordedAt,
+    required this.technicianName,
+  });
+
+  /// Le technicien partage-t-il encore sa position ?
+  final bool active;
+
+  /// Arrivée estimée, en minutes. `null` quand la destination n'est pas
+  /// connue : le client n'a pas encore partagé la position de sa zone. Aucun
+  /// chiffre n'est deviné à la place.
+  final int? etaMinutes;
+
+  final int? distanceMeters;
+  final DateTime? recordedAt;
+  final String? technicianName;
+
+  factory TicketTracking.fromJson(Map<String, dynamic> json) => TicketTracking(
+    active: json['active'] == true,
+    etaMinutes: JsonX.integerOrNull(json['etaMinutes']),
+    distanceMeters: JsonX.integerOrNull(json['distanceMeters']),
+    recordedAt: JsonX.date(json['recordedAt']),
+    technicianName: JsonX.strOrNull(json['technicianName']),
   );
 }
 

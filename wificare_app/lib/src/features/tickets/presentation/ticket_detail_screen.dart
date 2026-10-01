@@ -17,9 +17,7 @@ import '../../../core/widgets/states.dart';
 import '../../../core/widgets/ticket_progress.dart';
 import '../../../core/network/api_exception.dart';
 import '../application/ticket_providers.dart';
-
-final ticketDetailProvider = FutureProvider.autoDispose
-    .family<Ticket, String>((ref, id) => ref.read(ticketRepositoryProvider).byId(id));
+import 'arrival_estimate_card.dart';
 
 /// Détail d'une demande : suivi d'avancement, rapport d'intervention, facture et avis.
 class TicketDetailScreen extends ConsumerWidget {
@@ -115,6 +113,18 @@ class TicketDetailScreen extends ConsumerWidget {
                 ],
               ),
             ),
+            const SizedBox(height: AppSpacing.md),
+
+            // L'arrivée n'a de sens que le temps du trajet : hors de cette
+            // fenêtre, une ETA affichée serait une promesse que plus personne ne
+            // tient. L'écran reste discret : une carte, pas un bandeau.
+            if (ticket.status == TicketStatus.enRoute)
+              ArrivalEstimateCard(
+                ticketId: ticket.id,
+                zoneId: ticket.wifiZoneId,
+                tracking: ticket.tracking,
+                hasDestination: ticket.wifiZone?.hasLocation ?? false,
+              ),
             const SizedBox(height: AppSpacing.md),
 
             AppCard(

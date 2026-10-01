@@ -35,6 +35,12 @@ abstract final class JsonX {
     return fallback;
   }
 
+  static double? decimalOrNull(dynamic value) {
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value);
+    return null;
+  }
+
   static bool flag(dynamic value, {bool fallback = false}) {
     if (value is bool) return value;
     if (value is String) return value == 'true';

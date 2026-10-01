@@ -38,6 +38,23 @@ class ZoneRepository {
     return WifiZone.fromJson(response['data'] as Map<String, dynamic>);
   }
 
+  /// Enregistre la position du client comme destination de la zone.
+  ///
+  /// C'est ce point qui rend l'estimation d'arrivée calculable : sans lui, le
+  /// serveur sait où est le technicien mais pas où il va. Le relevé se fait
+  /// depuis le téléphone du client, qui est physiquement sur place — d'où une
+  /// position juste, sans avoir à deviner une adresse saisie en texte libre.
+  Future<void> shareLocation(
+    String wifiZoneId, {
+    required double latitude,
+    required double longitude,
+  }) async {
+    await _api.patch<Map<String, dynamic>>(
+      '/wifi-zones/$wifiZoneId/location',
+      data: {'latitude': latitude, 'longitude': longitude},
+    );
+  }
+
   Future<List<Equipment>> equipments(String wifiZoneId) async {
     final response = await _api.get<Map<String, dynamic>>(
       '/wifi-zones/$wifiZoneId/equipments',

@@ -5,6 +5,32 @@
          notification : sans elle, une demande reçue reste invisible. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
+    <!-- Suivi de position du technicien pendant son déplacement ("votre
+         technicien arrive dans ~7 min"). Seule la localisation fine est
+         demandée : c'est la précision qui permet au serveur de calculer une
+         distance et une ETA crédibles. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+
+    <!-- Repli si l'utilisateur refuse la localisation fine : Android affiche
+         alors une demande de permission dégradée, mais le GPS d'un téléphone
+         reste la source la plus fiable en déplacement. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+
+    <!-- Android 10 (API 29) exige une autorisation distincte pour suivre la
+         position quand l'application n'est plus au premier plan. C'est le cas
+         d'usage visé — téléphone en poche — et Android 14 refuse purement et
+         simplement d'ouvrir un service de premier plan de type localisation
+         sans elle. -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"/>
+
+    <!-- Autorise l'exécution en premier plan : c'est la seule façon de
+         continuer à recevoir des points quand Android suspend l'application. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+
+    <!-- Android 14 (API 34) exige que le type du service soit déclaré ET
+         autorisé : sans ce couple, `startForeground` lève une exception. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
+
     <application
         android:label="WiFiCare"
         android:name="${applicationName}"
@@ -37,6 +63,14 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
+        <!-- Le service de partage de position est instancié par Android, jamais
+             par le code Dart : le type `location` doit être déclaré, faute de
+             quoi Android 14 refuse d'ouvrir le service de premier plan. -->
+        <service
+            android:name=".LocationTrackingService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
 
         <!-- Le canal doit exister *avant* la première notification, y compris quand
              l'application est arrêtée : le SDK Android n'en crée pas un lui-même,

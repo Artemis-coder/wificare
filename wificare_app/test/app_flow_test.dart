@@ -132,6 +132,16 @@ void main() {
       '/tickets/t-2': (_, _) => {
         'data': FakeApiData.ticket('t-2', '#TK-2026-002', 'COMPLETED'),
       },
+      // Demande en cours de trajet, technicien en route : l'ETA est calculable.
+      '/tickets/t-enroute': (_, _) => {
+        'data': FakeApiData.ticket(
+          't-enroute',
+          '#TK-2026-010',
+          'EN_ROUTE',
+          technicianId: 'tech-1',
+          tracking: FakeApiData.tracking(),
+        ),
+      },
       // Demande dont le technicien a envoyé un devis : le client doit voir
       // l'étape « Devis en attente » dans le suivi.
       '/tickets/t-3': (_, _) => {
@@ -153,6 +163,13 @@ void main() {
         }
         return FakeApiData.ticketPage([
           FakeApiData.ticket('t-1', '#TK-2026-001', 'DIAGNOSING'),
+          FakeApiData.ticket(
+            't-enroute',
+            '#TK-2026-010',
+            'EN_ROUTE',
+            technicianId: 'tech-1',
+            tracking: FakeApiData.tracking(),
+          ),
           FakeApiData.ticket('t-2', '#TK-2026-002', 'COMPLETED'),
           FakeApiData.ticket(
             't-3',
@@ -862,6 +879,34 @@ void main() {
     expect(adapter.calls, contains('POST /wifi-zones'));
   });
 
+  testWidgets('client : heure d\'arrivée du technicien', (tester) async {
+    FlutterSecureStorage.setMockInitialValues(_session);
+    await pumpApp(tester);
+
+    await tester.tap(find.text('Pannes'));
+    await settle(tester);
+
+    await tester.tap(find.text('#TK-2026-010'));
+    await settle(tester, steps: 20);
+
+    expect(find.text('Arrivée du technicien'), findsOneWidget);
+    expect(find.text('dans 7 min'), findsOneWidget);
+    expect(find.text('à 2,4 km'), findsOneWidget);
+  });
+
+  testWidgets('client : sans destination, aucune ETA inventée', (tester) async {
+    FlutterSecureStorage.setMockInitialValues(_session);
+    await pumpApp(tester);
+
+    await tester.tap(find.text('Pannes'));
+    await settle(tester);
+
+    await tester.tap(find.text('#TK-2026-001'));
+    await settle(tester, steps: 20);
+
+    // La demande est diagnostiquée, pas en route : aucune promesse d'arrivée.
+    expect(find.text('Arrivée du technicien'), findsNothing);
+  });
   testWidgets('notifications : badge, ouverture et redirection vers la panne', (
     tester,
   ) async {

@@ -74,4 +74,39 @@ abstract final class Fmt {
     final rest = value % 60;
     return rest == 0 ? '$hours h' : '$hours h $rest min';
   }
+
+  /// Arrivée annoncée par le serveur, en toutes lettres.
+  ///
+  /// Sous deux minutes, le compte n'a plus de sens : on annonce l'arrivée plutôt
+  /// qu'un « dans 1 min » qui devient faux presque immédiatement.
+  static String eta(int? minutes) {
+    if (minutes == null) return '—';
+    if (minutes <= 1) return 'Arrivée imminente';
+    if (minutes < 60) return 'dans $minutes min';
+    return 'dans ${minutes ~/ 60} h${minutes % 60 == 0 ? '' : ' ${minutes % 60}'}';
+  }
+
+  /// Distance lisible, mètres sous un kilomètre.
+  static String distance(int? meters) {
+    if (meters == null) return '—';
+    if (meters < 1000) return '$meters m';
+    return '${(meters / 1000).toStringAsFixed(1).replaceAll('.', ',')} km';
+  }
+
+  /// Ancienneté d'une position, en une expression courte.
+  static String since(DateTime? value) {
+    if (value == null) return '—';
+
+    final minutes = DateTime.now().difference(value).inMinutes;
+
+    if (minutes <= 0) return 'à l\'instant';
+    if (minutes == 1) return 'il y a 1 min';
+    if (minutes < 60) return 'il y a $minutes min';
+
+    final hours = minutes ~/ 60;
+    if (hours == 1) return 'il y a 1 h';
+    if (hours < 24) return 'il y a $hours h';
+
+    return 'il y a ${hours ~/ 24} j';
+  }
 }

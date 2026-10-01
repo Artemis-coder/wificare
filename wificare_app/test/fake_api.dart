@@ -139,12 +139,28 @@ abstract final class FakeApiData {
     'wifiZones': [zone],
   };
 
+  /// Suivi de position en cours, tel que le serveur le renvoie sur un ticket.
+  static Map<String, dynamic> tracking({
+    bool active = true,
+    int? etaMinutes = 7,
+    int? distanceMeters = 2400,
+    int minutesAgo = 2,
+  }) => {
+    'active': active,
+    'etaMinutes': etaMinutes,
+    'distanceMeters': distanceMeters,
+    'recordedAt':
+        DateTime.now().subtract(Duration(minutes: minutesAgo)).toIso8601String(),
+    'technicianName': 'Koné Ibrahim',
+  };
+
   static Map<String, dynamic> ticket(
     String id,
     String reference,
     String status, {
     String? technicianId,
     Map<String, dynamic>? quoteInvoice,
+    Map<String, dynamic>? tracking,
   }) => {
     'id': id,
     'reference': reference,
@@ -162,6 +178,7 @@ abstract final class FakeApiData {
     'wifiZone': zone,
     'technician': technicianId == null ? null : technician,
     'quoteInvoice': quoteInvoice,
+    'tracking': tracking,
   };
 
   /// Devis en attente de décision du client.

@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,6 +11,55 @@ import 'package:wificare_app/src/core/storage/token_storage.dart';
 import 'package:wificare_app/src/core/widgets/notification_bell.dart';
 
 import 'fake_api.dart';
+
+/// Canal Android du suivi de position : mêmes noms que
+/// `com.wificare.mobile/location` côté Kotlin.
+const MethodChannel _locationChannel = MethodChannel('com.wificare.mobile/location');
+
+/// Simule la plateforme de suivi pour un test.
+///
+/// Un test widget n'a pas de côté Kotlin : sans ce relais, aucun point ne serait
+/// jamais posté. Installée sans `lastLocation`, elle renvoie une position nulle :
+/// c'est le cas d'un téléphone dont le GPS n'a encore rien donné.
+void installLocationPlatform({Map<String, dynamic>? lastLocation}) {
+  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+      .setMockMethodCallHandler(_locationChannel, (call) async {
+        return switch (call.method) {
+          'start' => <String, dynamic>{
+            'started': true,
+            'ticketId': (call.arguments as Map)['ticketId'],
+            'lastLocation': lastLocation,
+          },
+          'stop' || 'status' => <String, dynamic>{'running': false},
+          _ => null,
+        };
+      });
+}
+
+/// Simule une plateforme **absente**.
+///
+/// C'est le cas réel hors Android, où le canal n'a pas d'implémentation : il
+/// faut que l'appel lève `MissingPluginException` pour que le code prenne la
+/// branche « suivi indisponible ». Le relais est donc installé et lève
+/// volontairement l'exception, plutôt que de compter sur une absence de
+/// relais — le canal sans gestionnaire ne répond tout simplement jamais dans un
+/// test widget, ce qui laisserait l'écran bloqué sur « en cours ».
+void installAbsentLocationPlatform() {
+  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+      .setMockMethodCallHandler(
+        _locationChannel,
+        (call) async => throw MissingPluginException(
+          'No implementation found for method ${call.method} '
+          'on channel ${_locationChannel.name}',
+        ),
+      );
+}
+
+/// Retire la plateforme simulée.
+void removeLocationPlatform() {
+  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+      .setMockMethodCallHandler(_locationChannel, null);
+}
 
 const Map<String, String> _session = {
   'accessToken': 'access-tech',
@@ -43,8 +93,24 @@ void main() {
   late FakeHttpAdapter adapter;
   late List<Map<String, dynamic>> notifications;
 
+  /// Statut courant de `t-tech-1`.
+  ///
+  /// Le détail et la liste le lisent au lieu d renvoyer toujours « AFFECTÉ » :
+  /// sinon l'écran resterait figé après « Démarrer le déplacement » et ne
+  /// pourrait jamais proposer « Commencer le diagnostic », c'est-à-dire la fin
+  /// du suivi.
+  var status = 'ASSIGNED';
+
   setUp(() {
+    status = 'ASSIGNED';
     notifications = _seedNotifications();
+
+    // Plateforme de suivi absente par défaut : c'est le cas de tout test qui ne
+    // s'intéresse pas à la localisation, et cela évite qu'un appel de canal sans
+    // gestionnaire reste en suspens jusqu'au délai maximal. Le test dédié
+    // installe une plateforme complète à la place.
+    installAbsentLocationPlatform();
+    addTearDown(removeLocationPlatform);
     FlutterSecureStorage.setMockInitialValues({});
     adapter = FakeHttpAdapter({
       '/auth/login': (_, _) => {
@@ -67,12 +133,12 @@ void main() {
         'data': FakeApiData.ticket(
           't-tech-1',
           '#TK-2026-001',
-          'ASSIGNED',
+          status,
           technicianId: 'tech-1',
         ),
       },
       '/tickets/t-tech-1/status': (path, body) {
-        final status = (body as Map)['status'] as String;
+        status = (body as Map)['status'] as String;
         return {
           'data': FakeApiData.ticket(
             't-tech-1',
@@ -82,11 +148,35 @@ void main() {
           ),
         };
       },
+      // Suivi de position : l'API renvoie la distance et l'ETA qu'elle a
+      // recalculées, et le technicien voit exactement ce que voit le client.
+      '/tickets/t-tech-1/tracking': (path, body) {
+        final point = (body as Map);
+        expect(
+          point['latitude'],
+          isA<num>(),
+          reason: 'un point sans coordonnées serait refusé par le serveur',
+        );
+
+        return {
+          'data': {
+            'ticketId': 't-tech-1',
+            'distanceMeters': 840,
+            'etaMinutes': 7,
+            'destination': 'Cocody Angre',
+            'startedAt': '2026-01-30T10:00:00.000Z',
+            'recordedAt': '2026-01-30T10:05:00.000Z',
+          },
+        };
+      },
+      '/tickets/t-tech-1/tracking/stop': (_, _) => {
+        'data': {'stoppedAt': '2026-01-30T10:20:00.000Z'},
+      },
       '/tickets': (path, body) => FakeApiData.ticketPage([
         FakeApiData.ticket(
           't-tech-1',
           '#TK-2026-001',
-          'ASSIGNED',
+          status,
           technicianId: 'tech-1',
         ),
         FakeApiData.ticket(
@@ -274,6 +364,98 @@ void main() {
       adapter.calls.contains('PATCH /tickets/t-tech-1/status'),
       isTrue,
       reason: 'le technicien doit faire avancer la demande',
+    );
+  });
+
+  testWidgets(
+    'technicien : le déplacement partage la position, puis le suivi s\'arrête',
+    (tester) async {
+      // Un point de départ est posté par Dart à partir de la dernière position
+      // connue de l'appareil : il rend le suivi visible chez le client sans
+      // attendre le premier point du GPS.
+      installLocationPlatform(
+        lastLocation: <String, dynamic>{
+          'latitude': 5.3599,
+          'longitude': -4.0086,
+          'accuracy': 12.0,
+        },
+      );
+
+      FlutterSecureStorage.setMockInitialValues(Map.of(_session));
+      await pumpApp(tester);
+
+      await tester.tap(find.text('Demandes'));
+      await settle(tester);
+      await tester.tap(find.text('#TK-2026-001'));
+      await settle(tester);
+
+      await tester.tap(find.text('Démarrer le déplacement'));
+      await settle(tester, steps: 24);
+
+      // Le point part après la transition : le serveur refuse un suivi sur une
+      // demande qui n'est pas encore en route.
+      expect(adapter.calls, contains('PATCH /tickets/t-tech-1/status'));
+      expect(
+        adapter.calls,
+        contains('POST /tickets/t-tech-1/tracking'),
+        reason: 'le départ doit être annoncé au client. Appels : ${adapter.calls}',
+      );
+      expect(
+        adapter.calls.indexOf('POST /tickets/t-tech-1/tracking'),
+        greaterThan(adapter.calls.indexOf('PATCH /tickets/t-tech-1/status')),
+      );
+
+      // Le technicien voit ce que le service transmet, distance comprise.
+      expect(find.text('Suivi de position'), findsOneWidget);
+      expect(find.text('Actif — position envoyée'), findsOneWidget);
+      expect(find.text('840 m · environ 7 min'), findsOneWidget);
+
+      // « Commencer le diagnostic » termine le déplacement : le suivi doit
+      // s'arrêter, sinon le client verrait un technicien encore en route
+      // pendant que le travail a commencé. Le bouton est sous la carte de
+      // suivi, hors de l'écran.
+      await tester.drag(find.byType(ListView), const Offset(0, -600));
+      await settle(tester);
+      await tester.tap(find.text('Commencer le diagnostic'));
+      await settle(tester, steps: 24);
+
+      expect(
+        adapter.calls,
+        contains('POST /tickets/t-tech-1/tracking/stop'),
+        reason: 'le suivi doit être arrêté en sortant du déplacement',
+      );
+      expect(find.text('Suivi de position'), findsNothing);
+    },
+  );
+
+  testWidgets('technicien : sans le service Android, le départ n\'est pas bloqué', (
+    tester,
+  ) async {
+    // Plateforme absente (installée par `setUp`) : `start` lève
+    // `MissingPluginException`. Il ne doit produire ni erreur bloquante, ni
+    // demande de position sans coordonnées.
+    FlutterSecureStorage.setMockInitialValues(Map.of(_session));
+    await pumpApp(tester);
+
+    await tester.tap(find.text('Demandes'));
+    await settle(tester);
+    await tester.tap(find.text('#TK-2026-001'));
+    await settle(tester);
+
+    await tester.tap(find.text('Démarrer le déplacement'));
+    await settle(tester, steps: 24);
+
+    expect(adapter.calls, contains('PATCH /tickets/t-tech-1/status'));
+    expect(
+      adapter.calls,
+      isNot(contains('POST /tickets/t-tech-1/tracking')),
+      reason: 'sans position connue, aucun point ne doit être inventé',
+    );
+    expect(tester.takeException(), isNull);
+    expect(
+      find.textContaining('Suivi de position indisponible'),
+      findsWidgets,
+      reason: 'le technicien doit comprendre pourquoi le client ne voit rien',
     );
   });
 

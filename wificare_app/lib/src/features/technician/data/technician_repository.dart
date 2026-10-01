@@ -1,6 +1,7 @@
 import '../../../core/domain/enums.dart';
 import '../../../core/domain/models.dart';
 import '../../../core/network/api_client.dart';
+import '../domain/tracking_point.dart';
 
 /// Accès du technicien à ses interventions.
 ///
@@ -74,6 +75,48 @@ class TechnicianRepository {
     );
 
     return Ticket.fromJson(response['data'] as Map<String, dynamic>);
+  }
+
+  /// Enregistre la position du technicien pour une demande qu'il suit.
+  ///
+  /// Réservé au technicien affecté : l'API refuse toute autre position. Le
+  /// serveur recalcule la distance et l'ETA à chaque point et les renvoie, ce qui
+  /// permet d'afficher au technicien ce que le client voit.
+  Future<TrackingPoint> sharePosition({
+    required String ticketId,
+    required double latitude,
+    required double longitude,
+    double? accuracy,
+    double? speed,
+    double? heading,
+  }) async {
+    final response = await _api.post<Map<String, dynamic>>(
+      '/tickets/$ticketId/tracking',
+      data: {
+        'latitude': latitude,
+        'longitude': longitude,
+        // Les marqueurs null-aware ne conviennent pas à une entrée clé/valeur :
+        // ces measures doivent rester absentes quand le capteur ne les fournit
+        // pas, plutôt que d'envoyer un zéro qui ferait croire à une mesure.
+        // ignore: use_null_aware_elements
+        if (accuracy != null) 'accuracy': accuracy,
+        // ignore: use_null_aware_elements
+        if (speed != null) 'speed': speed,
+        // ignore: use_null_aware_elements
+        if (heading != null) 'heading': heading,
+      },
+    );
+
+    return TrackingPoint.fromJson(response['data'] as Map<String, dynamic>);
+  }
+
+  /// Clôture le suivi de position d'une demande.
+  ///
+  /// Idempotent côté serveur : un suivi déjà arrêté renvoie un succès. L'appel
+  /// est fait depuis Dart en plus du service Android, pour que l'arrêt reste
+  /// connu même si l'application a été tuée pendant le trajet.
+  Future<void> stopTracking(String ticketId) async {
+    await _api.post<Map<String, dynamic>>('/tickets/$ticketId/tracking/stop');
   }
 
   /// Compte rendu d'intervention : diagnostic, solution et durée.

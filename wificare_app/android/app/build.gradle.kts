@@ -80,4 +80,12 @@ flutter {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
+
+    // Localisation fusionnée du suivi de position du technicien
+    // (`LocationTrackingService`). Version fixe et non pilotée par le BoM
+    // Firebase : `play-services-location` n'est pas dans le BoM, et la version
+    // déclarée ici doit rester compatible avec le `play-services-basement`
+    // déjà résolu par les plugins Firebase (18.x). Ne pas aligner sur une
+    // version plus ancienne, le service utilise `LocationRequest.Builder`.
+    implementation("com.google.android.gms:play-services-location:21.3.0")
 }

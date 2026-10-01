@@ -1,5 +1,5 @@
 import { cert, getApps, initializeApp } from "firebase-admin/app";
-import { getMessaging } from "firebase-admin/messaging";
+import { getMessaging, type MulticastMessage } from "firebase-admin/messaging";
 import { prisma } from "./prisma";
 
 /**
@@ -144,16 +144,19 @@ export async function devicesSubscribedFor(userIds: string[]): Promise<number> {
 }
 
 /**
- * Envoie une notification à tous les appareils d'un destinataire.
+ * Envoie un message FCM à tous les appareils d'une liste de destinataires.
  *
- * Les jetons invalides sont retirés au passage : Firebase renvoie
- * `registration-token-not-registered` quand l'application a été désinstallée,
- * et conserver ce jeton ferait échouer l'envoi pour tous les autres à chaque
- * notification.
+ * La sélection des jetons et le retrait des jetons périmés ne dépendent que des
+ * comptes visés, pas du contenu du message : le travail commun est factorisé
+ * ici, et chaque canal ne compose que son message. C'est ce qui permet à
+ * `notifyTrackingUpdate` de partir en données seules sans réécrire — et sans
+ * faire diverger — la gestion des erreurs déjà éprouvée par les notifications.
+ *
+ * Ne lève jamais : un push perdu ne doit pas faire échouer l'appel métier.
  */
-export async function notifyPush(
+async function sendToDevices(
   userIds: string[],
-  payload: PushPayload
+  buildMessage: (tokens: string[]) => MulticastMessage
 ): Promise<void> {
   const messaging = getMessagingClient();
 
@@ -177,17 +180,9 @@ export async function notifyPush(
       return;
     }
 
-    const response = await messaging.sendEachForMulticast({
-      tokens: registrations.map((registration) => registration.token),
-      notification: { title: payload.title, body: payload.body },
-      android: {
-        priority: "high",
-        notification: { channelId: "wificare_notifications" },
-      },
-      // L'application reçoit l'identifiant de la demande et ouvre le détail
-      // quand l'utilisateur tape sur la notification.
-      data: payload.ticketId ? { ticketId: payload.ticketId } : undefined,
-    });
+    const response = await messaging.sendEachForMulticast(
+      buildMessage(registrations.map((registration) => registration.token))
+    );
 
     const staleIds = response.responses.flatMap((item, index) => {
       const error = item.error;
@@ -216,5 +211,127 @@ export async function notifyPush(
     }
   } catch (error) {
     console.error("Push notification error:", error);
+  }
+}
+
+/**
+ * Envoie une notification à tous les appareils d'un destinataire.
+ *
+ * Les jetons invalides sont retirés au passage : Firebase renvoie
+ * `registration-token-not-registered` quand l'application a été désinstallée,
+ * et conserver ce jeton ferait échouer l'envoi pour tous les autres à chaque
+ * notification.
+ */
+export async function notifyPush(
+  userIds: string[],
+  payload: PushPayload
+): Promise<void> {
+  await sendToDevices(userIds, (tokens) => ({
+    tokens,
+    notification: { title: payload.title, body: payload.body },
+    android: {
+      priority: "high",
+      notification: { channelId: "wificare_notifications" },
+    },
+    // L'application reçoit l'identifiant de la demande et ouvre le détail
+    // quand l'utilisateur tape sur la notification.
+    data: payload.ticketId ? { ticketId: payload.ticketId } : undefined,
+  }));
+}
+
+/** État de suivi à transmettre au client d'une demande. */
+export type TrackingUpdatePayload = {
+  ticketId: string;
+  reference: string;
+  etaMinutes: number | null;
+  distanceMeters: number | null;
+};
+
+/**
+ * Informe le client d'une mise à jour du suivi de position du technicien.
+ *
+ * Volontairement un message FCM *données seules*, sans bloc `notification` :
+ * l'application dessine elle-même sa notification, pour tenir un compte à rebours
+ * qui se met à jour minute après minute. Un bloc `notification` ferait qu'Android
+ * affiche en plus une bannière système figée sur la valeur reçue — doublon
+ * analogue à celui déjà corrigé sur le canal métier, qu'il ne faut pas
+ * réintroduire ici.
+ *
+ * La priorité reste à `high` : c'est elle qui fait livrer le message à
+ * l'application en tâche de fond, donc sans attendre qu'elle soit ouverte, et
+ * c'est ce qui permet à l'ETA de rester fraîche. FCM n'accepte que des chaînes
+ * en charge utile : une valeur absente part vide, ce que l'application distingue
+ * d'un zéro.
+ *
+ * Ne lève jamais : le suivi est rafraîchi à haute fréquence, une erreur sur un
+ * point ne doit pas interrompre l'enregistrement des suivants.
+ */
+export async function notifyTrackingUpdate(
+  userIds: string[],
+  payload: TrackingUpdatePayload
+): Promise<void> {
+  try {
+    await sendToDevices(userIds, (tokens) => ({
+      tokens,
+      // Discriminant lu par l'application : elle reconnaît le suivi et
+      // n'affiche que sa propre notification.
+      data: {
+        type: "TRACKING_UPDATE",
+        ticketId: payload.ticketId,
+        reference: payload.reference,
+        etaMinutes: payload.etaMinutes === null ? "" : String(payload.etaMinutes),
+        distanceMeters:
+          payload.distanceMeters === null ? "" : String(payload.distanceMeters),
+      },
+      android: {
+        priority: "high",
+      },
+    }));
+  } catch (error) {
+    console.error("Tracking update push error:", error);
+  }
+}
+
+/** Demande de réactivation du suivi de position adressée au technicien. */
+export type TrackingNudgePayload = {
+  ticketId: string;
+  reference: string;
+};
+
+/**
+ * Demande au technicien de réactiver le suivi de position de sa demande.
+ *
+ * Émis en données seules, comme le suivi lui-même : c'est l'application qui
+ * décide de ce qu'elle montre, et un bloc `notification` ferait apparaître en
+ * plus une bannière système figée, doublon de l'écran que le technicien vient
+ * d'ouvrir.
+ *
+ * Partage volontairement `sendToDevices` et donc `getMessagingClient` avec les
+ * autres canaux : une seconde initialisation Firebase créerait un second client
+ * de messagerie, donc une seconde file d'envoi, sur le même projet.
+ *
+ * Ne lève jamais, et l'absence de jeton n'est pas distinguished comme un échec :
+ * le technicien peut simplement avoir désinstallé l'application, ce qui ne dit
+ * rien de l'état de la demande et ne doit pas faire échouer l'appel du client.
+ */
+export async function notifyTrackingNudge(
+  userIds: string[],
+  payload: TrackingNudgePayload
+): Promise<void> {
+  try {
+    await sendToDevices(userIds, (tokens) => ({
+      tokens,
+      // Discriminant lu par l'application pour ouvrir la demande concernée.
+      data: {
+        type: "TRACKING_NUDGE",
+        ticketId: payload.ticketId,
+        reference: payload.reference,
+      },
+      android: {
+        priority: "high",
+      },
+    }));
+  } catch (error) {
+    console.error("Tracking nudge push error:", error);
   }
 }

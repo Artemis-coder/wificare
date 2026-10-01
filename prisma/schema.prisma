@@ -204,6 +204,8 @@ model User {
   pushSubscriptions WebPushSubscription[]
   /// Campagnes de messages composées par ce compte.
   broadcasts Broadcast[] @relation("Broadcasts")
+  /// Suivis de position que ce technicien a envoyés sur ses demandes.
+  technicianTrackings TechnicianTracking[]
 }
 
 enum Role {
@@ -244,9 +246,15 @@ model WifiZone {
   clientId  String
   name      String
   location  String
+  /// Latitude de la destination, relevée par le client. Null tant que le client
+  /// n'a pas partagé sa position : l'ETA ne peut être calculée sans elle.
+  latitude  Float?
+  /// Longitude de la destination, relevée par le client. Doit être renseignée
+  /// en même temps que `latitude` pour former une destination valide.
+  longitude Float?
   createdAt DateTime @default(now())
 
-  client     Client      @relation(fields: [clientId], references: [id])
+  client     Client               @relation(fields: [clientId], references: [id])
   equipments Equipment[]
   tickets    Ticket[]
 }
@@ -288,6 +296,7 @@ model Ticket {
   quoteInvoice  QuoteInvoice?
   evaluation    Evaluation?
   notifications Notification[]
+  tracking      TechnicianTracking[]
 }
 
 enum Priority {
@@ -435,6 +444,42 @@ enum PaymentStatus {
 // ----------------------------------------
 // Évaluations
 // ----------------------------------------
+
+/// Suivi de position d'un technicien sur une demande.
+///
+/// Une ligne par ticket (`ticketId` unique) : le technicien envoie sa position
+/// régulièrement, et le client la lit pour afficher une ETA. La ligne existe
+/// dès le premier point, et `stoppedAt` est mis à jour quand le technicien
+/// arrête le suivi ; actif = ligne présente et `stoppedAt` nul.
+model TechnicianTracking {
+  id               String   @id @default(uuid())
+  ticketId         String   @unique
+  technicianId     String
+  latitude         Float
+  longitude        Float
+  accuracy         Float?
+  speed            Float?
+  heading          Float?
+  /// Distance à vol d'oiseau entre le technicien et la destination, en mètres.
+  /// Null si la destination (coordonnées de zone) est inconnue.
+  distanceMeters   Int?
+  /// Estimation de l'arrivée en minutes, null si la destination est inconnue.
+  etaMinutes      Int?
+  startedAt        DateTime @default(now())
+  /// Horodatage de la position telle qu'elle a été reçue par le serveur.
+  /// Sert à la fois de `recordedAt` renvoyé au client et au bridage des push.
+  recordedAt       DateTime
+  stoppedAt        DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  ticket       Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  technician   User   @relation(fields: [technicianId], references: [id])
+
+  @@index([ticketId, recordedAt])
+  @@index([technicianId])
+}
+
 /// Avis d'un client sur une intervention.
 ///
 /// Rattachée à la demande, donc à l'intervention concernée, et au technicien qui

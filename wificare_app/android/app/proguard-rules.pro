@@ -29,3 +29,28 @@
 
 # Les adaptateurs de reception deserialize les donnees par reflexion.
 -keepattributes Signature, *Annotation*, InnerClasses, EnclosingMethod
+# ---------------------------------------------------------------------------
+# Suivi de position (LocationTrackingService)
+# ---------------------------------------------------------------------------
+# Le service est instancie par Android depuis le manifeste et le canal Dart ne
+# le voit jamais : R8 ne trouve aucune reference et supprime la classe. Le
+# résultat est un service qui ne démarre jamais, sans le moindre message, et
+# uniquement en release (le build debug livre les classes intactes).
+-keep class com.wificare.mobile.LocationTrackingService { *; }
+-keep class com.wificare.mobile.MainActivity { *; }
+
+# `TrackingSession` et `LocationPermissions` sont appeles par reflection-free
+# mais depuis le canal : les conserver evite qu'une optimisation inline supprime
+# un etat lu par `status()`.
+-keep class com.wificare.mobile.TrackingSession { *; }
+-keep class com.wificare.mobile.TrackingSession$Auth { *; }
+-keep class com.wificare.mobile.LocationPermissions { *; }
+
+# Les `LocationCallback` sont crees en classe anonyme : sans cette regle, R8
+# renomme la classe implements `com.google.android.gms.location.LocationCallback`
+# et la restauration du callback par le SDK echoue silencieusement.
+-keep class * implements com.google.android.gms.location.LocationCallback { *; }
+
+# Le SDK de localisation fusionnee est resolu a l'execution.
+-keep class com.google.android.gms.location.** { *; }
+-dontwarn com.google.android.gms.location.**

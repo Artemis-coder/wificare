@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getApiUser } from "@/lib/api-auth";
 import { Prisma, TicketStatus } from "@prisma/client";
 import { createTicket } from "@/lib/tickets";
+import type { TicketTrackingSummary } from "./[id]/route";
 
 export async function GET(request: NextRequest) {
   try {
@@ -34,9 +35,40 @@ export async function GET(request: NextRequest) {
       prisma.ticket.count({ where }),
     ]);
 
+    // Une seule requête pour tous les suivis de la page, plutôt qu'une par
+    // demande : sur une liste de vingt demandes, la seconde version multiplierait
+    // le temps de réponse et la charge de la base par vingt, et la page met
+    // déjà une seconde à répondre.
+    const trackingRows = tickets.length
+      ? await prisma.technicianTracking.findMany({
+          where: { ticketId: { in: tickets.map((ticket) => ticket.id) } },
+          include: { technician: { select: { name: true } } },
+        })
+      : [];
+
+    const trackingByTicket = new Map(
+      trackingRows.map((row) => [row.ticketId, row])
+    );
+
+    const items = tickets.map((ticket) => {
+      const row = trackingByTicket.get(ticket.id);
+
+      const tracking: TicketTrackingSummary | null = row
+        ? {
+            active: row.stoppedAt === null,
+            etaMinutes: row.etaMinutes,
+            distanceMeters: row.distanceMeters,
+            recordedAt: row.recordedAt,
+            technicianName: row.technician.name ?? ticket.technician?.name ?? null,
+          }
+        : null;
+
+      return { ...ticket, tracking };
+    });
+
     return NextResponse.json({
       data: {
-        items: tickets,
+        items,
         total,
         page,
         limit,

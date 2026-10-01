@@ -41,6 +41,10 @@ dependencies:
   intl: ^0.20.3
   image_picker: ^1.2.3
   url_launcher: ^6.3.2
+  # Position du client, relevée ponctuellement pour servir de destination à
+  # l'estimation d'arrivée du technicien. Un seul point à la demande : le
+  # suivi continu du technicien est fait par un service Android natif, pas ici.
+  geolocator: ^14.0.2
   cached_network_image: ^4.0.4
   firebase_core: ^4.15.0
   firebase_messaging: ^16.7.0

@@ -14,6 +14,7 @@ import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/states.dart';
 import '../application/technician_providers.dart';
+import '../application/tracking_controller.dart';
 import '../data/technician_repository.dart';
 import 'quote_composer.dart';
 
@@ -43,7 +44,16 @@ class _TechnicianTicketScreenState
   String _absoluteUrl(String url) =>
       url.startsWith('http') ? url : '${AppConfig.apiBaseUrl}$url';
 
+  /// Fait avancer la demande, et suit le déplacement qui va avec.
+  ///
+  /// Le partage de position est lié à `EN_ROUTE` : il démarre quand la demande
+  /// passe en route et s'arrête dès que le technicien ne circule plus (passage
+  /// au diagnostic, annulation). Il est déclenché **après** la mise à jour du
+  /// statut, jamais avant : l'API refuse un suivi sur une demande qui n'est pas
+  /// en route, et un suivi qui échoue ne doit pas faire perdre la transition.
   Future<void> _advance(Ticket ticket, TicketStatus next) async {
+    final wasEnRoute = ticket.status == TicketStatus.enRoute;
+
     setState(() => _busy = true);
     try {
       await ref
@@ -51,8 +61,27 @@ class _TechnicianTicketScreenState
           .updateStatus(ticket.id, next);
       ref.invalidate(technicianTicketDetailProvider(ticket.id));
       ref.invalidate(technicianTicketsProvider);
+
+      final tracking = ref.read(technicianTrackingProvider.notifier);
+      if (next == TicketStatus.enRoute) {
+        await tracking.start(ticket.id);
+      } else if (wasEnRoute) {
+        await tracking.stop(ticket.id);
+      }
+
       if (mounted) {
-        showAppSnackBar(context, 'Demande marquée « ${next.label} ».');
+        // Un suivi indisponible se signale, mais la transition est acquise :
+        // l'ETA est un confort, pas une condition pour travailler.
+        final state = ref.read(technicianTrackingProvider);
+        final note = state.message;
+
+        showAppSnackBar(
+          context,
+          note == null
+              ? 'Demande marquée « ${next.label} ».'
+              : 'Demande marquée « ${next.label} ». $note',
+          isError: note != null,
+        );
       }
     } on ApiException catch (error) {
       if (mounted) showAppSnackBar(context, error.message, isError: true);
@@ -161,6 +190,7 @@ class _TechnicianTicketScreenState
         ),
         data: (ticket) {
           final next = TicketStatus.transitionsFrom(ticket.status);
+          final tracking = ref.watch(technicianTrackingProvider);
 
           return ListView(
             padding: const EdgeInsets.fromLTRB(
@@ -260,6 +290,14 @@ class _TechnicianTicketScreenState
                 ),
               ),
               const SizedBox(height: AppSpacing.md),
+
+              // Le suivi n'existe que pendant le déplacement : l'afficher à
+              // chaque étape donnerait au technicien l'impression qu'il est
+              // encore partagé après le diagnostic.
+              if (ticket.status == TicketStatus.enRoute) ...[
+                _TrackingCard(state: tracking),
+                const SizedBox(height: AppSpacing.md),
+              ],
 
               if (ticket.files.isNotEmpty) ...[
                 AppCard(
@@ -440,4 +478,79 @@ class _TechnicianTicketScreenState
     TicketStatus.canceled => Icons.cancel_outlined,
     TicketStatus.created => Icons.undo_rounded,
   };
+}
+
+/// État du partage de position pendant le déplacement.
+///
+/// Le technicien doit pouvoir vérifier d'un coup d'œil que le client voit
+/// vraiment son arrivée : un service actif mais muet se traduirait par un ETA
+/// figé chez le client sans que personne ne s'en aperçoive.
+class _TrackingCard extends StatelessWidget {
+  const _TrackingCard({required this.state});
+
+  final TechnicianTrackingState state;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SectionHeader(title: 'Suivi de position'),
+          InfoRow(
+            label: 'État',
+            value: _status,
+            icon: state.active
+                ? Icons.my_location_rounded
+                : Icons.location_off_outlined,
+            valueColor: state.active ? context.colors.success : context.colors.error,
+          ),
+          if (state.hasSentPosition) ...[
+            const Divider(),
+            InfoRow(
+              label: 'Position envoyée',
+              value: Fmt.dateTime(state.lastSentAt),
+            ),
+          ],
+          if (state.distanceMeters != null || state.etaMinutes != null) ...[
+            const Divider(),
+            InfoRow(
+              label: 'Restant pour le client',
+              value: _remaining,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String get _status {
+    if (!state.available) {
+      return 'Indisponible sur cet appareil';
+    }
+    if (!state.active) {
+      return state.message ?? 'Arrêté';
+    }
+    return state.hasSentPosition
+        ? 'Actif — position envoyée'
+        : 'Actif — en attente du signal GPS';
+  }
+
+  String get _remaining {
+    final parts = <String>[];
+
+    final distance = state.distanceMeters;
+    if (distance != null) {
+      parts.add(
+        distance < 1000
+            ? '${distance.round()} m'
+            : '${(distance / 1000).toStringAsFixed(1)} km',
+      );
+    }
+
+    final eta = state.etaMinutes;
+    if (eta != null) parts.add('environ $eta min');
+
+    return parts.isEmpty ? '—' : parts.join(' · ');
+  }
 }
