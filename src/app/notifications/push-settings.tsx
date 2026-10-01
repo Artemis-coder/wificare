@@ -104,7 +104,7 @@ export default function PushSettings({
           )}
 
           <div style={{ display: 'flex', gap: '12px', marginTop: '20px', flexWrap: 'wrap' }}>
-            {state === 'granted' ? (
+            {state === 'subscribed' ? (
               <button
                 type="button"
                 className="btn btn-secondary btn-md"
@@ -113,6 +113,10 @@ export default function PushSettings({
               >
                 {isPending ? 'Désactivation…' : 'Désactiver sur ce poste'}
               </button>
+            ) : state === 'loading' ? (
+              <p style={{ color: 'var(--text-secondary)', fontSize: '14px', margin: 0 }}>
+                Vérification de ce poste…
+              </p>
             ) : (
               <button
                 type="button"

@@ -53,17 +53,53 @@ function deviceLabel(): string {
   return os ? `${browser} sur ${os}` : browser;
 }
 
-export type PushState = 'unsupported' | 'disabled' | 'prompt' | 'granted' | 'denied';
+export type PushState =
+  /** Lecture en cours : le navigateur n'a pas encore répondu. */
+  | 'loading'
+  | 'unsupported'
+  | 'disabled'
+  | 'prompt'
+  | 'denied'
+  /** Abonnement actif : le poste reçoit les notifications. */
+  | 'subscribed';
 
-/** État du canal push pour le navigateur courant. */
-export function currentPushState(): PushState {
+/**
+ * État du canal push pour le navigateur courant.
+ *
+ * L'autorisation et l'abonnement sont deux choses distinctes : un navigateur
+ * peut avoir la permission accordée sans abonnement — parce que la régie
+ * l'a retirée depuis un autre poste, ou parce qu'elle a été accordée avant que
+ * le canal existe. Confundre les deux affichait « Désactiver » sur un poste qui
+ * ne recevrait rien, et ne proposait aucun moyen de s'abonner : il fallait
+ * passer par les réglages du navigateur pour débloquer la situation.
+ *
+ * La lecture de l'abonnement est donc asynchrone : l'état `prompt` couvre
+ * « non abonné, autorisation demandable ».
+ */
+export async function currentPushState(): Promise<PushState> {
   if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) {
     return 'unsupported';
   }
 
   if (!VAPID_PUBLIC_KEY) return 'disabled';
+  if (Notification.permission === 'denied') return 'denied';
 
-  return Notification.permission === 'granted' ? 'granted' : Notification.permission === 'denied' ? 'denied' : 'prompt';
+  const subscription = await existingSubscription();
+
+  return subscription ? 'subscribed' : 'prompt';
+}
+
+/** Abonnement déjà présent sur ce poste, s'il y en a un. */
+async function existingSubscription(): Promise<PushSubscription | null> {
+  try {
+    const registration = await navigator.serviceWorker.getRegistration(WORKER_URL);
+
+    return (await registration?.pushManager.getSubscription()) ?? null;
+  } catch {
+    // Un service worker absent ou en erreur ne doit pas empêcher l'écran de
+    // s'afficher : l'activation saura dire ce qui ne va pas.
+    return null;
+  }
 }
 
 /**
@@ -91,7 +127,7 @@ export async function enableWebPush(): Promise<{ ok: boolean; error?: string }> 
     };
   }
 
-  const existing = await registration.pushManager.getSubscription();
+  const existing = await existingSubscription();
 
   const subscription =
     existing ??
@@ -121,9 +157,7 @@ export async function enableWebPush(): Promise<{ ok: boolean; error?: string }> 
 
 /** Retire l'abonnement du navigateur, sans toucher à l'autorisation système. */
 export async function disableWebPush(): Promise<{ ok: boolean; error?: string }> {
-  const registration = await navigator.serviceWorker.getRegistration(WORKER_URL);
-
-  const subscription = await registration?.pushManager.getSubscription();
+  const subscription = await existingSubscription();
 
   if (subscription) {
     await unregisterWebPushAction(subscription.endpoint);
@@ -142,19 +176,26 @@ export async function disableWebPush(): Promise<{ ok: boolean; error?: string }>
  * autorisation refusée.
  */
 export function usePushState(): PushState {
-  // L'état initial est lu pendant le rendu : il dépend du navigateur, que le
-  // serveur ne connaît pas, et le composant se rend déjà côté client.
-  const [state, setState] = useState<PushState>(currentPushState);
+  // L'état dépend de l'abonnement, que le navigateur ne livre qu'en asynchrone :
+  // il est donc relu après le premier rendu. L'écran affiche « Chargement » à
+  // cet instant, ce qui évite de proposer une activation sur un poste déjà
+  // abonné — ou l'inverse.
+  const [state, setState] = useState<PushState>('loading');
 
-  const refresh = useCallback(() => {
-    setState(currentPushState());
+  const refresh = useCallback(async () => {
+    setState(await currentPushState());
   }, []);
 
   useEffect(() => {
+    // La première lecture est asynchrone : elle est donc différée d'un tour de
+    // boucle, pour que l'effet n'écrive pas dans l'état pendant le rendu.
+    const timer = window.setTimeout(refresh, 0);
+
     document.addEventListener('visibilitychange', refresh);
     window.addEventListener('focus', refresh);
 
     return () => {
+      window.clearTimeout(timer);
       document.removeEventListener('visibilitychange', refresh);
       window.removeEventListener('focus', refresh);
     };
