@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 
 import '../config/env.dart';
 import '../storage/token_storage.dart';
@@ -121,8 +120,7 @@ class ApiClient {
         refreshToken: newRefreshToken,
       );
       return true;
-    } on DioException catch (error) {
-      debugPrint('Refresh token failed: ${error.message}');
+    } on DioException {
       return false;
     }
   }
