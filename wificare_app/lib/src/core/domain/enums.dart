@@ -200,6 +200,33 @@ enum PaymentChannel {
   );
 }
 
+/// Opérateur du paiement mobile.
+///
+/// Wave, Orange et MTN ne sont pas équivalents : c'est l'opérateur qui permet
+/// de rapprocher une transaction du règlement, et un client qui paie chez Orange
+/// ne peut pas être rapproché d'un paiement Wave.
+enum MobileMoneyOperator {
+  wave('WAVE', 'Wave', Color(0xFF1CA6F4)),
+  orange('ORANGE', 'Orange', Color(0xFFFF7900)),
+  mtn('MTN', 'MTN', Color(0xFFFFCC00));
+
+  const MobileMoneyOperator(this.wire, this.label, this.color);
+
+  final String wire;
+  final String label;
+  final Color color;
+
+  static MobileMoneyOperator? fromWire(String? value) {
+    if (value == null) return null;
+
+    for (final operator in MobileMoneyOperator.values) {
+      if (operator.wire == value) return operator;
+    }
+
+    return null;
+  }
+}
+
 enum PaymentStatus {
   pending('PENDING', 'En attente'),
   completed('COMPLETED', 'Terminé'),

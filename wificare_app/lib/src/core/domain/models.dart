@@ -295,6 +295,7 @@ class QuoteInvoice {
     required this.type,
     required this.status,
     required this.totalAmount,
+    required this.notes,
     required this.createdAt,
     required this.lines,
     required this.payment,
@@ -306,6 +307,10 @@ class QuoteInvoice {
   final DocumentType type;
   final DocumentStatus status;
   final double totalAmount;
+
+  /// Observations libres du technicien, non facturées.
+  final String? notes;
+
   final DateTime? createdAt;
   final List<InvoiceLine> lines;
   final Payment? payment;
@@ -320,6 +325,7 @@ class QuoteInvoice {
     type: DocumentType.fromWire(JsonX.strOrNull(json['type'])),
     status: DocumentStatus.fromWire(JsonX.strOrNull(json['status'])),
     totalAmount: JsonX.decimal(json['totalAmount']),
+    notes: JsonX.strOrNull(json['notes']),
     createdAt: JsonX.date(json['createdAt']),
     lines: JsonX.list(json['lines']).map(InvoiceLine.fromJson).toList(),
     payment: JsonX.mapOrNull(json['payment']) == null
@@ -336,7 +342,9 @@ class Payment {
     required this.id,
     required this.amount,
     required this.channel,
+    required this.operator,
     required this.reference,
+    required this.transactionRef,
     required this.proofUrl,
     required this.status,
     required this.createdAt,
@@ -345,7 +353,12 @@ class Payment {
   final String id;
   final double amount;
   final PaymentChannel channel;
+
+  /// Opérateur choisi pour un règlement Mobile Money, absent sinon.
+  final MobileMoneyOperator? operator;
+
   final String? reference;
+  final String? transactionRef;
   final String? proofUrl;
   final PaymentStatus status;
   final DateTime? createdAt;
@@ -354,7 +367,9 @@ class Payment {
     id: JsonX.str(json['id']),
     amount: JsonX.decimal(json['amount']),
     channel: PaymentChannel.fromWire(JsonX.strOrNull(json['channel'])),
+    operator: MobileMoneyOperator.fromWire(JsonX.strOrNull(json['operator'])),
     reference: JsonX.strOrNull(json['reference']),
+    transactionRef: JsonX.strOrNull(json['transactionRef']),
     proofUrl: JsonX.strOrNull(json['proofUrl']),
     status: PaymentStatus.fromWire(JsonX.strOrNull(json['status'])),
     createdAt: JsonX.date(json['createdAt']),

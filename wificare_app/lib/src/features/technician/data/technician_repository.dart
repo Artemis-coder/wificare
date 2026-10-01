@@ -37,6 +37,34 @@ class TechnicianRepository {
     return Ticket.fromJson(response['data'] as Map<String, dynamic>);
   }
 
+  /// Établit un devis et l'envoie au client.
+  ///
+  /// L'envoi est définitif : le client en est prévenu et le devis ne sera plus
+  /// modifiable.
+  Future<QuoteInvoice> sendQuote({
+    required String ticketId,
+    required List<QuoteLineDraft> lines,
+    String? notes,
+  }) async {
+    final response = await _api.post<Map<String, dynamic>>(
+      '/quote-invoices',
+      data: {
+        'ticketId': ticketId,
+        'notes': notes,
+        'lines': [
+          for (final line in lines)
+            {
+              'description': line.description,
+              'quantity': line.quantity,
+              'unitPrice': line.unitPrice,
+            },
+        ],
+      },
+    );
+
+    return QuoteInvoice.fromJson(response['data'] as Map<String, dynamic>);
+  }
+
   /// Fait avancer la demande : le technicien est l'acteur du déplacement,
   /// c'est lui qui fait évoluer le statut jusqu'à la clôture.
   Future<Ticket> updateStatus(String id, TicketStatus status) async {
@@ -74,4 +102,17 @@ class TechnicianRepository {
 
     return Intervention.fromJson(response['data'] as Map<String, dynamic>);
   }
+}
+
+/// Ligne de devis transmise à l'API.
+class QuoteLineDraft {
+  const QuoteLineDraft({
+    required this.description,
+    required this.quantity,
+    required this.unitPrice,
+  });
+
+  final String description;
+  final double quantity;
+  final double unitPrice;
 }

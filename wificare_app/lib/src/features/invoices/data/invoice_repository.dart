@@ -1,3 +1,4 @@
+import '../../../core/domain/enums.dart';
 import '../../../core/domain/models.dart';
 import '../../../core/network/api_client.dart';
 
@@ -20,6 +21,28 @@ class InvoiceRepository {
         .whereType<Map<String, dynamic>>()
         .map(QuoteInvoice.fromJson)
         .toList();
+  }
+
+  /// Déclare le règlement d'un devis.
+  ///
+  /// Le client choisit son moyen de paiement ; le montant n'est jamais transmis
+  /// depuis l'application, le serveur reprend celui du devis.
+  Future<Payment> pay({
+    required String ticketId,
+    required PaymentChannel channel,
+    MobileMoneyOperator? operator,
+    String? transactionRef,
+  }) async {
+    final response = await _api.post<Map<String, dynamic>>(
+      '/tickets/$ticketId/payment',
+      data: {
+        'channel': channel.wire,
+        'operator': ?operator?.wire,
+        'transactionRef': ?transactionRef,
+      },
+    );
+
+    return Payment.fromJson(response['data'] as Map<String, dynamic>);
   }
 
   Future<QuoteInvoice> byId(String id) async {

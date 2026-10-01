@@ -68,6 +68,10 @@ enum NotificationType {
   TICKET_STATUS_CHANGED
   /// La demande a été annulée.
   TICKET_CANCELED
+  /// Le technicien a envoyé un devis au client.
+  QUOTE_SENT
+  /// Le client a réglé le devis.
+  PAYMENT_RECEIVED
 }
 
 // ----------------------------------------
@@ -246,8 +250,14 @@ model QuoteInvoice {
   type        DocumentType
   status      DocumentStatus @default(DRAFT)
   totalAmount Float          @default(0)
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  /// Observations libres du technicien, ajoutées après les lignes du devis.
+  /// Elles ne sont pas facturées : elles expliquent l'intervention.
+  notes       String?
+
+  /// Date d'envoi au client. Distincte de `createdAt`, qui date la rédaction.
+  sentAt    DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   ticket  Ticket        @relation(fields: [ticketId], references: [id])
   lines   InvoiceLine[]
@@ -279,14 +289,20 @@ model InvoiceLine {
 }
 
 model Payment {
-  id             String         @id @default(uuid())
-  quoteInvoiceId String         @unique
+  id             String               @id @default(uuid())
+  quoteInvoiceId String               @unique
   amount         Float
   channel        PaymentChannel
+  /// Opérateur du paiement mobile (Wave, Orange, MTN). Null pour un règlement
+  /// en espèces ou par virement : ces moyens n'ont pas d'opérateur.
+  operator       MobileMoneyOperator?
+  /// Référence de la transaction Mobile Money, saisie par le client.
+  transactionRef String?
+  /// Référence classique, conservée pour les virements.
   reference      String?
   proofUrl       String?
-  status         PaymentStatus  @default(PENDING)
-  createdAt      DateTime       @default(now())
+  status         PaymentStatus        @default(PENDING)
+  createdAt      DateTime             @default(now())
 
   quoteInvoice QuoteInvoice @relation(fields: [quoteInvoiceId], references: [id])
 }
@@ -295,6 +311,12 @@ enum PaymentChannel {
   CASH
   MOBILE_MONEY
   BANK_TRANSFER
+}
+
+enum MobileMoneyOperator {
+  WAVE
+  ORANGE
+  MTN
 }
 
 enum PaymentStatus {

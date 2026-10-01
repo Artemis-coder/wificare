@@ -89,6 +89,23 @@ export default function TicketRow({ ticket }: { ticket: RowTicket }) {
           {ticket.status}
         </span>
       </td>
+      {/* Chevron : sans lui, rien n'indique que la ligne s'ouvre. Le
+          parcours se faisait à l'aveugle, la ligne paraissant décorative. */}
+      <td style={{ color: 'var(--text-disabled)', textAlign: 'right' }}>
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <polyline points="9 18 15 12 9 6" />
+        </svg>
+      </td>
     </tr>
   );
 }

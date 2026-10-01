@@ -9,7 +9,10 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_badge.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/states.dart';
+import '../../../core/network/api_exception.dart';
+import '../../../core/widgets/app_button.dart';
 import '../application/invoice_providers.dart';
+import 'payment_sheet.dart';
 
 final invoiceDetailProvider = FutureProvider.family<QuoteInvoice, String>((
   ref,
@@ -19,6 +22,9 @@ final invoiceDetailProvider = FutureProvider.family<QuoteInvoice, String>((
 });
 
 /// Détail d'un devis ou d'une facture.
+///
+/// Le devis est le document que le client valide et règle : c'est donc ici que
+/// se trouve le bouton de règlement, et non dans la liste des factures.
 class InvoiceDetailScreen extends ConsumerWidget {
   const InvoiceDetailScreen({super.key, required this.invoiceId});
 
@@ -46,13 +52,60 @@ class InvoiceDetailScreen extends ConsumerWidget {
   }
 }
 
-class _Content extends StatelessWidget {
+class _Content extends ConsumerWidget {
   const _Content({required this.invoice});
 
   final QuoteInvoice invoice;
 
+  /// Enregistre le règlement choisi par le client.
+  Future<void> _pay(BuildContext context, WidgetRef ref) async {
+    final ticketId = invoice.ticketId;
+
+    if (ticketId == null) return;
+
+    final choice = await showPaymentSheet(
+      context,
+      amount: invoice.totalAmount,
+      ticketReference: invoice.ticketReference,
+    );
+
+    if (choice == null || !context.mounted) return;
+
+    try {
+      await ref
+          .read(invoiceRepositoryProvider)
+          .pay(
+            ticketId: ticketId,
+            channel: choice.channel,
+            operator: choice.operator,
+            transactionRef: choice.transactionRef,
+          );
+
+      ref.invalidate(invoiceDetailProvider(invoice.id));
+
+      if (context.mounted) {
+        showAppSnackBar(
+          context,
+          choice.isCash
+              ? 'Paiement enregistré. Remettez la somme au technicien.'
+              : 'Paiement déclaré. Le technicien en est informé.',
+        );
+      }
+    } on ApiException catch (error) {
+      if (context.mounted) showAppSnackBar(context, error.message, isError: true);
+    } catch (_) {
+      if (context.mounted) {
+        showAppSnackBar(
+          context,
+          'Paiement impossible. Réessayez.',
+          isError: true,
+        );
+      }
+    }
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final colors = context.colors;
     final payment = invoice.payment;
     final isPaid = invoice.status == DocumentStatus.paid;
@@ -129,6 +182,19 @@ class _Content extends StatelessWidget {
               ],
             ),
           ),
+        if (invoice.notes != null && invoice.notes!.trim().isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.md),
+          SectionHeader(
+            title: 'Informations du technicien',
+            subtitle: "Précisions qui n'entrent pas dans le montant.",
+          ),
+          AppCard(
+            child: Text(
+              invoice.notes!,
+              style: TextStyle(color: colors.onSurface, fontSize: 14),
+            ),
+          ),
+        ],
         if (payment != null) ...[
           const SizedBox(height: AppSpacing.md),
           SectionHeader(title: 'Paiement'),
@@ -152,7 +218,9 @@ class _Content extends StatelessWidget {
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
-                  payment.channel.label,
+                  payment.operator == null
+                      ? payment.channel.label
+                      : '${payment.channel.label} ${payment.operator!.label}',
                   style: TextStyle(
                     color: colors.onSurface,
                     fontSize: 14,
@@ -161,6 +229,11 @@ class _Content extends StatelessWidget {
                 ),
                 const SizedBox(height: AppSpacing.md),
                 InfoRow(label: 'Montant', value: Fmt.money(payment.amount)),
+                if (payment.transactionRef != null)
+                  InfoRow(
+                    label: 'Référence de la transaction',
+                    value: payment.transactionRef!,
+                  ),
                 if (payment.reference != null)
                   InfoRow(label: 'Référence', value: payment.reference!),
                 InfoRow(label: 'Date', value: Fmt.date(payment.createdAt)),
@@ -178,6 +251,14 @@ class _Content extends StatelessWidget {
                 ],
               ],
             ),
+          ),
+        ],
+        if (payment == null && invoice.totalAmount > 0) ...[
+          const SizedBox(height: AppSpacing.md),
+          AppButton(
+            label: 'Régler le devis',
+            icon: Icons.payments_rounded,
+            onPressed: () => _pay(context, ref),
           ),
         ],
         const SizedBox(height: AppSpacing.xl),

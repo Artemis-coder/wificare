@@ -25,6 +25,9 @@ class AppInput extends StatefulWidget {
     this.prefixIcon,
     this.suffix,
     this.focusNode,
+    this.keyboardType,
+    this.inputFormatters,
+    this.maxLines,
     this.onChanged,
     this.onSubmitted,
     this.textInputAction,
@@ -42,6 +45,18 @@ class AppInput extends StatefulWidget {
   final IconData? prefixIcon;
   final Widget? suffix;
   final FocusNode? focusNode;
+
+  /// Surcharge le clavier déduit de la variante : une saisie de montant n'a
+  /// pas le même clavier qu'un texte, et la liste des lignes d'un devis comme
+  /// le paiement en dépendent.
+  final TextInputType? keyboardType;
+
+  /// Contraintes de saisie additionnelles, appliquées après celles de la
+  /// variante. S'y substituent : un prix décimal n'a pas à hériter du filtre
+  /// « chiffres uniquement » d'un mot de passe.
+  final List<TextInputFormatter>? inputFormatters;
+
+  final int? maxLines;
   final ValueChanged<String>? onChanged;
   final VoidCallback? onSubmitted;
   final TextInputAction? textInputAction;
@@ -59,7 +74,7 @@ class _AppInputState extends State<AppInput> {
     super.dispose();
   }
 
-  List<TextInputFormatter> get _formatters => switch (widget.variant) {
+  List<TextInputFormatter> get _formatters => widget.inputFormatters ?? switch (widget.variant) {
     AppInputVariant.phone => [
       FilteringTextInputFormatter.digitsOnly,
       LengthLimitingTextInputFormatter(15),
@@ -75,7 +90,7 @@ class _AppInputState extends State<AppInput> {
     _ => const [],
   };
 
-  TextInputType get _keyboardType => switch (widget.variant) {
+  TextInputType get _keyboardType => widget.keyboardType ?? switch (widget.variant) {
     AppInputVariant.phone => TextInputType.phone,
     AppInputVariant.otp => TextInputType.number,
     AppInputVariant.password => TextInputType.number,
@@ -128,7 +143,7 @@ class _AppInputState extends State<AppInput> {
           textInputAction: widget.textInputAction,
           inputFormatters: _formatters,
           obscureText: widget.variant == AppInputVariant.password,
-          maxLines: isMultiline ? 5 : 1,
+          maxLines: widget.maxLines ?? (isMultiline ? 5 : 1),
           minLines: isMultiline ? 3 : 1,
           maxLength: widget.maxLength,
           style: TextStyle(color: colors.onSurface, fontSize: 16),

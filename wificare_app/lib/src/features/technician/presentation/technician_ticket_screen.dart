@@ -14,6 +14,8 @@ import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/states.dart';
 import '../application/technician_providers.dart';
+import '../data/technician_repository.dart';
+import 'quote_composer.dart';
 
 final technicianTicketDetailProvider = FutureProvider.autoDispose
     .family<Ticket, String>(
@@ -66,6 +68,67 @@ class _TechnicianTicketScreenState
       if (mounted) setState(() => _busy = false);
     }
   }
+
+  /// Rédaction puis envoi du devis au client.
+  ///
+  /// La fenêtre ne renvoie que des lignes valides : elle est le seul endroit
+  /// où le technicien saisit, et le serveur revérifie de son côté.
+  Future<void> _sendQuote(Ticket ticket) async {
+    final draft = await showQuoteComposer(
+      context,
+      ticketReference: ticket.reference,
+    );
+
+    if (draft == null || draft.lines.isEmpty || !mounted) return;
+
+    setState(() => _busy = true);
+    try {
+      await ref.read(technicianRepositoryProvider).sendQuote(
+        ticketId: ticket.id,
+        lines: [
+          for (final line in draft.lines)
+            QuoteLineDraft(
+              description: line.description.text.trim(),
+              quantity: line.quantity,
+              unitPrice: line.unitPrice,
+            ),
+        ],
+        notes: draft.notes,
+      );
+
+      ref.invalidate(technicianTicketDetailProvider(ticket.id));
+      ref.invalidate(technicianTicketsProvider);
+
+      if (mounted) {
+        showAppSnackBar(
+          context,
+          'Devis envoyé au client.',
+        );
+      }
+    } on ApiException catch (error) {
+      if (mounted) showAppSnackBar(context, error.message, isError: true);
+    } catch (_) {
+      if (mounted) {
+        showAppSnackBar(
+          context,
+          'Envoi du devis impossible. Réessayez.',
+          isError: true,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// Le devis se rédige une fois le diagnostic posé, ou pendant la réparation
+  /// lorsque des travaux supplémentaires s'avèrent nécessaires.
+  ///
+  /// `PENDING_QUOTE` en est exclu : un devis attend alors une décision du
+  /// client, et lui en proposer un autre pendant qu'il tranche le laisserait
+  /// sans savoir lequel payer. Le serveur refuse de toute façon un second
+  /// devis sur une demande qui en porte déjà un.
+  static bool _canQuote(TicketStatus status) =>
+      status == TicketStatus.diagnosing || status == TicketStatus.repairing;
 
   Future<void> _cancel(Ticket ticket) async {
     final confirmed = await confirmDialog(
@@ -313,6 +376,20 @@ class _TechnicianTicketScreenState
                         ),
                       ),
                     ],
+                  ),
+                ),
+
+              // Le devis se rédige une fois le diagnostic posé : c'est à ce
+              // moment que le technicien sait ce qu'il a à facturer.
+              if (_canQuote(ticket.status))
+                Padding(
+                  padding: const EdgeInsets.only(top: AppSpacing.sm),
+                  child: AppButton(
+                    label: 'Envoyer un devis au client',
+                    icon: Icons.request_quote_outlined,
+                    variant: AppButtonVariant.secondary,
+                    loading: _busy,
+                    onPressed: _busy ? null : () => _sendQuote(ticket),
                   ),
                 ),
 
