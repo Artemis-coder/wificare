@@ -3,6 +3,11 @@ import { prisma } from "@/lib/prisma";
 import { signTokens } from "@/lib/auth-tokens";
 import { verifyPassword } from "@/lib/password";
 import { normalizePhone, phoneCandidates } from "@/lib/phone";
+import {
+  ACCOUNT_TYPE_ROLE,
+  accountTypeMismatchMessage,
+  isAccountType,
+} from "@/lib/roles";
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,6 +22,13 @@ export async function POST(request: NextRequest) {
 
     if (otp && otp !== "123456") {
       return NextResponse.json({ error: "Code OTP invalide" }, { status: 401 });
+    }
+
+    if (accountType !== undefined && accountType !== null && !isAccountType(accountType)) {
+      return NextResponse.json(
+        { error: "Type de compte inconnu" },
+        { status: 400 }
+      );
     }
 
     // Un numéro saisi avec ou sans indicatif désigne le même compte.
@@ -78,17 +90,12 @@ export async function POST(request: NextRequest) {
 
     // L'application demande le type de compte avant la connexion : on refuse
     // un compte qui ne correspond pas au type choisi.
-    if (accountType) {
-      const expectedRole = accountType === "TECHNICIAN" ? "TECHNICIAN" : "CLIENT";
+    if (accountType && isAccountType(accountType)) {
+      const expectedRole = ACCOUNT_TYPE_ROLE[accountType];
 
       if (user.role !== expectedRole) {
         return NextResponse.json(
-          {
-            error:
-              expectedRole === "TECHNICIAN"
-                ? "Ce compte n'est pas un compte technicien."
-                : "Ce compte n'est pas un compte propriétaire de zone.",
-          },
+          { error: accountTypeMismatchMessage(expectedRole) },
           { status: 403 }
         );
       }

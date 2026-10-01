@@ -22,6 +22,7 @@ import '../../features/technician/presentation/technician_ticket_screen.dart';
 import '../../features/technician/presentation/technician_tickets_screen.dart';
 import '../domain/enums.dart';
 import '../providers/infra_providers.dart';
+import '../widgets/app_logo.dart';
 
 abstract final class Routes {
   static const splash = '/';
@@ -284,15 +285,7 @@ class _SplashScreen extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 72,
-              height: 72,
-              decoration: BoxDecoration(
-                color: theme.colorScheme.primary,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: const Icon(Icons.wifi_rounded, color: Colors.white, size: 36),
-            ),
+            const AppLogo(size: 72),
             const SizedBox(height: 20),
             Text('WiFi Care', style: theme.textTheme.titleLarge),
             const SizedBox(height: 24),

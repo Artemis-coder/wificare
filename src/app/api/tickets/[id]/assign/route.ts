@@ -3,13 +3,15 @@ import { NotificationType } from "@prisma/client";
 import { getApiUser } from "@/lib/api-auth";
 import { notify } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
+import { isStaff } from "@/lib/roles";
 
 /**
  * Affecte un technicien à une demande.
  *
  * Réservée à la régie : affecter quelqu'un est une décision d'encadrement,
  * pas une action de terrain. Un technicien ne peut donc pas s'attribuer une
- * demande, ni affecter un collègue.
+ * demande, ni affecter un collègue. La régie est composée des administrateurs
+ * et des super administrateurs.
  */
 export async function PATCH(
   request: NextRequest,
@@ -21,7 +23,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
     }
 
-    if (auth.role !== "ADMIN") {
+    if (!isStaff(auth.role)) {
       return NextResponse.json(
         { error: "Seul un administrateur peut affecter un technicien" },
         { status: 403 }

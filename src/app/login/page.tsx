@@ -4,98 +4,200 @@ import { signIn } from "next-auth/react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { LOGIN_ERROR_MESSAGE } from "@/lib/auth";
+import {
+  ACCOUNT_TYPE_HINT,
+  ACCOUNT_TYPE_LABEL,
+  ACCOUNT_TYPES,
+  PASSWORD_LENGTH,
+  type AccountType,
+} from "@/lib/roles";
+
+/**
+ * Connexion à l'application web.
+ *
+ * Le type de compte est choisi avant le numéro : le serveur refuse un compte qui
+ * ne correspond pas, et l'erreur est alors rattachée au sélecteur. Sous le champ
+ * mot de passe, elle laisserait croire à un mot de passe erroné.
+ */
 export default function LoginPage() {
   const router = useRouter();
+  const [accountType, setAccountType] = useState<AccountType>("SUPER_ADMIN");
   const [phone, setPhone] = useState("");
-  const [otp, setOtp] = useState("");
-  const [error, setError] = useState("");
+  const [password, setPassword] = useState("");
+  const [phoneError, setPhoneError] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [accountTypeError, setAccountTypeError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
+    setPhoneError("");
+    setPasswordError("");
+    setAccountTypeError("");
+
+    if (!phone || !password) {
+      if (!phone) setPhoneError("Saisissez votre numéro de téléphone.");
+      if (!password) setPasswordError("Saisissez votre mot de passe.");
+      return;
+    }
+
     setLoading(true);
 
     const result = await signIn("credentials", {
       phone,
-      otp,
+      password,
+      accountType,
       redirect: false,
     });
 
     if (result?.error) {
-      setError("Numéro de téléphone ou code OTP incorrect.");
+      // `result.error` porte le code renvoyé par `authorize` (voir
+      // LoginRejected dans lib/auth.ts).
+      const code = decodeURIComponent(result.error);
+      const message = LOGIN_ERROR_MESSAGE[code as keyof typeof LOGIN_ERROR_MESSAGE]
+        ?? LOGIN_ERROR_MESSAGE.CredentialsSignin;
+
+      if (code === "mismatch" || code === "badtype") {
+        setAccountTypeError(message);
+      } else if (code === "unknown" || code === "missing") {
+        setPhoneError(message);
+      } else if (code === "inactive") {
+        setAccountTypeError(message);
+      } else {
+        setPasswordError(message);
+      }
+
       setLoading(false);
-    } else {
-      router.push("/");
+      return;
     }
+
+    router.push("/");
+    router.refresh();
   };
 
   return (
-    <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--bg-secondary)' }}>
-      <div style={{ backgroundColor: 'var(--bg-primary)', padding: '40px', borderRadius: 'var(--radius-xl)', boxShadow: 'var(--elevation-3)', width: '100%', maxWidth: '400px' }}>
+    <div style={{ display: 'flex', minHeight: '100vh', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--bg-secondary)', padding: '24px' }}>
+      <div style={{ backgroundColor: 'var(--bg-primary)', padding: '40px', borderRadius: 'var(--radius-xl)', boxShadow: 'var(--elevation-3)', width: '100%', maxWidth: '460px' }}>
         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', color: 'var(--brand-600)', fontSize: '24px', fontWeight: 700, marginBottom: '16px' }}>
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M5 12.55a11 11 0 0 1 14.08 0" />
-              <path d="M1.42 9a16 16 0 0 1 21.16 0" />
-              <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
-              <line x1="12" y1="20" x2="12.01" y2="20" />
-            </svg>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/logo-wificare.png"
+            alt="WiFiCare"
+            width={96}
+            height={96}
+            style={{ display: 'block', margin: '0 auto 12px', borderRadius: 'var(--radius-xl)' }}
+          />
+          <div style={{ fontSize: '24px', fontWeight: 800, color: 'var(--brand-600)' }}>
             WiFiCare
           </div>
           <h2>Connexion</h2>
-          <p className="body-m" style={{ color: 'var(--text-secondary)' }}>Accédez à votre espace administrateur</p>
+          <p className="body-m" style={{ color: 'var(--text-secondary)' }}>Accédez à votre espace</p>
         </div>
 
-        {error && (
-          <div style={{ backgroundColor: 'var(--error-50)', color: 'var(--error-600)', padding: '12px', borderRadius: 'var(--radius-md)', marginBottom: '24px', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-            {error}
+        {accountTypeError && (
+          <div role="alert" style={{ backgroundColor: 'var(--error-50)', color: 'var(--error-600)', padding: '12px', borderRadius: 'var(--radius-md)', marginBottom: '16px', fontSize: '14px' }}>
+            {accountTypeError}
           </div>
         )}
+
+        <fieldset style={{ border: 'none', padding: 0, margin: '0 0 20px' }}>
+          <legend className="label" style={{ marginBottom: '8px' }}>Type de compte</legend>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+            {ACCOUNT_TYPES.map((type) => {
+              const selected = type === accountType;
+
+              return (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => {
+                    setAccountType(type);
+                    setAccountTypeError('');
+                  }}
+                  disabled={loading}
+                  aria-pressed={selected}
+                  style={{
+                    textAlign: 'left',
+                    padding: '10px 12px',
+                    borderRadius: 'var(--radius-md)',
+                    border: `1px solid ${selected ? 'var(--brand-600)' : 'var(--border-strong)'}`,
+                    backgroundColor: selected ? 'var(--brand-50)' : 'var(--bg-primary)',
+                    color: selected ? 'var(--brand-700)' : 'var(--text-primary)',
+                    cursor: loading ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  <span style={{ display: 'block', fontSize: '13px', fontWeight: 600 }}>
+                    {ACCOUNT_TYPE_LABEL[type]}
+                  </span>
+                  <span style={{ display: 'block', fontSize: '11px', color: 'var(--text-secondary)' }}>
+                    {ACCOUNT_TYPE_HINT[type]}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </fieldset>
 
         <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <label className="label" htmlFor="phone">Numéro de téléphone</label>
-            <input 
+            <input
               id="phone"
-              type="text" 
-              placeholder="+2250102030405" 
+              type="tel"
+              inputMode="numeric"
+              placeholder="+2250102030405"
               value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              style={{ height: '44px', padding: '0 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-strong)', fontSize: '16px', outline: 'none' }}
+              onChange={(e) => {
+                setPhone(e.target.value);
+                if (phoneError) setPhoneError("");
+              }}
+              aria-invalid={Boolean(phoneError)}
+              style={{ height: '44px', padding: '0 12px', borderRadius: 'var(--radius-md)', border: `1px solid ${phoneError ? 'var(--error-600)' : 'var(--border-strong)'}`, fontSize: '16px', outline: 'none' }}
               required
             />
+            {phoneError && (
+              <span style={{ fontSize: '12px', color: 'var(--error-600)' }}>{phoneError}</span>
+            )}
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <label className="label" htmlFor="otp">Code OTP</label>
-              <span style={{ fontSize: '12px', color: 'var(--brand-600)', cursor: 'pointer' }}>Envoyer un code</span>
-            </div>
-            <input 
-              id="otp"
-              type="password" 
-              placeholder="123456 (Code de test)" 
-              value={otp}
-              onChange={(e) => setOtp(e.target.value)}
-              style={{ height: '44px', padding: '0 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-strong)', fontSize: '16px', outline: 'none' }}
+            <label className="label" htmlFor="password">Mot de passe</label>
+            <input
+              id="password"
+              type="password"
+              inputMode="numeric"
+              placeholder={'•'.repeat(PASSWORD_LENGTH)}
+              value={password}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                if (passwordError) setPasswordError("");
+              }}
+              aria-invalid={Boolean(passwordError)}
+              style={{ height: '44px', padding: '0 12px', borderRadius: 'var(--radius-md)', border: `1px solid ${passwordError ? 'var(--error-600)' : 'var(--border-strong)'}`, fontSize: '16px', outline: 'none' }}
               required
             />
+            {passwordError ? (
+              <span style={{ fontSize: '12px', color: 'var(--error-600)' }}>{passwordError}</span>
+            ) : (
+              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                {PASSWORD_LENGTH} chiffres
+              </span>
+            )}
           </div>
 
-          <button 
-            type="submit" 
-            className="btn btn-primary btn-lg" 
+          <button
+            type="submit"
+            className="btn btn-primary btn-lg"
             style={{ marginTop: '8px', width: '100%' }}
             disabled={loading}
           >
             {loading ? 'Connexion en cours...' : 'Se connecter'}
           </button>
         </form>
-        
+
         <div style={{ textAlign: 'center', marginTop: '24px', fontSize: '12px', color: 'var(--text-secondary)' }}>
-          Mode démo: Numéro <strong>+2250505050505</strong> (Admin) et code <strong>123456</strong>
+          Mode démo : super administrateur <strong>2250909090909</strong>, administrateur <strong>2250505050505</strong>, technicien <strong>2250102030405</strong>, propriétaire <strong>2250707070707</strong> — mot de passe <strong>1234</strong>
         </div>
       </div>
     </div>

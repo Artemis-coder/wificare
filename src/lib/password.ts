@@ -1,7 +1,9 @@
 import { randomBytes, scryptSync, timingSafeEqual } from "crypto";
 
+import { PASSWORD_LENGTH } from "./roles";
+
 /** Longueur du mot de passe demandé à l'inscription. */
-export const PASSWORD_LENGTH = 4;
+export { PASSWORD_LENGTH };
 
 const KEY_LENGTH = 32;
 

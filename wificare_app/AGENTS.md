@@ -55,6 +55,10 @@ Règles :
   couleurs sémantiques (statuts, priorités) de `core/domain/enums.dart`.
 - Les espacements passent par `AppSpacing`, les rayons par `AppRadius`.
 - Les libellés utilisateur sont **en français**, sans emoji.
+- La marque passe par `core/widgets/app_logo.dart` (`AppLogo`), jamais par un
+  `Icons.wifi_rounded` posé en dur : c'est ce widget qui applique l'arrondi du
+  logo. L'asset est déclaré dans `pubspec.yaml`
+  (`assets/logo/logo_wificare.png`).
 
 ## Comptes
 
@@ -79,6 +83,10 @@ message éphémère (`showAppSnackBar`) et erreur sous le champ concerné.
 
 Comptes de démonstration (mot de passe `1234`) : propriétaire `2250707070707`,
 technicien `2250102030405`.
+
+L'application ne propose que ces deux types de compte : un compte
+d'administration n'a pas d'espace mobile. Le back-office web connaît en plus le
+super administrateur `2250909090909` et l'administrateur `2250505050505`.
 
 Deux pièges d'affichage à ne pas réintroduire :
 

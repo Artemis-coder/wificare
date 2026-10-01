@@ -129,7 +129,7 @@ export default async function Dashboard() {
             Bienvenue, {session.user?.name || 'Administrateur'} 👋
           </h1>
           <p style={{ color: '#c7d2fe', fontSize: '14px', maxWidth: '520px' }}>
-            Supervisez vos zones Wi-Fi, validez les demandes d'installation d'antennes et coordonnez les techniciens en temps réel.
+            Supervisez vos zones Wi-Fi, validez les demandes d&apos;installation d&apos;antennes et coordonnez les techniciens en temps réel.
           </p>
         </div>
         <div style={{ display: 'flex', gap: '12px' }}>
@@ -158,7 +158,7 @@ export default async function Dashboard() {
 
         <div className="kpi-card">
           <div className="kpi-header">
-            <div className="kpi-label">Demandes d'Installation</div>
+            <div className="kpi-label">Demandes d&apos;Installation</div>
             <div className="kpi-icon-wrapper purple">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
             </div>
@@ -204,7 +204,7 @@ export default async function Dashboard() {
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/></svg>
           </div>
           <div>
-            <div style={{ fontWeight: 700, fontSize: '15px' }}>Demande d'Installation</div>
+            <div style={{ fontWeight: 700, fontSize: '15px' }}>Demande d&apos;Installation</div>
             <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Nouvelle antenne, routeur ou extension de couverture</div>
           </div>
         </Link>
@@ -235,7 +235,7 @@ export default async function Dashboard() {
         <div className="data-table-header">
           <div>
             <h3 style={{ margin: 0 }}>Dernières Demandes & Interventions</h3>
-            <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Installations d'antennes, équipements et dépannages urgents</span>
+            <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Installations d&apos;antennes, équipements et dépannages urgents</span>
           </div>
           <Link href="/tickets" className="btn btn-secondary btn-md">
             Voir tout ({recentTickets.length})

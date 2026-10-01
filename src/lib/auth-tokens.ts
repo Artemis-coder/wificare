@@ -1,11 +1,13 @@
 import { sign } from "jsonwebtoken";
 
+import type { AppRole } from "./roles";
+
 const JWT_SECRET = process.env.NEXTAUTH_SECRET || "default-secret-key";
 
 export type TokenUser = {
   id: string;
   phone: string;
-  role: "ADMIN" | "TECHNICIAN" | "CLIENT";
+  role: AppRole;
 };
 
 export type TokenPair = {

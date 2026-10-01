@@ -29,7 +29,7 @@ export default async function ZonesPage() {
         <div>
           <h1>Wi-Fi Zones</h1>
           <p className="body-m" style={{ color: 'var(--text-secondary)' }}>
-            Gérez votre parc de routeurs et d'équipements Wi-Fi.
+            Gérez votre parc de routeurs et d&apos;équipements Wi-Fi.
           </p>
         </div>
         <button className="btn btn-primary btn-lg">

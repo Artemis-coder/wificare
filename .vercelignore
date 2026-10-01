@@ -1,0 +1,33 @@
+# Fichiers exclus du déploiement Vercel.
+#
+# Vercel n'installe que `package.json` / `package-lock.json` et reconstruit le
+# projet côté serveur. Tout le reste — l'application Flutter, ses artefacts de
+# compilation, les caches — represents plusieurs centaines de mega-octets pour
+# rien : le build web n'a pas de dependance dessus, et leur envoi ferait
+# echouer le deploiement sur la limite de 100 Mo par fichier.
+
+node_modules
+.next
+.vercel
+
+# Application mobile Flutter : elle se construit avec `flutter build apk`, pas
+# sur Vercel. Le code est utile au depot, pas a l'hebergement.
+/wificare_app
+
+# Artefacts de compilation generes
+build
+dist
+out
+*.tsbuildinfo
+next-env.d.ts
+
+# Secrets et variables locales
+.env
+.env.local
+.env.*.local
+
+# Fichiers de l'ide et du systeme
+.DS_Store
+.idea
+.vscode
+*.iml

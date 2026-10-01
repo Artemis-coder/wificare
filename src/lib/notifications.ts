@@ -47,10 +47,13 @@ export async function notify(input: NotificationInput): Promise<void> {
   }
 }
 
-/** Identifiants des administrateurs : ce sont eux qui répartissent le travail. */
+/**
+ * Identifiants des administrateurs : ce sont eux qui répartissent le travail.
+ * Un super administrateur fait aussi partie de la régie, il est donc inclus.
+ */
 export async function adminIds(): Promise<string[]> {
   const admins = await prisma.user.findMany({
-    where: { role: "ADMIN" },
+    where: { role: { in: ["SUPER_ADMIN", "ADMIN"] } },
     select: { id: true },
   });
 

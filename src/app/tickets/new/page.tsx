@@ -30,7 +30,7 @@ export default async function NewTicketPage() {
         </Link>
         <h1>Nouvelle Demande ou Intervention</h1>
         <p className="body-m" style={{ color: 'var(--text-secondary)' }}>
-          Faites une demande d'installation de matériel (antenne, routeur) ou signalez une panne.
+          Faites une demande d&apos;installation de matériel (antenne, routeur) ou signalez une panne.
         </p>
       </div>
 
@@ -45,7 +45,7 @@ export default async function NewTicketPage() {
               required
               style={{ height: '48px', padding: '0 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-strong)', fontSize: '15px', backgroundColor: 'var(--bg-primary)', outline: 'none' }}
             >
-              <option value="">Sélectionnez la Wi-Fi Zone ou l'emplacement...</option>
+              <option value="">Sélectionnez la Wi-Fi Zone ou l&apos;emplacement...</option>
               {wifiZones.map((zone) => (
                 <option key={zone.id} value={zone.id}>
                   {zone.name} — {zone.client.name} ({zone.location})
@@ -63,8 +63,8 @@ export default async function NewTicketPage() {
               style={{ height: '48px', padding: '0 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-strong)', fontSize: '15px', backgroundColor: 'var(--bg-primary)', outline: 'none' }}
             >
               <optgroup label="📡 Installations & Équipements">
-                <option value="Installation Antenne">Installation d'antenne (Point-à-point / Relais)</option>
-                <option value="Nouveau Routeur">Ajout / Remplacement d'un routeur Wi-Fi</option>
+                <option value="Installation Antenne">Installation d&apos;antenne (Point-à-point / Relais)</option>
+                <option value="Nouveau Routeur">Ajout / Remplacement d&apos;un routeur Wi-Fi</option>
                 <option value="Extension Couverture">Extension de zone / Répéteur supplémentaire</option>
               </optgroup>
               <optgroup label="🛠️ Pannes & Dépannage">

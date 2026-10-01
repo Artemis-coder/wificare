@@ -65,10 +65,10 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
           
           {/* Section 1: Nature de la Demande */}
           <div style={{ backgroundColor: 'var(--bg-primary)', borderRadius: 'var(--radius-xl)', padding: '24px', border: '1px solid var(--border-default)', boxShadow: 'var(--elevation-1)' }}>
-            <h3 style={{ marginBottom: '16px', fontSize: '16px' }}>Nature & Description de l'Incident</h3>
+            <h3 style={{ marginBottom: '16px', fontSize: '16px' }}>Nature &amp; Description de l&apos;Incident</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div>
-                <div className="label">Type d'intervention</div>
+                <div className="label">Type d&apos;intervention</div>
                 <div style={{ fontWeight: 700, fontSize: '16px', color: 'var(--brand-700)', marginTop: '2px' }}>
                   {ticket.type}
                 </div>
@@ -97,14 +97,14 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
                 </div>
                 {ticket.intervention.durationMin && (
                   <div>
-                    <div className="label">Durée d'intervention</div>
+                    <div className="label">Durée d&apos;intervention</div>
                     <div style={{ fontWeight: 500 }}>{ticket.intervention.durationMin} minutes</div>
                   </div>
                 )}
               </div>
             ) : (
               <div style={{ color: 'var(--text-secondary)', fontSize: '14px', fontStyle: 'italic', padding: '12px 0' }}>
-                Le technicien n'a pas encore saisi de rapport pour cette intervention.
+                Le technicien n&apos;a pas encore saisi de rapport pour cette intervention.
               </div>
             )}
           </div>

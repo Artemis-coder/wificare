@@ -10,6 +10,7 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_input.dart';
+import '../../../core/widgets/app_logo.dart';
 import '../../../core/widgets/states.dart';
 import '../application/auth_controller.dart';
 import 'widgets/account_type_selector.dart';
@@ -124,21 +125,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const SizedBox(height: AppSpacing.xl),
-                  Align(
-                    child: Container(
-                      width: 72,
-                      height: 72,
-                      decoration: BoxDecoration(
-                        color: colors.primary,
-                        borderRadius: BorderRadius.circular(AppRadius.xl),
-                      ),
-                      child: const Icon(
-                        Icons.wifi_rounded,
-                        color: Colors.white,
-                        size: 36,
-                      ),
-                    ),
-                  ),
+                  const Center(child: AppLogo(size: 88)),
                   const SizedBox(height: AppSpacing.lg),
                   Text(
                     'WiFi Care',

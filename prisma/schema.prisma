@@ -72,6 +72,9 @@ model User {
 }
 
 enum Role {
+  /// Super administrateur : seul rôle autorisé à gérer les comptes, les rôles
+  /// et les zones à l'échelle de la plateforme.
+  SUPER_ADMIN
   ADMIN
   TECHNICIAN
   CLIENT

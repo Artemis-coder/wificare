@@ -1,12 +1,14 @@
 import { NextRequest } from "next/server";
 import { verify } from "jsonwebtoken";
 
+import type { AppRole } from "./roles";
+
 const JWT_SECRET = process.env.NEXTAUTH_SECRET || "default-secret-key";
 
 export type ApiUser = {
   userId: string;
   phone: string;
-  role: "ADMIN" | "TECHNICIAN" | "CLIENT";
+  role: AppRole;
 };
 
 /**

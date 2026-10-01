@@ -3,24 +3,28 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
+import { ROLE_LABEL } from '@/lib/roles';
+import { SignOutButton } from './sign-out-button';
 
 export const dynamic = 'force-dynamic';
 
+const STATUS_LABEL = {
+  ACTIVE: 'Actif',
+  INACTIVE: 'Inactif',
+  SUSPENDED: 'Suspendu',
+} as const;
+
 export default async function ProfilePage() {
   const session = await getServerSession(authOptions);
-  
+
   if (!session) {
     redirect('/login');
   }
 
-  // Fetch complete user profile from Neon
-  const user = await prisma.user.findFirst({
-    where: {
-      OR: [
-        { phone: (session.user as any)?.phone },
-        { name: session.user?.name },
-      ],
-    },
+  // La session porte l'identifiant du compte : la requête porte sur cet id, et
+  // non sur le nom, qui n'est pas unique.
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
     include: {
       clients: {
         include: {
@@ -57,7 +61,7 @@ export default async function ProfilePage() {
                 <div style={{ color: 'var(--text-secondary)', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
                   <span className="badge badge-brand">
                     <span className="badge-dot"></span>
-                    {user?.role || (session.user as any)?.role || 'ADMINISTRATEUR'}
+                    {user ? ROLE_LABEL[user.role] : ROLE_LABEL[session.user.role]}
                   </span>
                   <span>• Inscrit le {user?.createdAt ? new Date(user.createdAt).toLocaleDateString('fr-FR') : 'Récemment'}</span>
                 </div>
@@ -70,16 +74,16 @@ export default async function ProfilePage() {
             <div>
               <div className="label" style={{ marginBottom: '6px' }}>Numéro de Téléphone (Identifiant)</div>
               <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)' }}>
-                {user?.phone || (session.user as any)?.phone || 'Non renseigné'}
+                {user?.phone || session.user.phone || 'Non renseigné'}
               </div>
             </div>
 
             <div>
               <div className="label" style={{ marginBottom: '6px' }}>Statut du Compte</div>
               <div>
-                <span className="badge badge-success">
+                <span className={`badge ${user?.status === 'ACTIVE' ? 'badge-success' : 'badge-warning'}`}>
                   <span className="badge-dot"></span>
-                  {user?.status || 'ACTIF'}
+                  {STATUS_LABEL[user?.status ?? 'ACTIVE']}
                 </span>
               </div>
             </div>
@@ -99,6 +103,10 @@ export default async function ProfilePage() {
             </div>
           </div>
         </div>
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <SignOutButton />
       </div>
 
       {/* Mes Wi-Fi Zones Rattachées */}

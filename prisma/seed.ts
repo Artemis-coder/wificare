@@ -11,7 +11,22 @@ const DEMO_PASSWORD = '1234';
 async function main() {
   console.log('Seeding database...');
 
-  // 1. Create a Technician
+  // 1. Super administrateur : seul rôle habilité à gérer les comptes de la
+  //    plateforme. Il est créé en premier car il sert de référence à la régie.
+  await prisma.user.upsert({
+    where: { phone: normalizePhone('+2250909090909') },
+    update: { passwordHash: hashPassword(DEMO_PASSWORD), role: Role.SUPER_ADMIN },
+    create: {
+      name: 'Direction Wi-Fi Care',
+      phone: normalizePhone('+2250909090909'),
+      firstName: 'Direction',
+      lastName: 'Wi-Fi Care',
+      passwordHash: hashPassword(DEMO_PASSWORD),
+      role: Role.SUPER_ADMIN,
+    },
+  });
+
+  // 2. Create a Technician
   const tech = await prisma.user.upsert({
     where: { phone: normalizePhone('+2250102030405') },
     update: { passwordHash: hashPassword(DEMO_PASSWORD) },
@@ -25,7 +40,7 @@ async function main() {
     },
   });
 
-  // 2. Create an Admin
+  // 3. Create an Admin
   await prisma.user.upsert({
     where: { phone: normalizePhone('+2250505050505') },
     update: { passwordHash: hashPassword(DEMO_PASSWORD) },
@@ -39,7 +54,7 @@ async function main() {
     },
   });
 
-  // 3. Create a Client user
+  // 4. Create a Client user
   const clientUser = await prisma.user.upsert({
     where: { phone: normalizePhone('+2250707070707') },
     // Le compte démo peut avoir été créé par une connexion OTP : on lui remet
@@ -55,7 +70,7 @@ async function main() {
     },
   });
 
-  // 4. Create a Client entity linked to the user (idempotent : le compte démo
+  // 5. Create a Client entity linked to the user (idempotent : le compte démo
   //    peut avoir déjà été créé par une connexion).
   const client =
     (await prisma.client.findFirst({ where: { userId: clientUser.id } })) ??
@@ -87,7 +102,7 @@ async function main() {
   });
 
   if (wifiZone) {
-    // 5. Create a Ticket
+    // 6. Create a Ticket
     await prisma.ticket.upsert({
       where: { reference: '#TK-2026-001' },
       update: {},

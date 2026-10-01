@@ -26,6 +26,14 @@ Compte **distinct** du client : le technicien reçoit des demandes et les fait
 avancer. Il ne gère ni zone, ni équipement, ni facture — ces notions
 n'apparaissent nulle part dans son interface, et l'API les lui refuse (`403`).
 
+### Back-office web (régie)
+
+Le site web s'adresse à l'encadrement, pas aux particuliers. Il porte un
+**super administrateur** — seul rôle habilité à gérer les comptes de la
+plateforme : création, changement de rôle, activation, suspension et
+réinitialisation du mot de passe. L'administrateur de régie répartit les
+demandes et suit l'exploitation, sans accès aux comptes.
+
 ### Cycle de vie d'une demande et notifications
 
 Les notifications sont **in-app**, sans service de push : aucun Firebase, aucun
@@ -103,12 +111,33 @@ Mot de passe `1234` pour tous, mot de passe normalisé par
 
 | Rôle | Numéro | Espace |
 | --- | --- | --- |
-| Propriétaire de zone | `2250707070707` | client |
-| Technicien | `2250102030405` | technicien |
-| Administrateur | `2250505050505` | — (API) |
+| Super administrateur | `2250909090909` | web — gère tous les comptes |
+| Administrateur | `2250505050505` | web — répartit les demandes |
+| Technicien | `2250102030405` | mobile `/tech/...` |
+| Propriétaire de zone | `2250707070707` | mobile `/home/...` |
 
-La connexion exige le **type de compte** en plus du téléphone : le serveur
-refuse (`403`) un compte qui ne correspond pas au type choisi.
+La connexion exige le **type de compte** en plus du téléphone et du mot de
+passe : le serveur refuse (`403`) un compte qui ne correspond pas au type choisi.
+L'OTP de démonstration (`123456`) reste accepté par l'API mobile
+`POST /api/auth/login`, mais plus par l'écran web.
+
+### Rôles
+
+| Rôle | Peut |
+| --- | --- |
+| `SUPER_ADMIN` | tout, y compris gérer comptes, rôles et statuts |
+| `ADMIN` | répartir les demandes, suivre l'exploitation |
+| `TECHNICIAN` | traiter les demandes qui lui sont affectées |
+| `CLIENT` | déclarer et suivre les pannes de ses zones |
+
+Les règles vivent dans `src/lib/roles.ts` (libellés, navigation, prédicats) et
+`src/lib/user-admin.ts` (modification d'un compte). L'interface web et l'API
+partagent ces règles : une même décision, quel que soit le chemin d'appel.
+
+Le back-office est réservé à la régie : un compte technicien ou propriétaire ne
+s'y connecte pas. Le super administrateur seul voit l'entrée « Utilisateurs » ;
+une visite directe de `/admin/utilisateurs` par un autre rôle est renvoyée vers
+le tableau de bord.
 
 ---
 
@@ -136,10 +165,16 @@ Toutes les réponses sont enveloppées (`{ "data": ... }` ou
 | `GET` | `/api/notifications` | authentifié |
 | `PATCH` | `/api/notifications` | authentifié — tout marquer comme lu |
 | `PATCH` | `/api/notifications/:id` | authentifié — une notification |
+| `GET` | `/api/admin/users` | super administrateur |
+| `POST` | `/api/admin/users` | super administrateur — créer un compte |
+| `PATCH` | `/api/admin/users/:id` | super administrateur — rôle, statut, mot de passe |
 | `GET` | `/api/health` | public |
 
 Un client ne peut pas faire avancer le statut d'une demande ; un technicien ne
-peut agir que sur les demandes qui lui sont affectées.
+peut agir que sur les demandes qui lui sont affectées. L'API mobile
+s'authentifie par jeton Bearer ; l'interface web utilise sa session NextAuth et
+passe par des **server actions** — les deux chemins appliquent les mêmes règles,
+via `src/lib/user-admin.ts`.
 
 ---
 
@@ -152,10 +187,30 @@ flutter build apk --release --dart-define=API_BASE_URL=http://10.0.2.2:3000/api
 ```
 
 Pour une URL publique, remplacer `10.0.2.2:3000` par l'adresse du serveur
-accessible depuis les appareils.
+accessible depuis les appareils. Pour viser la production déployée :
+
+```bash
+flutter build apk --release \
+  --dart-define=API_BASE_URL=https://wificare-web.vercel.app/api
+```
 
 L'APK n'est pas versionné dans Git (binaire de 57 Mo). Les releases
 GitHub fournissent le fichier prêt à installer.
+
+### Logo
+
+La marque est versionnée, pas seulement posée dans le dépôt :
+
+| Emplacement | Usage |
+| --- | --- |
+| `public/logo-wificare.png` | barre latérale du back-office, écran de connexion, favicon |
+| `public/logo-wificare.jpg` | fichier source d'origine |
+| `wificare_app/assets/logo/logo_wificare.png` | connexion et splash de l'application |
+| `wificare_app/android/app/src/main/res/mipmap-*/ic_launcher.png` | icône du lanceur |
+
+Un changement de logo se dérive de `logo wificare.jpg` : l'application lit le
+PNG declared dans `pubspec.yaml`, le site lit `public/`. L'icône Android doit
+être régénérée pour chaque densité (`mdpi` 48 px → `xxxhdpi` 192 px).
 
 ### Ce qui est versionné, et pourquoi
 
