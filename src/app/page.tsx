@@ -5,6 +5,8 @@ import { authOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 
+import DashboardTicketRow from './dashboard-ticket-row';
+
 export const dynamic = 'force-dynamic';
 
 export default async function Dashboard() {
@@ -57,65 +59,6 @@ export default async function Dashboard() {
       technician: true,
     },
   });
-
-  const isInstallationType = (type: string) => {
-    return ['Installation Antenne', 'Nouveau Routeur', 'Extension Couverture', 'Nouvelle Installation'].includes(type);
-  };
-
-  const getStatusBadge = (status: TicketStatus, type: string) => {
-    if (isInstallationType(type)) {
-      return (
-        <span className="badge badge-purple">
-          <span className="badge-dot"></span>
-          Installation ({status})
-        </span>
-      );
-    }
-
-    switch (status) {
-      case TicketStatus.NEW:
-      case TicketStatus.TO_VERIFY:
-        return (
-          <span className="badge badge-neutral">
-            <span className="badge-dot"></span>
-            Nouveau
-          </span>
-        );
-      case TicketStatus.ASSIGNED:
-      case TicketStatus.CONFIRMED:
-      case TicketStatus.EN_ROUTE:
-        return (
-          <span className="badge badge-brand">
-            <span className="badge-dot"></span>
-            En cours
-          </span>
-        );
-      case TicketStatus.DIAGNOSING:
-      case TicketStatus.PENDING_QUOTE:
-      case TicketStatus.REPAIRING:
-        return (
-          <span className="badge badge-warning">
-            <span className="badge-dot"></span>
-            Diagnostic / Reparation
-          </span>
-        );
-      case TicketStatus.COMPLETED:
-      case TicketStatus.CLOSED:
-        return (
-          <span className="badge badge-success">
-            <span className="badge-dot"></span>
-            Terminé
-          </span>
-        );
-      default:
-        return (
-          <span className="badge badge-neutral">
-            <span className="badge-dot"></span>
-            {status}
-          </span>
-        );
-    }
-  };
 
   return (
     <div>
@@ -251,49 +194,21 @@ export default async function Dashboard() {
               <th>Priorité</th>
               <th>Technicien</th>
               <th>Statut</th>
+              {/* Colonne vide réservée au chevron : elle indique que la ligne
+                  entière mène au détail, où se trouvent les actions. */}
+              <th style={{ width: '40px' }}>
+                <span className="sr-only">Ouvrir</span>
+              </th>
             </tr>
           </thead>
           <tbody>
             {recentTickets.map((ticket) => (
-              <tr key={ticket.id}>
-                <td style={{ fontWeight: 700, color: 'var(--brand-600)' }}>{ticket.reference}</td>
-                <td>
-                  <div style={{ fontWeight: 600 }}>{ticket.wifiZone.name}</div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{ticket.client.name} • {ticket.wifiZone.location}</div>
-                </td>
-                <td style={{ fontWeight: 500 }}>
-                  {isInstallationType(ticket.type) ? (
-                    <span style={{ color: 'var(--accent-purple)', fontWeight: 600 }}>📡 {ticket.type}</span>
-                  ) : (
-                    <span>🛠️ {ticket.type}</span>
-                  )}
-                </td>
-                <td>
-                  {ticket.priority === Priority.URGENT ? (
-                    <span className="badge badge-warning">🚨 URGENT</span>
-                  ) : (
-                    <span className="badge badge-neutral">{ticket.priority}</span>
-                  )}
-                </td>
-                <td>
-                  {ticket.technician ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <div style={{ width: '26px', height: '26px', borderRadius: '50%', backgroundColor: 'var(--brand-100)', color: 'var(--brand-700)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 700 }}>
-                        {ticket.technician.name?.[0] || 'T'}
-                      </div>
-                      <span style={{ fontWeight: 500 }}>{ticket.technician.name}</span>
-                    </div>
-                  ) : (
-                    <span style={{ color: 'var(--text-disabled)', fontSize: '13px' }}>Non assigné</span>
-                  )}
-                </td>
-                <td>{getStatusBadge(ticket.status, ticket.type)}</td>
-              </tr>
+              <DashboardTicketRow key={ticket.id} ticket={ticket} />
             ))}
 
             {recentTickets.length === 0 && (
               <tr>
-                <td colSpan={6} style={{ textAlign: 'center', padding: '36px', color: 'var(--text-secondary)' }}>
+                <td colSpan={7} style={{ textAlign: 'center', padding: '36px', color: 'var(--text-secondary)' }}>
                   Aucune demande en cours.
                 </td>
               </tr>

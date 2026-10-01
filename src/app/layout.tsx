@@ -2,7 +2,9 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { navItemsFor, ROLE_LABEL, type NavItem } from '@/lib/roles';
+import { navItemsFor, ROLE_LABEL, isStaff, type NavItem } from '@/lib/roles';
+import { prisma } from '@/lib/prisma';
+import NotificationBell from './notifications/notification-bell';
 
 export const metadata: Metadata = {
   title: 'WiFi Zone Assist - Dashboard',
@@ -41,6 +43,14 @@ export default async function RootLayout({
   // découvrir l'existence d'une page qu'il ne peut pas ouvrir.
   const navItems = navItemsFor(role);
 
+  // Le badge est lu au rendu de la page : la cloche affiche donc le bon compte
+  // dès le premier écran, sans appel client supplémentaire.
+  const unreadCount = session
+    ? await prisma.notification.count({
+        where: { userId: session.user.id, readAt: null },
+      })
+    : 0;
+
   return (
     <html lang="fr">
       <body>
@@ -67,7 +77,13 @@ export default async function RootLayout({
                 <div className="search-bar">
                   {/* Search bar placeholder */}
                 </div>
-                <a href="/profile" className="user-profile" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                {/* La cloche n'est montée que pour la régie : un client n'a pas
+                    d'espace web, et la notification concernerait un travail qui
+                    n'est pas le sien. Le composant est client, la session reste
+                    côté serveur : il lit la sienne par server action. */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                  {isStaff(role) && <NotificationBell initialUnreadCount={unreadCount} />}
+                  <a href="/profile" className="user-profile" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', lineHeight: 1.2 }}>
                     <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>
                       {session.user?.name || 'Mon Compte'}
@@ -81,7 +97,8 @@ export default async function RootLayout({
                   <div style={{width: '36px', height: '36px', borderRadius: '50%', backgroundColor: 'var(--brand-600)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ffffff', fontWeight: 700, fontSize: '14px', boxShadow: '0 2px 6px rgba(37,99,235,0.3)'}}>
                     {session.user?.name?.[0] || 'U'}
                   </div>
-                </a>
+                  </a>
+                </div>
               </header>
 
               <div className="page-content">
