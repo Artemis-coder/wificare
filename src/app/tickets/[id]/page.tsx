@@ -5,6 +5,7 @@ import { redirect, notFound } from 'next/navigation';
 import Link from 'next/link';
 
 import { isStaff } from '@/lib/roles';
+import { listTechnicians } from '@/lib/technicians';
 import AssignTechnicianForm from './assign-technician-form';
 
 export const dynamic = 'force-dynamic';
@@ -43,13 +44,9 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
   // un client ou un technicien n'a rien à en faire, et n'a pas à la voir.
   const canAssign = isStaff(session.user.role);
 
-  const technicians = canAssign
-    ? await prisma.user.findMany({
-        where: { role: "TECHNICIAN", status: "ACTIVE" },
-        select: { id: true, name: true, phone: true },
-        orderBy: { name: "asc" },
-      })
-    : [];
+  // Tout l'annuaire des techniciens, pas seulement ceux en service : un compte
+  // hors service reste visible, grisé, pour que la régie sache qu'il existe.
+  const technicians = canAssign ? await listTechnicians() : [];
 
   return (
     <div style={{ maxWidth: '900px', margin: '0 auto' }}>

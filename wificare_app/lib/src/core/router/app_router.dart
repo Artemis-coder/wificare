@@ -11,6 +11,7 @@ import '../../features/client/presentation/profile_screen.dart';
 import '../../features/invoices/presentation/invoice_detail_screen.dart';
 import '../../features/invoices/presentation/invoices_screen.dart';
 import '../../features/reviews/presentation/reviews_screen.dart';
+import '../../features/reviews/presentation/technician_reviews_screen.dart';
 import '../../features/notifications/presentation/notifications_screen.dart';
 import '../../features/shell/presentation/client_shell.dart';
 import '../../features/tickets/presentation/ticket_detail_screen.dart';
@@ -62,7 +63,10 @@ abstract final class TechnicianRoutes {
   static const profile = '/tech/dashboard/profile';
   static const notifications = '/tech/dashboard/notifications';
 
-  static const List<String> branches = ['dashboard', 'tickets'];
+  /// Avis reçus des clients, en lecture seule.
+  static const reviews = '/tech/reviews';
+
+  static const List<String> branches = ['dashboard', 'tickets', 'reviews'];
 }
 
 /// Clé de navigation typée pour les onglets.
@@ -263,6 +267,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                     ),
                   ),
                 ],
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: TechnicianRoutes.reviews,
+                builder: (_, _) => const TechnicianReviewsScreen(),
               ),
             ],
           ),

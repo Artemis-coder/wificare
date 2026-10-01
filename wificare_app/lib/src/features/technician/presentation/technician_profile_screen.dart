@@ -218,9 +218,33 @@ class TechnicianProfileScreen extends ConsumerWidget {
                         Icons.chevron_right_rounded,
                         color: colors.onSurfaceVariant,
                       ),
-                      onTap: () => context.push(TechnicianRoutes.notifications),
+onTap: () => context.push(TechnicianRoutes.notifications),
                     ),
-                  ],
+                    const Divider(),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(
+                        Icons.star_outline_rounded,
+                        color: colors.onSurface,
+                      ),
+                      title: Text(
+                        'Avis reçus',
+                        style: TextStyle(color: colors.onSurface, fontSize: 14),
+                      ),
+                      subtitle: Text(
+                        'Ce que les clients ont pensé de vos interventions',
+                        style: TextStyle(
+                          color: colors.onSurfaceVariant,
+                          fontSize: 12,
+                        ),
+                      ),
+                      trailing: Icon(
+                        Icons.chevron_right_rounded,
+                        color: colors.onSurfaceVariant,
+                      ),
+                      onTap: () => context.push(TechnicianRoutes.reviews),
+                    ),
+],
                 ),
               ),
               const SizedBox(height: AppSpacing.lg),

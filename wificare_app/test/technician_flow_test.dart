@@ -105,6 +105,27 @@ void main() {
           'data': notifications.firstWhere((item) => item['id'] == 'n-1'),
         };
       },
+      // Le serveur ne renvoie au technicien que les avis qui le concernent.
+      '/evaluations': (_, _) => {
+        'data': [
+          FakeApiData.evaluation(
+            id: 'e-1',
+            ticketId: 't-tech-2',
+            reference: '#TK-2026-002',
+            rating: 5,
+            comment: 'Intervention rapide et soignée.',
+            technicianName: 'Jean Dupont',
+          ),
+          FakeApiData.evaluation(
+            id: 'e-2',
+            ticketId: 't-tech-3',
+            reference: '#TK-2026-003',
+            rating: 2,
+            comment: 'Retard sur le rendez-vous.',
+            technicianName: 'Jean Dupont',
+          ),
+        ],
+      },
     });
   });
 
@@ -276,6 +297,28 @@ void main() {
     // La barre de navigation reste visible, sur l'accueil.
     expect(find.byType(NavigationBar), findsOneWidget);
     expect(find.text('Demandes'), findsOneWidget);
+  });
+
+  testWidgets('technicien : les avis reçus sont visibles, en lecture seule', (
+    tester,
+  ) async {
+    FlutterSecureStorage.setMockInitialValues(Map.of(_session));
+    await pumpApp(tester);
+
+    await tester.tap(find.text('Avis'));
+    await settle(tester, steps: 20);
+
+    expect(adapter.calls, contains('GET /evaluations'));
+    expect(find.text('Avis reçus'), findsOneWidget);
+    expect(find.text('Intervention rapide et soignée.'), findsOneWidget);
+    expect(find.text('Retard sur le rendez-vous.'), findsOneWidget);
+
+    // 5 et 2 : la moyenne affichée doit être 3,5, pas 3 (cumul entier).
+    expect(find.text('3,5'), findsOneWidget);
+
+    // Le technicien subit la note, il ne la rédige pas.
+    expect(find.text('Mon avis'), findsNothing);
+    expect(find.text('Déposer un avis'), findsNothing);
   });
 
   testWidgets('notifications : le technicien voit ses demandes assignées', (

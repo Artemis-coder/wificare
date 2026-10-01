@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { assignTicketAction } from '../actions';
@@ -9,10 +9,38 @@ type Technician = {
   id: string;
   name: string | null;
   phone: string;
+  status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
+  /** Demandes non clôturées affectées au technicien. */
+  openTickets: number;
+  /** Un technicien hors service ne peut pas recevoir de demande. */
+  assignable: boolean;
 };
+
+/** Motif du refus d'affectation, tel que l'annuaire le présente. */
+const UNAVAILABLE_REASON = {
+  INACTIVE: 'inactif',
+  SUSPENDED: 'suspendu',
+} as const;
+
+/**
+ * Motif lisible pour un technicien hors service, ou `null` s'il est en service.
+ *
+ * `assignable` et `status` voyagent ensemble depuis le serveur ; le type du
+ * composant les garde indépendants, d'où le test explicite plutôt qu'un accès
+ * direct à l'index — qui n'existe pas pour un compte actif.
+ */
+function unavailableReason(technician: Technician): string | null {
+  return technician.status === 'ACTIVE'
+    ? null
+    : UNAVAILABLE_REASON[technician.status];
+}
 
 /**
  * Affectation d'une demande à un technicien précis.
+ *
+ * Tous les comptes de rôle technicien sont proposés, y compris ceux qui ne sont
+ * pas en service : les seconds apparaissent grisés avec leur motif, sinon la
+ * régie cherchait un technicien absent de la liste sans comprendre pourquoi.
  *
  * Le technicien qui reçoit l'intervention est poussé sur son téléphone ; le
  * client, lui, est prévenu qu'un technicien a été désigné. Le message
@@ -35,6 +63,25 @@ export default function AssignTechnicianForm({
   const [isPending, startTransition] = useTransition();
 
   const unchanged = selected === (currentTechnicianId ?? '');
+  const current = technicians.find((t) => t.id === currentTechnicianId) ?? null;
+
+  // Recherche : une équipe nombreuse rend le sélecteur illisible, et le
+  // téléphone suffit à identifier un technicien.
+  const [query, setQuery] = useState('');
+
+  const filtered = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+
+    if (!needle) return technicians;
+
+    return technicians.filter(
+      (technician) =>
+        technician.phone.includes(needle) ||
+        (technician.name ?? '').toLowerCase().includes(needle),
+    );
+  }, [query, technicians]);
+
+  const availableCount = technicians.filter((t) => t.assignable).length;
 
   function handleSubmit() {
     if (!selected) {
@@ -52,7 +99,7 @@ export default function AssignTechnicianForm({
         router.refresh();
       } catch (caught) {
         setError(
-          caught instanceof Error ? caught.message : "Affectation impossible."
+          caught instanceof Error ? caught.message : 'Affectation impossible.'
         );
       }
     });
@@ -66,6 +113,14 @@ export default function AssignTechnicianForm({
       >
         Affecter à un technicien
       </label>
+      <input
+        type="search"
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        placeholder="Rechercher un technicien (nom ou téléphone)"
+        aria-label="Rechercher un technicien"
+        style={{ width: '100%', padding: '8px 10px', fontSize: '14px', marginBottom: '8px' }}
+      />
       <div style={{ display: 'flex', gap: '8px' }}>
         <select
           id="technician-assignment"
@@ -75,9 +130,22 @@ export default function AssignTechnicianForm({
           style={{ flex: 1, padding: '8px 10px', fontSize: '14px' }}
         >
           <option value="">— Choisir un technicien —</option>
-          {technicians.map((technician) => (
-            <option key={technician.id} value={technician.id}>
+          {filtered.map((technician) => (
+            <option
+              key={technician.id}
+              value={technician.id}
+              disabled={!technician.assignable}
+            >
               {technician.name ?? technician.phone} · {technician.phone}
+              {(() => {
+                const reason = unavailableReason(technician);
+
+                if (reason) return ` · ${reason}`;
+
+                return technician.openTickets > 0
+                  ? ` · ${technician.openTickets} en cours`
+                  : ' · disponible';
+              })()}
             </option>
           ))}
         </select>
@@ -85,7 +153,7 @@ export default function AssignTechnicianForm({
           type="button"
           className="btn btn-primary btn-md"
           onClick={handleSubmit}
-          disabled={isPending || unchanged || technicians.length === 0}
+          disabled={isPending || unchanged || !selected}
         >
           {isPending ? 'Affectation…' : 'Affecter'}
         </button>
@@ -93,7 +161,28 @@ export default function AssignTechnicianForm({
 
       {technicians.length === 0 && (
         <p style={{ marginTop: '8px', fontSize: '13px', color: 'var(--text-secondary)' }}>
-          Aucun technicien en service pour le moment.
+          Aucun compte technicien n&apos;existe pour le moment. Créez-en un depuis
+          l&apos;annuaire des utilisateurs.
+        </p>
+      )}
+
+      {technicians.length > 0 && availableCount === 0 && (
+        <p role="alert" style={{ marginTop: '8px', fontSize: '13px', color: 'var(--danger-600)' }}>
+          Aucun technicien n&apos;est en service : tous les comptes sont inactifs ou
+          suspendus. Réactivez-en un pour affecter cette demande.
+        </p>
+      )}
+
+      {query.trim() && filtered.length === 0 && (
+        <p style={{ marginTop: '8px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+          Aucun technicien ne correspond à « {query.trim()} ».
+        </p>
+      )}
+
+      {current && !current.assignable && (
+        <p style={{ marginTop: '8px', fontSize: '13px', color: 'var(--warning-600)' }}>
+          Cette demande est actuellement affectée à {current.name ?? current.phone},
+          dont le compte est {unavailableReason(current)}.
         </p>
       )}
 

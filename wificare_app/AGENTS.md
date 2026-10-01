@@ -112,8 +112,8 @@ La connexion dispatche sur deux espaces distincts, selon le rôle du compte :
 
 | Rôle | Espace | Onglets |
 | --- | --- | --- |
-| `CLIENT` (propriétaire de zone) | `/home/...` | Accueil, Pannes, Équipements, Factures |
-| `TECHNICIAN` | `/tech/...` | Accueil, Demandes |
+| `CLIENT` (propriétaire de zone) | `/home/...` | Accueil, Pannes, Équipements, Factures, Avis |
+| `TECHNICIAN` | `/tech/...` | Accueil, Demandes, Avis |
 
 Un utilisateur connecté qui ouvre l'URL de l'espace de l'autre rôle est
 redirigé vers le sien (`redirect` du `GoRouter`). L'API applique la même règle :
@@ -133,6 +133,9 @@ l'API les lui refuse.
   transitions autorisées par `TicketStatus.transitionsFrom`, libellées en
   verbs d'action (« Démarrer le déplacement », « Passer en réparation »).
 - Son profil affiche son activité, pas ses zones.
+- L'onglet « Avis » est **en lecture seule** : le technicien subit la note, il
+  ne la rédige pas. `GET /api/evaluations` le borne à `technicianId`, sans quoi
+  il pourrait lire ce que les clients ont pensé d'un collègue.
 
 ## Notifications : in-app et push
 

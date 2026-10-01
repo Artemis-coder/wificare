@@ -178,4 +178,34 @@ abstract final class FakeApiData {
       'unreadCount': items.where((item) => item['readAt'] == null).length,
     },
   };
+
+  /// Avis d'intervention.
+  ///
+  /// Le serveur renvoie systématiquement le client et le technicien : un avis
+  /// engage les deux parties.
+  static Map<String, dynamic> evaluation({
+    required String id,
+    required String ticketId,
+    required String reference,
+    required int rating,
+    String? comment,
+    String? technicianName,
+  }) => {
+    'id': id,
+    'ticketId': ticketId,
+    'rating': rating,
+    'comment': comment,
+    'createdAt': '2026-01-30T10:00:00.000Z',
+    'client': {'id': 'user-1', 'name': 'Kouassi Marc', 'phone': '2250707070707'},
+    'technician': technicianName == null
+        ? null
+        : {'id': 'tech-1', 'name': technicianName, 'phone': '2250102030405'},
+    'ticket': {
+      'id': ticketId,
+      'reference': reference,
+      'type': 'Panne totale',
+      'status': 'COMPLETED',
+      'wifiZone': {'name': 'WiFi Zone Angre 8e Tranche'},
+    },
+  };
 }
