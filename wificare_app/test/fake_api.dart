@@ -123,6 +123,7 @@ abstract final class FakeApiData {
     String reference,
     String status, {
     String? technicianId,
+    Map<String, dynamic>? quoteInvoice,
   }) => {
     'id': id,
     'reference': reference,
@@ -139,6 +140,19 @@ abstract final class FakeApiData {
     'client': client,
     'wifiZone': zone,
     'technician': technicianId == null ? null : technician,
+    'quoteInvoice': quoteInvoice,
+  };
+
+  /// Devis en attente de décision du client.
+  static Map<String, dynamic> quote({String ticketId = 't-3'}) => {
+    'id': 'inv-q1',
+    'ticketId': ticketId,
+    'type': 'QUOTE',
+    'status': 'SENT',
+    'totalAmount': 25000,
+    'createdAt': '2026-01-30T10:00:00.000Z',
+    'lines': [],
+    'payment': null,
   };
 
   static Map<String, dynamic> ticketPage(List<Map<String, dynamic>> items) => {

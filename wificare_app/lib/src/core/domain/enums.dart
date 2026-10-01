@@ -80,11 +80,18 @@ enum TicketStatus {
   );
 
   /// Étapes affichées dans le suivi de progression côté client.
-  static const List<TicketStatus> clientProgressSteps = [
+  ///
+  /// Le devis n'y figure que si la demande en porte un : c'est une étape
+  /// facultative, puisqu'un diagnostic peut être réparé sans devis. L'afficher
+  /// systématiquement laisserait le client devant un « Devis en attente » qui
+  /// n'arrivera jamais ; l'omettre, lui, cachait complètement le devis envoyé.
+  /// La demande portant un devis est donc la seule à voir l'étape apparaître.
+  static List<TicketStatus> clientProgressSteps({required bool hasQuote}) => [
     TicketStatus.created,
     TicketStatus.assigned,
     TicketStatus.enRoute,
     TicketStatus.diagnosing,
+    if (hasQuote) TicketStatus.pendingQuote,
     TicketStatus.repairing,
     TicketStatus.completed,
   ];
@@ -127,7 +134,10 @@ enum TicketStatus {
   }
 
   /// Index dans le suivi client, ou -1 si le statut n'y figure pas.
-  int get progressIndex => clientProgressSteps.indexOf(this);
+  ///
+  /// La liste dépend de la demande : `steps` doit être celle réellement
+  /// affichée, sinon un devis présent compterait pour une étape absente.
+  int progressIndex(List<TicketStatus> steps) => steps.indexOf(this);
 
   bool get isOpen =>
       this != TicketStatus.closed && this != TicketStatus.canceled;

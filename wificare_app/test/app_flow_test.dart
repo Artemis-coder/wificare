@@ -128,6 +128,16 @@ void main() {
       '/tickets/t-2': (_, _) => {
         'data': FakeApiData.ticket('t-2', '#TK-2026-002', 'COMPLETED'),
       },
+      // Demande dont le technicien a envoyé un devis : le client doit voir
+      // l'étape « Devis en attente » dans le suivi.
+      '/tickets/t-3': (_, _) => {
+        'data': FakeApiData.ticket(
+          't-3',
+          '#TK-2026-003',
+          'PENDING_QUOTE',
+          quoteInvoice: FakeApiData.quote(),
+        ),
+      },
       '/tickets': (path, body) {
         if (path.startsWith('/tickets?') && path.contains('status=')) {
           return FakeApiData.ticketPage([
@@ -140,6 +150,12 @@ void main() {
         return FakeApiData.ticketPage([
           FakeApiData.ticket('t-1', '#TK-2026-001', 'DIAGNOSING'),
           FakeApiData.ticket('t-2', '#TK-2026-002', 'COMPLETED'),
+          FakeApiData.ticket(
+            't-3',
+            '#TK-2026-003',
+            'PENDING_QUOTE',
+            quoteInvoice: FakeApiData.quote(),
+          ),
         ]);
       },
       '/notifications': (_, _) => FakeApiData.notificationFeed(notifications),
@@ -338,6 +354,45 @@ void main() {
     expect(find.text('#TK-2026-002'), findsOneWidget);
     expect(find.text('En diagnostic'), findsWidgets);
     expect(find.text('Terminé'), findsWidgets);
+  });
+
+  testWidgets('suivi : le devis envoyé apparaît dans la liste d\'étapes', (
+    tester,
+  ) async {
+    FlutterSecureStorage.setMockInitialValues(_session);
+    await pumpApp(tester);
+
+    await tester.tap(find.text('Pannes'));
+    await settle(tester);
+
+    // Demande sans devis : l'étape ne doit pas promettre un devis à venir.
+    await tester.tap(find.text('#TK-2026-001'));
+    await settle(tester);
+
+    expect(find.text('Suivi de l\'intervention'), findsOneWidget);
+    expect(
+      find.text('Devis en attente'),
+      findsNothing,
+      reason: 'un devis est facultatif : ne pas l\'annoncer s\'il n\'existe pas',
+    );
+
+    await tester.pageBack();
+    await settle(tester);
+
+    // Demande pour laquelle le technicien a envoyé un devis : l'étape doit
+    // figurer, et porter la mention « En cours ».
+    await tester.scrollUntilVisible(
+      find.text('#TK-2026-003'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.text('#TK-2026-003'));
+    await settle(tester);
+
+    // Le libellé apparaît deux fois : dans le statut de la demande et dans
+    // l'étape du suivi, ce qui est précisément ce qui manquait.
+    expect(find.text('Devis en attente'), findsWidgets);
+    expect(find.text('En cours'), findsWidgets);
   });
 
   testWidgets('factures : montant et statut de paiement', (tester) async {

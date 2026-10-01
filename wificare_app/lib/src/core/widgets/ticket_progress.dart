@@ -4,34 +4,44 @@ import '../domain/enums.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 
-/// Suivi de progression du ticket côté client (6 étapes).
+/// Suivi de progression du ticket côté client.
+///
+/// L'étape « Devis en attente » n'apparaît que si la demande porte un devis
+/// ([hasQuote]) : un devis est facultatif, et afficher une étape qui n'arrivera
+/// jamais ferait douter le client pendant toute l'intervention.
 ///
 /// L'implémentation verticale est volontairement simple et lisible : cercle
 /// rempli / vide + trait de liaison, sans dépendance à un paquet d'animation.
 class TicketProgressTracker extends StatelessWidget {
-  const TicketProgressTracker({super.key, required this.status});
+  const TicketProgressTracker({
+    super.key,
+    required this.status,
+    required this.hasQuote,
+  });
 
   final TicketStatus status;
+
+  /// La demande porte-t-elle un devis ?
+  final bool hasQuote;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final currentIndex = status.progressIndex;
+    final steps = TicketStatus.clientProgressSteps(hasQuote: hasQuote);
+    final currentIndex = status.progressIndex(steps);
     final isDone = status == TicketStatus.closed;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (var i = 0; i < TicketStatus.clientProgressSteps.length; i++)
+        for (var i = 0; i < steps.length; i++)
           _Step(
-            step: TicketStatus.clientProgressSteps[i],
+            step: steps[i],
             isDone: currentIndex > i || isDone,
             isCurrent: currentIndex == i,
-            isLast: i == TicketStatus.clientProgressSteps.length - 1,
-            color: TicketStatus.clientProgressSteps[i].color,
-            lineColor: currentIndex > i
-                ? TicketStatus.clientProgressSteps[i].color
-                : colors.outlineVariant,
+            isLast: i == steps.length - 1,
+            color: steps[i].color,
+            lineColor: currentIndex > i ? steps[i].color : colors.outlineVariant,
           ),
       ],
     );

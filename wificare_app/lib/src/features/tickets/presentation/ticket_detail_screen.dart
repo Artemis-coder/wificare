@@ -105,7 +105,13 @@ class TicketDetailScreen extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const SectionHeader(title: "Suivi de l'intervention"),
-                  TicketProgressTracker(status: ticket.status),
+                  // Le devis n'est pas systématique : l'étape ne s'affiche que
+                  // si la demande en porte un, sinon le client la verrait
+                  // promise sans jamais la voir arriver.
+                  TicketProgressTracker(
+                    status: ticket.status,
+                    hasQuote: ticket.quoteInvoice != null,
+                  ),
                 ],
               ),
             ),
