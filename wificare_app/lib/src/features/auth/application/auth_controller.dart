@@ -71,15 +71,6 @@ class AuthController extends AsyncNotifier<Session?> {
       await push.registerToken(
         ref.read(pushTokenRepositoryProvider).register,
       );
-
-      // Un jeton peut être renouvelé plus tard sans que l'utilisateur se
-      // reconnecte : c'est le seul moment où le serveur peut en être informé.
-      FirebaseMessaging.instance.onTokenRefresh.listen((token) {
-        ref
-            .read(pushTokenRepositoryProvider)
-            .register(token)
-            .catchError((_) => <String, dynamic>{});
-      });
     } catch (error) {
       debugPrint('Annonce de l\'appareil impossible : $error');
     }
@@ -110,6 +101,13 @@ class AuthController extends AsyncNotifier<Session?> {
     // La session vient d'être créée : le routeur doit recalculer la
     // destination (accueil client ou technicien).
     ref.read(routerRefreshProvider).trigger();
+
+    // L'appareil doit être déclaré ici aussi, et pas seulement au démarrage :
+    // sans cela, une installation neuve — donc le cas le plus fréquent —
+    // n'enregistre son jeton qu'au lancement suivant. Un technicien qui
+    // installe l'application et se connecte resterait sans notifications
+    // jusqu'à rouvrir l'application.
+    await _announceDevice();
   }
 
   /// Connexion par mot de passe (compte créé via `/auth/register`).

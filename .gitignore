@@ -55,3 +55,9 @@ next-env.d.ts
 /wificare_app/.flutter-plugins-dependencies
 /wificare_app/.idea/
 /wificare_app/*.iml
+
+# Configuration Firebase : elle identifie le projet Google et la cle API de
+# l'application. Elle n'est pas versionnee — chaque developpeur depose la
+# sienne dans `wificare_app/android/app/` (voir README, section « Notifications
+# push »). Sans elle, le build reste possible mais le push est desactive.
+/Firebase/

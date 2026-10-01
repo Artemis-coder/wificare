@@ -82,6 +82,11 @@ class PushService {
   bool _available = false;
   bool _initialized = false;
 
+  /// Un jeton peut être renouvelé sans que l'utilisateur se reconnecte : c'est
+  /// le seul moment où le serveur peut en être informé. L'abonnement est posé
+  /// une seule fois, l'annonce de l'appareil pouvant être répétée.
+  bool _tokenRefreshSubscribed = false;
+
   /// Vrai si Firebase a pu démarrer : le push fonctionne alors.
   bool get isAvailable => _available;
 
@@ -170,6 +175,14 @@ class PushService {
       }
 
       await send(token);
+
+      if (!_tokenRefreshSubscribed) {
+        _tokenRefreshSubscribed = true;
+
+        FirebaseMessaging.instance.onTokenRefresh.listen((refreshed) {
+          send(refreshed).catchError((Object _) {});
+        });
+      }
     } catch (error) {
       debugPrint('Enregistrement du jeton de push impossible : $error');
     }

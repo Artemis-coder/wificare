@@ -17,6 +17,13 @@ if (file("google-services.json").exists()) {
     apply(plugin = "com.google.gms.google-services")
 }
 
+// Pas de bloc `dependencies` Firebase ici, contrairement à la documentation
+// Android de Google. Les plugins Flutter (`firebase_core`,
+// `firebase_messaging`) déclarent déjà le BoM et `firebase-messaging`, comme le
+// montre `build/app/outputs/sdk-dependencies/release/sdkDependencies.txt`.
+// Imposer le BoM ici viendrait écraser les versions résolues par le SDK Flutter
+// et pourrait faire diverger `firebase_core` du SDK Android qu'il embarque.
+
 android {
     namespace = "com.wificare.mobile"
     compileSdk = flutter.compileSdkVersion
