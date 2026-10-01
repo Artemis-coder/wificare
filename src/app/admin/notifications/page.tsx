@@ -4,9 +4,11 @@ import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import { authOptions } from '@/lib/auth';
 import { isStaff } from '@/lib/roles';
+import { isPushConfigured } from '@/lib/push';
 import { isWebPushConfigured } from '@/lib/web-push';
 import PushSettings from '@/app/notifications/push-settings';
 import { fetchBroadcastHistory, loadAudiences } from './actions';
+import AndroidPushStatus from './android-push-status';
 import BroadcastComposer, {
   BroadcastHistory,
 } from './broadcast-composer';
@@ -36,7 +38,7 @@ export default async function NotificationConsolePage() {
     redirect('/');
   }
 
-  const [subscriptions, audiences, broadcasts] = await Promise.all([
+  const [subscriptions, audiences, broadcasts, pushState] = await Promise.all([
     prisma.webPushSubscription.findMany({
       where: { userId: session.user.id },
       orderBy: { lastSeenAt: 'desc' },
@@ -44,7 +46,14 @@ export default async function NotificationConsolePage() {
     }),
     loadAudiences(),
     fetchBroadcastHistory(),
+    isPushConfigured(),
   ]);
+
+  // L'audience « tout le monde » compte déjà les comptes actifs : elle est la
+  // référence pour dire sur combien de téléphones un message peut sonner.
+  const everyone = audiences.find((audience) => audience.value === 'ALL');
+  const activeAccounts = everyone?.count ?? 0;
+  const subscribedAccounts = everyone?.devices ?? 0;
 
   return (
     <div style={{ maxWidth: '860px', margin: '0 auto' }}>
@@ -58,6 +67,12 @@ export default async function NotificationConsolePage() {
       </div>
 
       <BroadcastComposer audiences={audiences} />
+
+      <AndroidPushStatus
+        configured={pushState}
+        subscribedAccounts={subscribedAccounts}
+        totalAccounts={activeAccounts}
+      />
 
       <PushSettings
         vapidConfigured={isWebPushConfigured()}

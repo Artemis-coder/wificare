@@ -13,6 +13,7 @@ import {
   sendBroadcast,
   type BroadcastAudience,
 } from '@/lib/broadcast';
+import { devicesSubscribedFor } from '@/lib/push';
 import { isStaff } from '@/lib/roles';
 
 /**
@@ -30,6 +31,8 @@ export type AudienceOption = {
   hint: string;
   /** Destinataires actifs : affiché avant l'envoi, pour viser juste. */
   count: number;
+  /** Dont possédant un téléphone abonné au push, donc joignables hors application. */
+  devices: number;
 };
 
 export type SentBroadcast = {
@@ -45,12 +48,19 @@ export async function loadAudiences(): Promise<AudienceOption[]> {
   const audiences = Object.keys(AUDIENCE_LABEL) as BroadcastAudience[];
 
   return Promise.all(
-    audiences.map(async (audience) => ({
-      value: audience,
-      label: AUDIENCE_LABEL[audience],
-      hint: AUDIENCE_HINT[audience],
-      count: (await audienceUserIds(audience)).length,
-    }))
+    audiences.map(async (audience) => {
+      const userIds = await audienceUserIds(audience);
+
+      return {
+        value: audience,
+        label: AUDIENCE_LABEL[audience],
+        hint: AUDIENCE_HINT[audience],
+        count: userIds.length,
+        // Un message envoyé à cent personnes n'avertit que celles qui ont un
+        // téléphone abonné : l'écart se voit ici, et non dans l'usage.
+        devices: await devicesSubscribedFor(userIds),
+      };
+    })
   );
 }
 

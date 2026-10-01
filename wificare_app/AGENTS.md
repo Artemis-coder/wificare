@@ -207,13 +207,28 @@ rendre la main à l'écran de connexion — Firebase peut mettre plusieurs
 centaines de millisecondes à démarrer, et l'utilisateur resterait devant le
 splash.
 
-**Ce qu'il reste à faire pour activer le push** : le fichier
-`android/app/google-services.json`, qui dépend d'un projet Firebase externe et
-n'est donc pas versionné. Le plugin Gradle `com.google.gms.google-services` n'est
-appliqué que si le fichier est présent, pour que le build reste possible sans
-lui. Côté serveur, la variable `FIREBASE_SERVICE_ACCOUNT` (le secret de service
-au format JSON) doit être définie : sans elle, `lib/push.ts` se laisse tomber
-dans le silence et seule la notification in-app fonctionne.
+**Qui dessine la notification, et où ne pas le faire** : le serveur envoie un
+message porteur d'un bloc `notification`. En arrière-plan ou application arrêtée,
+**c'est le SDK Android qui l'affiche**, sur le canal `wificare_notifications`.
+`firebaseMessagingBackgroundHandler` ne doit donc **pas** redessiner, sans quoi
+l'utilisateur reçoit deux bulles et entend deux sons pour un seul message — le
+défaut le plus visible du push, et invisible en test tant qu'on garde
+l'application au premier plan. Au premier plan en revanche le SDK ne dessine
+rien : c'est `onMessage` qui appelle `showLocalNotification`.
+
+Le canal est créé à la connexion, avant l'enregistrement du jeton : un appareil
+qui possède un jeton a donc toujours son canal. Les entrées
+`default_notification_channel_id` et `default_notification_icon` du manifeste
+sont le filet de sécurité pour le cas général — sans elles, un canal absent est
+créé par le système en importance basse, donc muet.
+
+**Ce qu'il reste à faire pour activer le push** : `google-services.json` est
+déposé (`android/app/`), le plugin Gradle `com.google.gms.google-services` n'est
+appliqué que s'il est présent pour que le build reste possible sans lui. Ce qui
+manque est la variable **serveur** `FIREBASE_SERVICE_ACCOUNT` (secret de service
+au format JSON) : sans elle, `lib/push.ts` se laisse tomber dans le silence et
+seule la notification in-app fonctionne. L'écran `/admin/notifications` affiche
+l'état du push pour que ce silence ne passe pas pour un succès.
 
 Le désucrage de bibliothèque (`coreLibraryDesugaring`) est activé pour
 `flutter_local_notifications` : sans lui, Gradle refuse de compiler.

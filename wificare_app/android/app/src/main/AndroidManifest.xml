@@ -37,6 +37,18 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
+        <!-- Le canal doit exister *avant* la première notification, y compris quand
+             l'application est arrêtée : le SDK Android n'en crée pas un lui-même,
+             et le canal qu'il invente est en importance basse, donc muet. L'application
+             crée ce canal à la connexion (push_service.dart) ; ces deux entrées
+             disent au SDK lequel utiliser dans le cas général. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="wificare_notifications" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@mipmap/ic_launcher" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

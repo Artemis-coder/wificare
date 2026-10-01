@@ -202,10 +202,15 @@ dans le silence et tout continue de fonctionner en notification in-app.
 Pour l'activer :
 
 1. définir `FIREBASE_SERVICE_ACCOUNT` avec le secret de service du projet
-   Firebase, au format JSON ;
+   Firebase, au format JSON — c'est **cette** étape qui manque pour que les
+   messages de `/admin/notifications` sonnent sur les téléphones ;
 2. déposer `google-services.json` dans `wificare_app/android/app/` (le fichier
-   n'est pas versionné) ;
+   n'est pas versionné) — **déjà fait** ;
 3. reconstruire l'APK.
+
+L'écran `/admin/notifications` affiche l'état du push Android et le nombre de
+téléphones réellement joignables par audience : une campagne qui n'atteint
+personne est visible avant l'envoi, et non après.
 
 Le canal Android est `wificare_notifications` : il doit correspondre au
 `channelId` envoyé par le serveur.

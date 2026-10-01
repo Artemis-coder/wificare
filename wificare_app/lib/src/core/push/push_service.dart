@@ -14,23 +14,39 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 /// donc sans son propre son.
 const String kNotificationChannelId = 'wificare_notifications';
 
-/// Affiche une notification reçue alors que l'application est en arrière-plan.
+/// Réception des notifications hors application.
 ///
-/// Obligatoirement une fonction de premier niveau : Firebase l'instancie dans
-/// un isolate séparé, et une méthode d'instance n'y serait pas accessible.
+/// **Ne dessine rien.** Le serveur envoie un message porteur d'un bloc
+/// `notification` : c'est le SDK Android qui l'affiche lui-même quand
+/// l'application est en arrière-plan ou arrêtée, sur le canal
+/// [kNotificationChannelId]. Dessiner ici en plus produirait deux bulles et
+/// deux sons pour un seul message — le défaut le plus visible de tout le push,
+/// et il ne se verrait qu'en conditions réelles, téléphone en poche.
+///
+/// Le handler reste enregistré pour que le processus soit réveillé et que le
+/// jeton puisse être rafraîchi ; et parce qu'un message *sans* bloc
+/// `notification` (donnée seule) n'est jamais dessiné par le système, il faut
+/// savoir le traiter. `showLocalNotification` couvre les deux : premier plan, où
+/// le SDK ne dessine rien, et message de données.
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
 
-  final notification = message.notification;
+  if (message.notification != null) {
+    // Dessiné par le SDK, avec son canal et son importance.
+    return;
+  }
 
-  if (notification == null) {
+  final title = message.data['title'] as String?;
+  final body = message.data['body'] as String?;
+
+  if (title == null || title.isEmpty) {
     return;
   }
 
   await showLocalNotification(
-    title: notification.title ?? 'WiFiCare',
-    body: notification.body ?? '',
+    title: title,
+    body: body ?? '',
     payload: message.data['ticketId'] as String?,
   );
 }
@@ -188,14 +204,33 @@ class PushService {
     }
   }
 
+  /// Premier plan : le SDK ne dessine rien, l'application le fait elle-même.
+  ///
+  /// Sans cela, une notification reçue alors que l'application est ouverte se
+  /// limiterait à incrémenter une cloche — l'utilisateur voit qu'il a quelque
+  /// chose à regarder, sans être tenté de le faire maintenant.
   Future<void> _onForegroundMessage(RemoteMessage message) async {
     final notification = message.notification;
 
-    if (notification == null) return;
+    if (notification != null) {
+      await showLocalNotification(
+        title: notification.title ?? 'WiFiCare',
+        body: notification.body ?? '',
+        payload: message.data['ticketId'] as String?,
+      );
+
+      return;
+    }
+
+    final title = message.data['title'] as String?;
+
+    if (title == null || title.isEmpty) {
+      return;
+    }
 
     await showLocalNotification(
-      title: notification.title ?? 'WiFiCare',
-      body: notification.body ?? '',
+      title: title,
+      body: message.data['body'] as String? ?? '',
       payload: message.data['ticketId'] as String?,
     );
   }

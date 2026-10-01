@@ -111,6 +111,39 @@ type PushPayload = {
 };
 
 /**
+ * Vrai si le serveur peut réellement envoyer.
+ *
+ * À lire par la console de notification : sans cette information, une campagne
+ * envoyée quand Firebase n'est pas configuré se termine par un message
+ * enregistré, et rien n'indique à la régie qu'aucun téléphone n'a été touché.
+ */
+export function isPushConfigured(): boolean {
+  return readServiceAccount() !== null;
+}
+
+/**
+ * Destinataires disposant d'au moins un téléphone abonné.
+ *
+ * Un compte actif peut n'avoir jamais ouvert l'application depuis l'installation
+ * du push, ou refuser les notifications : il verrait le message en l'ouvrant,
+ * mais ne le recevrait pas en dehors. Compter ces comptes à part permet de le
+ * dire avant l'envoi plutôt que de le découvrir après.
+ */
+export async function devicesSubscribedFor(userIds: string[]): Promise<number> {
+  if (userIds.length === 0) {
+    return 0;
+  }
+
+  const rows = await prisma.pushToken.findMany({
+    where: { userId: { in: userIds } },
+    select: { userId: true },
+    distinct: ["userId"],
+  });
+
+  return rows.length;
+}
+
+/**
  * Envoie une notification à tous les appareils d'un destinataire.
  *
  * Les jetons invalides sont retirés au passage : Firebase renvoie

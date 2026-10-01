@@ -128,6 +128,22 @@ export default function BroadcastComposer({
                   <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
                     {option.hint}
                   </span>
+                  {/* L'écart entre les deux chiffres est la seule chose qui
+                      distingue « envoyé » de « reçu » : autant le dire ici. */}
+                  {option.count > 0 && option.devices < option.count && (
+                    <span
+                      style={{
+                        display: 'block',
+                        marginTop: '4px',
+                        fontSize: '12px',
+                        color: 'var(--warning-600, var(--text-secondary))',
+                      }}
+                    >
+                      {option.devices === 0
+                        ? 'Aucun téléphone abonné : le message n’apparaîtra que dans l’application, et ceux qui l’ont fermée ne le verront pas.'
+                        : `${option.count - option.devices} sans téléphone abonné : leur message n’apparaîtra que dans l’application.`}
+                    </span>
+                  )}
                 </span>
               </label>
             ))}
