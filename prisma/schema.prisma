@@ -107,6 +107,8 @@ enum NotificationType {
   PAYMENT_RECEIVED
   /// Un client a déposé un avis sur l'intervention du technicien.
   EVALUATION_RECEIVED
+  /// Message adressé par l'équipe d'administration à toute la plateforme.
+  BROADCAST
 }
 
 // ----------------------------------------

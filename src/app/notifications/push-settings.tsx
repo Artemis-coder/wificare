@@ -22,21 +22,22 @@ type Subscription = {
 export default function PushSettings({
   vapidConfigured,
   subscriptions,
-  testSent,
 }: {
   /** Les clés VAPID sont-elles présentes côté serveur ? */
   vapidConfigured: boolean;
   subscriptions: Subscription[];
-  testSent: boolean;
 }) {
   const state = usePushState();
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState(false);
+  // Une seule confirmation pour les deux gestes : « activé » et « essai envoyé »
+  // disent tous deux que le poste est opérationnel, et deux messages
+  // simultanés se contrediraient.
+  const [done, setDone] = useState<'subscribed' | 'tested' | null>(null);
   const [isPending, startTransition] = useTransition();
 
   function handleEnable() {
     setError(null);
-    setDone(false);
+    setDone(null);
 
     startTransition(async () => {
       const result = await enableWebPush();
@@ -46,14 +47,14 @@ export default function PushSettings({
         return;
       }
 
-      setDone(true);
+      setDone("subscribed");
       window.location.reload();
     });
   }
 
   function handleDisable() {
     setError(null);
-    setDone(false);
+    setDone(null);
 
     startTransition(async () => {
       await disableWebPush();
@@ -66,7 +67,7 @@ export default function PushSettings({
 
     startTransition(async () => {
       await sendTestNotificationAction();
-      setDone(true);
+      setDone("tested");
     });
   }
 
@@ -138,17 +139,11 @@ export default function PushSettings({
             </button>
           </div>
 
-          {testSent && !error && (
+          {done && !error && (
             <p role="status" style={{ color: 'var(--success-600)', fontSize: '14px', marginTop: '16px' }}>
-              Notification d&apos;essai envoyée. Elle doit apparaître en bas de
-              l&apos;écran, même si ce poste est en arrière-plan. Vous la
-              retrouverez aussi dans la liste des notifications, en haut à droite.
-            </p>
-          )}
-
-          {done && !testSent && !error && (
-            <p role="status" style={{ color: 'var(--success-600)', fontSize: '14px', marginTop: '16px' }}>
-              Notifications activées sur ce poste.
+              {done === 'tested'
+                ? 'Notification d’essai envoyée. Elle doit apparaître en bas de l’écran, même si ce poste est en arrière-plan. Vous la retrouverez aussi dans la liste des notifications, en haut à droite.'
+                : 'Notifications activées sur ce poste.'}
             </p>
           )}
 

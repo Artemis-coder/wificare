@@ -1,27 +1,31 @@
-import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { redirect } from 'next/navigation';
 
+import { prisma } from '@/lib/prisma';
 import { authOptions } from '@/lib/auth';
 import { isStaff } from '@/lib/roles';
 import { isWebPushConfigured } from '@/lib/web-push';
 import PushSettings from '@/app/notifications/push-settings';
+import { fetchBroadcastHistory, loadAudiences } from './actions';
+import BroadcastComposer, {
+  BroadcastHistory,
+} from './broadcast-composer';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * Réglages de notification du poste, pour la régie.
+ * Console de notification de la régie.
  *
- * Le back-office ne vit que dans un navigateur : sans abonnement Web Push, une
- * demande qui attend une répartition n'est visible qu'au chargement de la
- * page. Cet écran est donc là où l'on active le canal, où l'on voit quels postes
- * sont abonnés, et d'où l'on s'envoie une notification d'essai.
+ * Le cycle de vie d'une demande ne couvre qu'une partie de ce qu'il faut
+ * annoncer : une coupure réseau sur plusieurs zones, une maintenance planifiée,
+ * un incident général. Ces messages n'ont ni demande ni technicien associé, et
+ * n'arrivaient qu'à passer par la console Firebase — une dépendance externe pour
+ * un geste qui relève du back-office.
+ *
+ * L'écran regroupe donc les deux besoins : composer un message pour une audience,
+ * et équiper le poste pour être prévenu hors application.
  */
-export default async function NotificationSettingsPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ sent?: string }>;
-}) {
+export default async function NotificationConsolePage() {
   const session = await getServerSession(authOptions);
 
   if (!session) {
@@ -32,25 +36,28 @@ export default async function NotificationSettingsPage({
     redirect('/');
   }
 
-  const params = await searchParams;
-  const sent = params.sent === '1';
-
-  const subscriptions = await prisma.webPushSubscription.findMany({
-    where: { userId: session.user.id },
-    orderBy: { lastSeenAt: 'desc' },
-    select: { id: true, label: true, lastSeenAt: true },
-  });
+  const [subscriptions, audiences, broadcasts] = await Promise.all([
+    prisma.webPushSubscription.findMany({
+      where: { userId: session.user.id },
+      orderBy: { lastSeenAt: 'desc' },
+      select: { id: true, label: true, lastSeenAt: true },
+    }),
+    loadAudiences(),
+    fetchBroadcastHistory(),
+  ]);
 
   return (
-    <div style={{ maxWidth: '820px', margin: '0 auto' }}>
+    <div style={{ maxWidth: '860px', margin: '0 auto' }}>
       <div className="page-header">
         <div>
           <h1>Notifications</h1>
-          <p className="body-m" style={{ color: 'var(--text-secondary)' }}>
-            Soyez prévenu sur ce poste, même le back-office fermé.
+          <p style={{ color: 'var(--text-secondary)', fontSize: '14px', margin: 0 }}>
+            Prévenez la plateforme, et equippez ce poste pour être prévenu.
           </p>
         </div>
       </div>
+
+      <BroadcastComposer audiences={audiences} />
 
       <PushSettings
         vapidConfigured={isWebPushConfigured()}
@@ -59,8 +66,11 @@ export default async function NotificationSettingsPage({
           label: subscription.label,
           lastSeenAt: subscription.lastSeenAt.toISOString(),
         }))}
-        testSent={sent}
       />
+
+      <div style={{ marginTop: '24px' }}>
+        <BroadcastHistory broadcasts={broadcasts} audienceLabel="la plateforme" />
+      </div>
     </div>
   );
 }
