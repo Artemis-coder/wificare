@@ -1,14 +1,20 @@
 import { NotificationType } from "@prisma/client";
 import { prisma } from "./prisma";
 import { notifyPush } from "./push";
+import { notifyWebPush } from "./web-push";
 
 /**
  * Écriture des notifications in-app et push.
  *
- * Le backend est la seule source de vérité : les deux canaux partent de la même
- * écriture, ce qui garantit qu'un technicien alerté sur son téléphone retrouve
- * la notification dans l'application. Les notifications sont donc persistées,
- * ce qui les rend disponibles hors ligne et après redémarrage.
+ * Le backend est la seule source de vérité : les canaux partent de la même
+ * écriture, ce qui garantit qu'un utilisateur alerté retrouve la notification
+ * dans l'application. Les notifications sont donc persistées, ce qui les rend
+ * disponibles hors ligne et après redémarrage.
+ *
+ * Trois canaux, un par matériel : la notification in-app, le push Firebase pour
+ * l'application Android (`lib/push`), et le push Web Push pour les navigateurs
+ * du back-office (`lib/web-push`). Les deux derniers sont déclenchés ensemble
+ * après l'écriture : un même événement alarme donc les deux matérials d'un coup.
  */
 
 /** Destinataires d'une notification, à déduire du contexte métier. */
@@ -47,6 +53,12 @@ export async function notify(input: NotificationInput): Promise<void> {
     });
 
     await notifyPush(targets, {
+      title: input.title,
+      body: input.body,
+      ticketId: input.ticketId,
+    });
+
+    await notifyWebPush(targets, {
       title: input.title,
       body: input.body,
       ticketId: input.ticketId,

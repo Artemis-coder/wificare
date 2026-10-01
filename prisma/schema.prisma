@@ -59,6 +59,39 @@ model PushToken {
   @@index([userId])
 }
 
+/// Abonnement push d'un navigateur.
+///
+/// Le back-office prévient la régie même onglet fermé : c'est le seul moment où
+/// une demande qui attend une répartition est visible, personne ne laisse un
+/// tableau de bord ouvert en permanence pour guetter une ligne qui changerait.
+///
+/// L'abonnement est fourni par le navigateur et expire : le service de push le
+/// répond `404` ou `410` quand il n'est plus valide, et il est alors retiré —
+/// sinon chaque notification échouerait pour tout le monde à cause d'un poste
+/// éteint depuis des mois.
+model WebPushSubscription {
+  id     String @id @default(uuid())
+  /// Adresse du service de push du navigateur. Unique : un même navigateur ne
+  /// s'abonne qu'une fois, et se réabonne après avoir révoqué son autorisation.
+  endpoint String @unique
+  userId   String
+  /// Clé de chiffrement publique du navigateur (`p256dh`).
+  p256dh   String
+  /// Clé d'authentification du navigateur.
+  auth     String
+  /// Nom du navigateur et du système, pour que la régie sache quel poste est
+  /// abonné : un abonnement orphelin est difficile à reconnaître.
+  label    String?
+  /// Dernière confirmation de vie : un abonnement inactif depuis plusieurs mois
+  /// est considéré comme périmé.
+  lastSeenAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
 enum NotificationType {
   /// Une demande vient d'être soumise par un client.
   TICKET_SUBMITTED
@@ -102,6 +135,8 @@ model User {
   notifications   Notification[]
   /// Jetons de push des appareils de ce compte.
   pushTokens      PushToken[]
+  /// Navigateurs du back-office abonnés aux notifications hors application.
+  pushSubscriptions WebPushSubscription[]
 }
 
 enum Role {

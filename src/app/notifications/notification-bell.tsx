@@ -184,23 +184,38 @@ export default function NotificationBell({
         <div className="notif-panel" role="dialog" aria-label="Notifications">
           <div className="notif-panel-header">
             <strong style={{ fontSize: '14px' }}>Notifications</strong>
-            {unreadCount > 0 && (
-              <button
-                type="button"
-                onClick={handleMarkAll}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              {/* Les réglages du poste se règlent une fois, pas à chaque
+                  notification : le panneau y renvoie. */}
+              <a
+                href="/admin/notifications"
                 style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
                   fontSize: '12px',
                   fontWeight: 600,
-                  color: 'var(--brand-600)',
-                  padding: 0,
+                  color: 'var(--text-secondary)',
+                  textDecoration: 'none',
                 }}
               >
-                Tout lire
-              </button>
-            )}
+                Réglages
+              </a>
+              {unreadCount > 0 && (
+                <button
+                  type="button"
+                  onClick={handleMarkAll}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    color: 'var(--brand-600)',
+                    padding: 0,
+                  }}
+                >
+                  Tout lire
+                </button>
+              )}
+            </div>
           </div>
 
           {items.length === 0 ? (

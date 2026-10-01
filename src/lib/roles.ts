@@ -126,6 +126,12 @@ export const NAV_ITEMS: readonly NavItem[] = [
     icon: "reviews",
     roles: ["SUPER_ADMIN", "ADMIN"],
   },
+  {
+    href: "/admin/notifications",
+    label: "Notifications",
+    icon: "bell",
+    roles: ["SUPER_ADMIN", "ADMIN"],
+  },
   { href: "/zones", label: "Wi-Fi Zones", icon: "zones" },
   { href: "/invoices", label: "Factures & Paiements", icon: "invoices" },
   { href: "/profile", label: "Mon Profil", icon: "profile" },
