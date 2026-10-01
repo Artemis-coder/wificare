@@ -1,12 +1,14 @@
 import { NotificationType } from "@prisma/client";
 import { prisma } from "./prisma";
+import { notifyPush } from "./push";
 
 /**
- * Écriture des notifications in-app.
+ * Écriture des notifications in-app et push.
  *
- * Le backend est la seule source de vérité : l'application mobile les relit
- * (polling) au lieu de recevoir un push. Les notifications sont donc
- * persistées, ce qui les rend disponibles hors ligne et après redémarrage.
+ * Le backend est la seule source de vérité : les deux canaux partent de la même
+ * écriture, ce qui garantit qu'un technicien alerté sur son téléphone retrouve
+ * la notification dans l'application. Les notifications sont donc persistées,
+ * ce qui les rend disponibles hors ligne et après redémarrage.
  */
 
 /** Destinataires d'une notification, à déduire du contexte métier. */
@@ -19,11 +21,12 @@ type NotificationInput = {
 };
 
 /**
- * Crée une notification pour chaque destinataire.
+ * Crée une notification pour chaque destinataire, puis l'envoie en push.
  *
  * Ne fait jamais échouer l'opération métier qui l'appelle : une notification
  * perdue ne doit pas faire perdre une demande au client. Les erreurs sont
- * loguées, pas propagées.
+ * loguées, pas propagées. Le push est déclenché après l'écriture in-app, pour
+ * qu'un échec de Firebase ne retarde jamais la réponse au client.
  */
 export async function notify(input: NotificationInput): Promise<void> {
   const targets = [...new Set(input.userIds)].filter(Boolean);
@@ -41,6 +44,12 @@ export async function notify(input: NotificationInput): Promise<void> {
         body: input.body,
         ticketId: input.ticketId ?? null,
       })),
+    });
+
+    await notifyPush(targets, {
+      title: input.title,
+      body: input.body,
+      ticketId: input.ticketId,
     });
   } catch (error) {
     console.error("Notification creation error:", error);

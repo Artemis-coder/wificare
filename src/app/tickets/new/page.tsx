@@ -2,7 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
-import { createTicket } from '../actions';
+import { createTicketAction } from '../actions';
 import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
@@ -35,7 +35,7 @@ export default async function NewTicketPage() {
       </div>
 
       <div style={{ backgroundColor: 'var(--bg-primary)', padding: '36px', borderRadius: 'var(--radius-xl)', border: '1px solid var(--border-default)', boxShadow: 'var(--elevation-2)' }}>
-        <form action={createTicket} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        <form action={createTicketAction} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <label className="label" htmlFor="wifiZoneId">Wi-Fi Zone concernée *</label>

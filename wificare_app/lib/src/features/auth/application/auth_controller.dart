@@ -1,8 +1,13 @@
+import 'dart:async';
+
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/domain/models.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/providers/infra_providers.dart';
+import '../../notifications/data/push_token_repository.dart';
 import '../data/auth_repository.dart';
 
 final authRepositoryProvider = Provider<AuthRepository>(
@@ -10,6 +15,10 @@ final authRepositoryProvider = Provider<AuthRepository>(
     api: ref.watch(apiClientProvider),
     storage: ref.watch(tokenStorageProvider),
   ),
+);
+
+final pushTokenRepositoryProvider = Provider<PushTokenRepository>(
+  (ref) => PushTokenRepository(ref.watch(apiClientProvider)),
 );
 
 /// Source de vérité de l'authentification.
@@ -27,7 +36,53 @@ class AuthController extends AsyncNotifier<Session?> {
       ref.read(routerRefreshProvider).trigger();
     };
 
-    return ref.read(authRepositoryProvider).restore();
+    final restored = await ref.read(authRepositoryProvider).restore();
+
+    if (restored != null) {
+      // L'annonce de l'appareil ne doit jamais retarder le démarrage : Firebase
+      // peut mettre plusieurs centaines de millisecondes à s'initialiser, et
+      // l'utilisateur resterait devant le splash pendant ce temps.
+      unawaited(_announceDevice());
+    }
+
+    return restored;
+  }
+
+  /// Déclare cet appareil au serveur pour qu'il reçoive les notifications.
+  ///
+  /// Le jeton est enregistré à chaque ouverture de session : Firebase peut le
+  /// renouveler à la réinstallation ou au changement d'appareil, et le serveur
+  /// doit détenir le jeton valide le plus récent, sans quoi la notification
+  /// d'une nouvelle demande partirait dans le vide.
+  ///
+  /// Silencieuse en cas d'échec : sans configuration Firebase, l'application
+  /// continue de fonctionner sur ses notifications internes.
+  Future<void> _announceDevice() async {
+    try {
+      final push = ref.read(pushServiceProvider);
+      await push.initialize();
+
+      if (!push.isAvailable) {
+        return;
+      }
+
+      await push.requestPermission();
+
+      await push.registerToken(
+        ref.read(pushTokenRepositoryProvider).register,
+      );
+
+      // Un jeton peut être renouvelé plus tard sans que l'utilisateur se
+      // reconnecte : c'est le seul moment où le serveur peut en être informé.
+      FirebaseMessaging.instance.onTokenRefresh.listen((token) {
+        ref
+            .read(pushTokenRepositoryProvider)
+            .register(token)
+            .catchError((_) => <String, dynamic>{});
+      });
+    } catch (error) {
+      debugPrint('Annonce de l\'appareil impossible : $error');
+    }
   }
 
   Session? get session => state.value;
@@ -118,6 +173,22 @@ class AuthController extends AsyncNotifier<Session?> {
   }
 
   Future<void> logout() async {
+    // Le jeton est retiré avant la destruction de la session : l'API doit
+    // encore reconnaître l'appelant. Sans cela, le téléphone continuerait de
+    // recevoir les notifications du compte quitté.
+    final push = ref.read(pushServiceProvider);
+
+    if (push.isAvailable) {
+      final token = await FirebaseMessaging.instance.getToken();
+
+      if (token != null && token.isNotEmpty) {
+        await ref
+            .read(pushTokenRepositoryProvider)
+            .unregister(token)
+            .catchError((_) => <String, dynamic>{});
+      }
+    }
+
     await ref.read(authRepositoryProvider).logout();
     state = const AsyncValue.data(null);
     ref.read(routerRefreshProvider).trigger();

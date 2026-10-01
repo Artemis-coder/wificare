@@ -4,6 +4,19 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Firebase n'est appliqué que si le fichier de configuration est présent.
+//
+// Sans `google-services.json`, le plugin échoue à la compilation : or le
+// fichier dépend d'un projet Firebase externe, il ne peut pas être versionné.
+// L'application doit donc rester compilable dans son état, en se passant
+// simplement de notifications push (cf. `core/push/push_service.dart`, qui
+// absorbe l'échec d'initialisation). Déposer le fichier dans
+// `android/app/google-services.json` suffit à activer le push, sans toucher
+// au Gradle.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}
+
 android {
     namespace = "com.wificare.mobile"
     compileSdk = flutter.compileSdkVersion
@@ -12,6 +25,10 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // `flutter_local_notifications` utilise des API Java récentes
+        // (java.time) absentes des runtimes Android plus anciens : le
+        // désucrage les réécrit pour les versions qui les ignorent.
+        isCoreLibraryDesugaringEnabled = true
     }
 
     defaultConfig {
@@ -52,4 +69,8 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 }

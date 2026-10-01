@@ -36,8 +36,24 @@ demandes et suit l'exploitation, sans accès aux comptes.
 
 ### Cycle de vie d'une demande et notifications
 
-Les notifications sont **in-app**, sans service de push : aucun Firebase, aucun
-APNs, aucune messagerie externe à configurer.
+Une demande entrante est répartie de deux façons :
+
+- **affectation par la régie** : dans le détail d'une demande
+  (`/tickets/<id>`), l'administrateur ou le super administrateur choisit un
+  technicien dans la liste des techniciens en service ;
+- **affectation automatique** : tant qu'il existe **exactement un** technicien
+  `ACTIVE`, toute nouvelle demande lui revient sans intervention, et il en est
+  prévenu. Dès qu'un second technicien entre en service, l'affectation redevient
+  une décision de régie.
+
+Les deux chemins passent par `src/lib/tickets.ts` : l'interface web et l'API
+mobile appliquent donc exactement la même règle.
+
+Les notifications partent sur deux canaux alimentés par la même écriture :
+dans l'application (in-app), et en **push** vers le téléphone — une intervention
+assignée doit prévenir le technicien même application fermée. Le push passe par
+Firebase Cloud Messaging ; il est facultatif, l'application restant pleinement
+fonctionnelle sans lui.
 
 | Événement | Destinataires |
 | --- | --- |
@@ -165,6 +181,8 @@ Toutes les réponses sont enveloppées (`{ "data": ... }` ou
 | `GET` | `/api/notifications` | authentifié |
 | `PATCH` | `/api/notifications` | authentifié — tout marquer comme lu |
 | `PATCH` | `/api/notifications/:id` | authentifié — une notification |
+| `POST` | `/api/push-tokens` | authentifié — déclare le jeton de push de l'appareil |
+| `DELETE` | `/api/push-tokens` | authentifié — retire le jeton (déconnexion) |
 | `GET` | `/api/admin/users` | super administrateur |
 | `POST` | `/api/admin/users` | super administrateur — créer un compte |
 | `PATCH` | `/api/admin/users/:id` | super administrateur — rôle, statut, mot de passe |
@@ -174,7 +192,23 @@ Un client ne peut pas faire avancer le statut d'une demande ; un technicien ne
 peut agir que sur les demandes qui lui sont affectées. L'API mobile
 s'authentifie par jeton Bearer ; l'interface web utilise sa session NextAuth et
 passe par des **server actions** — les deux chemins appliquent les mêmes règles,
-via `src/lib/user-admin.ts`.
+via `src/lib/user-admin.ts` (comptes) et `src/lib/tickets.ts` (demandes).
+
+### Notifications push
+
+Le push est facultatif : sans configuration, `src/lib/push.ts` se laisse tomber
+dans le silence et tout continue de fonctionner en notification in-app.
+
+Pour l'activer :
+
+1. définir `FIREBASE_SERVICE_ACCOUNT` avec le secret de service du projet
+   Firebase, au format JSON ;
+2. déposer `google-services.json` dans `wificare_app/android/app/` (le fichier
+   n'est pas versionné) ;
+3. reconstruire l'APK.
+
+Le canal Android est `wificare_notifications` : il doit correspondre au
+`channelId` envoyé par le serveur.
 
 ---
 

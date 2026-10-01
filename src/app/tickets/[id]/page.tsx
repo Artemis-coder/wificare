@@ -4,6 +4,9 @@ import { authOptions } from '@/lib/auth';
 import { redirect, notFound } from 'next/navigation';
 import Link from 'next/link';
 
+import { isStaff } from '@/lib/roles';
+import AssignTechnicianForm from './assign-technician-form';
+
 export const dynamic = 'force-dynamic';
 
 export default async function TicketDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -35,6 +38,18 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
   if (!ticket) {
     notFound();
   }
+
+  // La liste des techniciens disponibles n'est chargée que pour la régie :
+  // un client ou un technicien n'a rien à en faire, et n'a pas à la voir.
+  const canAssign = isStaff(session.user.role);
+
+  const technicians = canAssign
+    ? await prisma.user.findMany({
+        where: { role: "TECHNICIAN", status: "ACTIVE" },
+        select: { id: true, name: true, phone: true },
+        orderBy: { name: "asc" },
+      })
+    : [];
 
   return (
     <div style={{ maxWidth: '900px', margin: '0 auto' }}>
@@ -200,6 +215,14 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
               <div style={{ color: 'var(--text-disabled)', fontSize: '13px' }}>
                 Aucun technicien affecté pour le moment.
               </div>
+            )}
+
+            {canAssign && (
+              <AssignTechnicianForm
+                ticketId={ticket.id}
+                technicians={technicians}
+                currentTechnicianId={ticket.technicianId}
+              />
             )}
           </div>
 

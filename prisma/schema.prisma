@@ -17,23 +17,46 @@ datasource db {
 // affiche. Pas de push : la consultation se fait par polling depuis l'écran
 // dédié.
 model Notification {
-  id String @id @default(uuid())
+  id        String           @id @default(uuid())
   /// Destinataire : un client, un technicien ou un administrateur.
-  userId     String
-  type       NotificationType
-  title      String
-  body       String
-  /// Demande concernée, pour allowonger l'utilisateur vers le détail.
-  ticketId   String?
+  userId    String
+  type      NotificationType
+  title     String
+  body      String
+  /// Demande concernée, pour amener l'utilisateur vers le détail.
+  ticketId  String?
   /// Date de lecture. null = non lu.
-  readAt     DateTime?
-  createdAt  DateTime @default(now())
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
 
   user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   ticket Ticket? @relation(fields: [ticketId], references: [id], onDelete: Cascade)
 
   @@index([userId, readAt])
   @@index([userId, createdAt])
+}
+
+/// Jeton de push d'un appareil.
+///
+/// Un utilisateur peut être connecté sur plusieurs téléphones : chaque
+/// appareil enregistre son propre jeton. Le jeton est la clé d'adressage
+/// fournie par Firebase Cloud Messaging, il est donc propre à l'appareil et
+/// change si l'application est réinstallée.
+model PushToken {
+  id         String   @id @default(uuid())
+  /// Adresse de l'appareil qui doit recevoir la notification.
+  token      String   @unique
+  userId     String
+  /// Plateforme, pour pouvoir cibler un envoi ultérieur.
+  platform   String   @default("android")
+  /// Dernière confirmation de vie du jeton. Un jeton qui n'a pas été
+  /// rafraîchi depuis plusieurs mois est considéré comme périmé.
+  lastSeenAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 enum NotificationType {
@@ -51,24 +74,26 @@ enum NotificationType {
 // Utilisateurs & Authentification
 // ----------------------------------------
 model User {
-  id           String   @id @default(uuid())
+  id           String     @id @default(uuid())
   name         String?
   firstName    String?
   lastName     String?
-  phone        String   @unique
+  phone        String     @unique
   /// Empreinte du mot de passe de 4 chiffres (scrypt + sel), null tant que le
   /// compte n'a été créé que par OTP.
   passwordHash String?
-  role         Role     @default(CLIENT)
-  status    UserStatus @default(ACTIVE)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  role         Role       @default(CLIENT)
+  status       UserStatus @default(ACTIVE)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 
   // Relations
-  clients     Client[]     @relation("ClientUsers")
-  tickets     Ticket[]     @relation("TechnicianTickets")
-  evaluations Evaluation[]
+  clients       Client[]       @relation("ClientUsers")
+  tickets       Ticket[]       @relation("TechnicianTickets")
+  evaluations   Evaluation[]
   notifications Notification[]
+  /// Jetons de push des appareils de ce compte.
+  pushTokens    PushToken[]
 }
 
 enum Role {
@@ -105,53 +130,53 @@ model Client {
 }
 
 model WifiZone {
-  id          String   @id @default(uuid())
-  clientId    String
-  name        String
-  location    String
-  createdAt   DateTime @default(now())
+  id        String   @id @default(uuid())
+  clientId  String
+  name      String
+  location  String
+  createdAt DateTime @default(now())
 
-  client      Client      @relation(fields: [clientId], references: [id])
-  equipments  Equipment[]
-  tickets     Ticket[]
+  client     Client      @relation(fields: [clientId], references: [id])
+  equipments Equipment[]
+  tickets    Ticket[]
 }
 
 model Equipment {
   id           String   @id @default(uuid())
   wifiZoneId   String
-  type         String   // e.g., Routeur, Switch, ONT
+  type         String // e.g., Routeur, Switch, ONT
   brand        String?
   model        String?
   serialNumber String?
   createdAt    DateTime @default(now())
 
-  wifiZone     WifiZone @relation(fields: [wifiZoneId], references: [id])
+  wifiZone WifiZone @relation(fields: [wifiZoneId], references: [id])
 }
 
 // ----------------------------------------
 // Tickets & Interventions
 // ----------------------------------------
 model Ticket {
-  id           String   @id @default(uuid())
-  reference    String   @unique // e.g., #TK-2026-001
-  type         String   // Panne, Lenteur, Installation
-  priority     Priority @default(NORMAL)
+  id           String       @id @default(uuid())
+  reference    String       @unique // e.g., #TK-2026-001
+  type         String // Panne, Lenteur, Installation
+  priority     Priority     @default(NORMAL)
   status       TicketStatus @default(NEW)
   scheduledFor DateTime?
   description  String?
   clientId     String
   wifiZoneId   String
   technicianId String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
 
-  client       Client       @relation(fields: [clientId], references: [id])
-  wifiZone     WifiZone     @relation(fields: [wifiZoneId], references: [id])
-  technician   User?        @relation("TechnicianTickets", fields: [technicianId], references: [id])
-  files        File[]
-  intervention Intervention?
-  quoteInvoice QuoteInvoice?
-  evaluation   Evaluation?
+  client        Client         @relation(fields: [clientId], references: [id])
+  wifiZone      WifiZone       @relation(fields: [wifiZoneId], references: [id])
+  technician    User?          @relation("TechnicianTickets", fields: [technicianId], references: [id])
+  files         File[]
+  intervention  Intervention?
+  quoteInvoice  QuoteInvoice?
+  evaluation    Evaluation?
   notifications Notification[]
 }
 
@@ -163,18 +188,18 @@ enum Priority {
 }
 
 enum TicketStatus {
-  NEW             // Nouveau
-  TO_VERIFY       // À vérifier
-  ASSIGNED        // Affecté
-  CONFIRMED       // Rendez-vous confirmé
-  EN_ROUTE        // En route
-  DIAGNOSING      // En diagnostic
-  PENDING_QUOTE   // Devis en attente
-  REPAIRING       // En réparation
-  COMPLETED       // Terminé
+  NEW // Nouveau
+  TO_VERIFY // À vérifier
+  ASSIGNED // Affecté
+  CONFIRMED // Rendez-vous confirmé
+  EN_ROUTE // En route
+  DIAGNOSING // En diagnostic
+  PENDING_QUOTE // Devis en attente
+  REPAIRING // En réparation
+  COMPLETED // Terminé
   PENDING_PAYMENT // Paiement en attente
-  CLOSED          // Clôturé
-  CANCELED        // Annulé
+  CLOSED // Clôturé
+  CANCELED // Annulé
 }
 
 // ----------------------------------------
@@ -187,7 +212,7 @@ model File {
   fileType  FileType // Photo, Video, Audio
   createdAt DateTime @default(now())
 
-  ticket    Ticket   @relation(fields: [ticketId], references: [id])
+  ticket Ticket @relation(fields: [ticketId], references: [id])
 }
 
 enum FileType {
@@ -203,30 +228,30 @@ enum FileType {
 model Intervention {
   id          String   @id @default(uuid())
   ticketId    String   @unique
-  checklist   Json?    // e.g. { "router_restarted": true, "cable_checked": false }
+  checklist   Json? // e.g. { "router_restarted": true, "cable_checked": false }
   diagnostic  String?
   solution    String?
   durationMin Int?
   createdAt   DateTime @default(now())
 
-  ticket      Ticket   @relation(fields: [ticketId], references: [id])
+  ticket Ticket @relation(fields: [ticketId], references: [id])
 }
 
 // ----------------------------------------
 // Devis, Factures & Paiements
 // ----------------------------------------
 model QuoteInvoice {
-  id          String   @id @default(uuid())
-  ticketId    String   @unique
+  id          String         @id @default(uuid())
+  ticketId    String         @unique
   type        DocumentType
   status      DocumentStatus @default(DRAFT)
-  totalAmount Float    @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  totalAmount Float          @default(0)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
 
-  ticket      Ticket        @relation(fields: [ticketId], references: [id])
-  lines       InvoiceLine[]
-  payment     Payment?
+  ticket  Ticket        @relation(fields: [ticketId], references: [id])
+  lines   InvoiceLine[]
+  payment Payment?
 }
 
 enum DocumentType {
@@ -243,27 +268,27 @@ enum DocumentStatus {
 }
 
 model InvoiceLine {
-  id             String       @id @default(uuid())
+  id             String @id @default(uuid())
   quoteInvoiceId String
   description    String
-  quantity       Int          @default(1)
+  quantity       Int    @default(1)
   unitPrice      Float
   totalPrice     Float
-  
-  quoteInvoice   QuoteInvoice @relation(fields: [quoteInvoiceId], references: [id], onDelete: Cascade)
+
+  quoteInvoice QuoteInvoice @relation(fields: [quoteInvoiceId], references: [id], onDelete: Cascade)
 }
 
 model Payment {
-  id             String       @id @default(uuid())
-  quoteInvoiceId String       @unique
+  id             String         @id @default(uuid())
+  quoteInvoiceId String         @unique
   amount         Float
   channel        PaymentChannel
   reference      String?
   proofUrl       String?
-  status         PaymentStatus @default(PENDING)
-  createdAt      DateTime     @default(now())
+  status         PaymentStatus  @default(PENDING)
+  createdAt      DateTime       @default(now())
 
-  quoteInvoice   QuoteInvoice @relation(fields: [quoteInvoiceId], references: [id])
+  quoteInvoice QuoteInvoice @relation(fields: [quoteInvoiceId], references: [id])
 }
 
 enum PaymentChannel {
@@ -286,10 +311,10 @@ model Evaluation {
   id        String   @id @default(uuid())
   ticketId  String   @unique
   clientId  String
-  rating    Int      // 1 to 5
+  rating    Int // 1 to 5
   comment   String?
   createdAt DateTime @default(now())
 
-  ticket    Ticket   @relation(fields: [ticketId], references: [id])
-  client    User     @relation(fields: [clientId], references: [id])
+  ticket Ticket @relation(fields: [ticketId], references: [id])
+  client User   @relation(fields: [clientId], references: [id])
 }

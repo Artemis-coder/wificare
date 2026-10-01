@@ -1,46 +1,63 @@
 'use server';
 
-import { prisma } from '@/lib/prisma';
-import { Priority, TicketStatus } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
+import { getServerSession } from 'next-auth';
 import { redirect } from 'next/navigation';
 
-export async function createTicket(formData: FormData) {
+import { authOptions } from '@/lib/auth';
+import { isStaff } from '@/lib/roles';
+import { createTicket, assignTicket } from '@/lib/tickets';
+
+/**
+ * Création d'une demande depuis le back-office.
+ *
+ * La répartition est déléguée à `lib/tickets` : le formulaire web et
+ * l'application mobile appliquent donc la même règle d'affectation.
+ */
+export async function createTicketAction(formData: FormData) {
   const wifiZoneId = formData.get('wifiZoneId') as string;
   const type = formData.get('type') as string;
-  const priority = formData.get('priority') as Priority;
+  const priority = formData.get('priority') as string;
   const description = formData.get('description') as string;
 
-  if (!wifiZoneId || !type) {
-    throw new Error('La zone Wi-Fi et le type d\'intervention sont requis.');
-  }
-
-  // Find zone to get associated client
-  const zone = await prisma.wifiZone.findUnique({
-    where: { id: wifiZoneId },
+  const result = await createTicket({
+    wifiZoneId,
+    type,
+    priority,
+    description,
   });
 
-  if (!zone) {
-    throw new Error('Wi-Fi Zone introuvable.');
+  if (!result.ok) {
+    throw new Error(result.error);
   }
-
-  // Count tickets to generate ref
-  const count = await prisma.ticket.count();
-  const reference = `#TK-${new Date().getFullYear()}-${String(count + 1).padStart(3, '0')}`;
-
-  await prisma.ticket.create({
-    data: {
-      reference,
-      type,
-      priority: priority || Priority.NORMAL,
-      status: TicketStatus.NEW,
-      description,
-      clientId: zone.clientId,
-      wifiZoneId: zone.id,
-    },
-  });
 
   revalidatePath('/tickets');
   revalidatePath('/');
   redirect('/tickets');
+}
+
+/**
+ * Affectation d'un technicien choisi dans le détail d'une demande.
+ *
+ * Le contrôle de rôle est refait côté serveur : masquer le sélecteur dans
+ * l'interface ne protège pas la donnée, seule la règle ici-dessous le fait.
+ */
+export async function assignTicketAction(ticketId: string, technicianId: string) {
+  // Le rôle est vérifié ici, et pas seulement en masquant le sélecteur :
+  // l'interface ne protège pas la donnée, seule cette règle le fait.
+  const session = await getServerSession(authOptions);
+
+  if (!session || !isStaff(session.user.role)) {
+    throw new Error('Seul un administrateur peut affecter un technicien.');
+  }
+
+  const result = await assignTicket(ticketId, technicianId);
+
+  if (!result.ok) {
+    throw new Error(result.error);
+  }
+
+  revalidatePath(`/tickets/${ticketId}`);
+  revalidatePath('/tickets');
+  revalidatePath('/');
 }

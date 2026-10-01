@@ -53,3 +53,9 @@ app.*.map.json
 /android/.gradle/
 /android/local.properties
 /android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
+
+# Fichier de configuration Firebase du developpeur : il identifie le projet
+# Firebase et ne doit jamais etre versionne. Chaque developpeur depose le sien
+# (voir AGENTS.md, section « Notifications push ») ; le build reste possible
+# sans lui, au prix de la désactivation du push.
+android/app/google-services.json

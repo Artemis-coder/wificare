@@ -1,6 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET"/>
 
+    <!-- Android 13 (API 33) exige une autorisation explicite pour afficher une
+         notification : sans elle, une demande reçue reste invisible. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+
     <application
         android:label="WiFiCare"
         android:name="${applicationName}"

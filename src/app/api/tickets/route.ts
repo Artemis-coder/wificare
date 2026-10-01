@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getApiUser } from "@/lib/api-auth";
-import { Prisma, Priority, TicketStatus, NotificationType } from "@prisma/client";
-import { adminIds, notify, soleTechnicianId } from "@/lib/notifications";
-
-const PRIORITIES = Object.values(Priority);
+import { Prisma, TicketStatus } from "@prisma/client";
+import { createTicket } from "@/lib/tickets";
 
 export async function GET(request: NextRequest) {
   try {
@@ -60,6 +58,16 @@ export async function GET(request: NextRequest) {
  * ce qui évite au client mobile de devoir DEVINER son propre Client comme le
  * faisait l'ancienne version (`getClients().data[0]`).
  */
+/**
+ * Création d'une demande d'intervention par un client depuis l'application mobile.
+ * Le client est déduit de l'utilisateur authentifié (ou du wifiZoneId fourni),
+ * ce qui évite au client mobile de devoir DEVINER son propre Client comme le
+ * faisait l'ancienne version (`getClients().data[0]`).
+ *
+ * La répartition elle-même est partagée avec l'interface web : une demande
+ * créée depuis un téléphone et une demande créée depuis le back-office
+ * suivent exactement le même chemin.
+ */
 export async function POST(request: NextRequest) {
   try {
     const auth = getApiUser(request);
@@ -68,7 +76,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { wifiZoneId, type, priority, description, scheduledFor } = body;
+    const { wifiZoneId, type, priority, description } = body;
 
     if (!wifiZoneId || !type) {
       return NextResponse.json(
@@ -86,14 +94,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Wi-Fi Zone introuvable" }, { status: 404 });
     }
 
-    const resolvedPriority = PRIORITIES.includes(priority) ? priority : Priority.NORMAL;
-
     // Un client ne peut créer un ticket que pour son propre compte.
-    const client = zone.client;
     if (
       auth.role === "CLIENT" &&
-      client.userId &&
-      client.userId !== auth.userId
+      zone.client.userId &&
+      zone.client.userId !== auth.userId
     ) {
       return NextResponse.json(
         { error: "Vous n'êtes pas autorisé à créer une demande pour ce client" },
@@ -101,65 +106,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const count = await prisma.ticket.count();
-    const reference = `#TK-${new Date().getFullYear()}-${String(count + 1).padStart(3, "0")}`;
-
-    // Tant qu'un seul technicien est en service, la demande lui revient
-    // automatiquement : personne d'autre ne pourrait la traiter.
-    const soleTechnician = await soleTechnicianId();
-
-    const ticket = await prisma.ticket.create({
-      data: {
-        reference,
-        type,
-        priority: resolvedPriority,
-        status: soleTechnician ? TicketStatus.ASSIGNED : TicketStatus.NEW,
-        description: description || null,
-        scheduledFor: scheduledFor ? new Date(scheduledFor) : null,
-        clientId: client.id,
-        wifiZoneId: zone.id,
-        technicianId: soleTechnician,
-      },
-      include: {
-        client: true,
-        wifiZone: true,
-        technician: true,
-      },
+    const result = await createTicket({
+      wifiZoneId,
+      type,
+      priority,
+      description,
+      clientId: zone.clientId,
     });
 
-    // Affectation automatique : le technicien est prévenu, le client aussi.
-    // Sinon la demande attend une répartition par la régie.
-    if (soleTechnician) {
-      const technician = ticket.technician;
-
-      await notify({
-        userIds: [soleTechnician],
-        type: NotificationType.TICKET_ASSIGNED,
-        title: "Nouvelle intervention assignée",
-        body: `${ticket.reference} · ${zone.name} — ${type}. Elle vous a été attribuée automatiquement.`,
-        ticketId: ticket.id,
-      });
-
-      if (client.userId) {
-        await notify({
-          userIds: [client.userId],
-          type: NotificationType.TICKET_ASSIGNED,
-          title: "Demande transmise au technicien",
-          body: `${ticket.reference} a été transmise à ${technician?.name ?? "un technicien"}.`,
-          ticketId: ticket.id,
-        });
-      }
-    } else {
-      await notify({
-        userIds: await adminIds(),
-        type: NotificationType.TICKET_SUBMITTED,
-        title: "Nouvelle demande à répartir",
-        body: `${ticket.reference} · ${client.name} · ${zone.name} — ${type}.`,
-        ticketId: ticket.id,
-      });
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: result.status });
     }
 
-    return NextResponse.json({ data: ticket }, { status: 201 });
+    return NextResponse.json({ data: result.data }, { status: 201 });
   } catch (error) {
     console.error("Create ticket error:", error);
     return NextResponse.json(

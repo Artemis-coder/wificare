@@ -168,4 +168,13 @@ class ApiClient {
       throw ApiException.fromDio(error);
     }
   }
+
+  Future<T> delete<T>(String path, {Object? data}) async {
+    try {
+      final response = await _dio.delete<T>(path, data: data);
+      return response.data as T;
+    } on DioException catch (error) {
+      throw ApiException.fromDio(error);
+    }
+  }
 }

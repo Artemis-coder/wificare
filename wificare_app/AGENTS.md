@@ -134,11 +134,12 @@ l'API les lui refuse.
   verbs d'action (« Démarrer le déplacement », « Passer en réparation »).
 - Son profil affiche son activité, pas ses zones.
 
-## Notifications in-app
+## Notifications : in-app et push
 
-Le cycle de vie d'une demande prévient les comptes concernés **dans
-l'application**, sans service de push : il n'y a ni Firebase, ni APNs, ni
-service de messagerie externe à configurer.
+Le cycle de vie d'une demande prévient les comptes concernés sur deux canaux
+alimentés par la même écriture côté serveur (`lib/tickets.ts`) : la
+notification in-app, et le push qui atteint le téléphone même application
+fermée.
 
 | Événement | Destinataires | Type |
 | --- | --- | --- |
@@ -165,6 +166,54 @@ est un `FutureProvider` mis en cache tant qu'un écran l'observe (cloche,
 profil, liste), et l'écran des notifications le relance toutes les 30 s pendant
 qu'il est visible, avec un `Timer` annulé dans `dispose`. Aucun timer ne survit
 donc à la fermeture de l'écran.
+
+### Push hors application
+
+Une intervention assignée doit prévenir le technicien **application fermée** :
+seule la notification in-app exigerait qu'il ouvre l'application, donc qu'il
+soit devant son téléphone au bon moment. Le canal utilisé est Firebase Cloud
+Messaging, le seul qui traverse Android sans maintenir de connexion — l'OS
+répète lui-même la demande d'envoi jusqu'au retour du réseau.
+
+`lib/src/core/push/push_service.dart` porte tout le canal push :
+
+- `initialize()` démarre Firebase et pose les écouteurs. **Sans configuration,
+  il absorbe l'échec** : l'application continue sur ses notifications in-app,
+  car une plateforme qui perd ses notifications à cause d'un fichier manquant
+  serait pire qu'une plateforme qui les affiche en retard.
+- Premier plan : Firebase ne dessine rien, l'application affiche elle-même la
+  notification (`flutter_local_notifications`) pour qu'elle soit identique à
+  celle reçue en arrière-plan.
+- Arrière-plan / application fermée : `firebaseMessagingBackgroundHandler`,
+  obligatoirement fonction de premier niveau — Firebase l'exécute dans un
+  isolate séparé où une méthode d'instance n'existe pas. Enregistrée dans
+  `main.dart` avant `runApp`.
+- Taper sur la notification ouvre la demande : l'identifiant est mis en attente
+  par le service et consommé au retour dans l'application (`app.dart`,
+  `didChangeAppLifecycleState`), dans l'espace du rôle connecté.
+
+Android 13 rend l'affichage des notifications conditionné à une autorisation
+explicite (`POST_NOTIFICATIONS`) : elle est demandée à la connexion, et un refus
+est silencieux.
+
+Le jeton est enregistré à chaque ouverture de session
+(`AuthController._announceDevice`), et à chaque renouvellement Firebase
+(`onTokenRefresh`) : un jeton périmé en silence ferait partir les notifications
+de toute la journée dans le vide. L'annonce n'est **pas** attendue avant de
+rendre la main à l'écran de connexion — Firebase peut mettre plusieurs
+centaines de millisecondes à démarrer, et l'utilisateur resterait devant le
+splash.
+
+**Ce qu'il reste à faire pour activer le push** : le fichier
+`android/app/google-services.json`, qui dépend d'un projet Firebase externe et
+n'est donc pas versionné. Le plugin Gradle `com.google.gms.google-services` n'est
+appliqué que si le fichier est présent, pour que le build reste possible sans
+lui. Côté serveur, la variable `FIREBASE_SERVICE_ACCOUNT` (le secret de service
+au format JSON) doit être définie : sans elle, `lib/push.ts` se laisse tomber
+dans le silence et seule la notification in-app fonctionne.
+
+Le désucrage de bibliothèque (`coreLibraryDesugaring`) est activé pour
+`flutter_local_notifications` : sans lui, Gradle refuse de compiler.
 
 ## Navigation
 
