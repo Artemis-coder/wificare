@@ -185,6 +185,14 @@ page lors d'une poussée depuis une branche.
   l'historique de branche : ouvrir `/home/tickets/new` depuis l'accueil
   highlighte bien « Pannes ».
 - Recliquer sur l'onglet courant ramène à sa page racine.
+- **L'onglet « Accueil » ramène toujours à la racine**, même quand on vient
+  d'une autre branche : le profil et les notifications sont des pages enfants
+  du tableau de bord, donc la dernière page visitée de la branche « dashboard ».
+  Sans cette exception (`shouldGoToTabRoot` dans `core/router/app_router.dart`),
+  avoir consulté son profil une fois suffisait à ce que l'onglet Accueil
+  rouvre le profil au lieu du tableau de bord — le bouton paraît alors ne rien
+  faire. Les autres onglets gardent leur pile : revenir sur « Factures » après
+  une facture rouvre cette facture.
 - Chaque onglet conserve sa propre pile : revenir sur « Pannes » après une
   création réaffirme la liste, pas le formulaire.
 

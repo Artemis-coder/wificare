@@ -43,6 +43,40 @@ List<Map<String, dynamic>> _seedNotifications() => [
   ),
 ];
 
+/// Facture de démonstration, partagée par la liste et le détail.
+///
+/// Le détail recharge la facture par son identifiant : sans cette route dans
+/// l'API simulée, l'écran afficherait son titre de repli au lieu de « Facture ».
+final Map<String, dynamic> _invoice = {
+  'id': 'inv-1',
+  'ticketId': 't-2',
+  'type': 'INVOICE',
+  'status': 'PAID',
+  'totalAmount': 15000,
+  'createdAt': '2026-01-30T10:00:00.000Z',
+  'lines': [
+    {
+      'id': 'line-1',
+      'quoteInvoiceId': 'inv-1',
+      'description': 'Remplacement de l\'ONT',
+      'quantity': 1,
+      'unitPrice': 15000,
+      'totalPrice': 15000,
+    },
+  ],
+  'payment': {
+    'id': 'pay-1',
+    'quoteInvoiceId': 'inv-1',
+    'amount': 15000,
+    'channel': 'MOBILE_MONEY',
+    'reference': 'TRX-1',
+    'proofUrl': null,
+    'status': 'COMPLETED',
+    'createdAt': '2026-01-30T10:00:00.000Z',
+  },
+  'ticket': FakeApiData.ticket('t-2', '#TK-2026-002', 'COMPLETED'),
+};
+
 void _markRead(List<Map<String, dynamic>> items, String id) {
   for (final item in items) {
     if (item['id'] == id) item['readAt'] = '2026-01-30T12:00:00.000Z';
@@ -120,37 +154,10 @@ void main() {
         return {'data': _notificationById(notifications, 'n-1')};
       },
       '/quote-invoices': (_, _) => {
-        'data': [
-          {
-            'id': 'inv-1',
-            'ticketId': 't-2',
-            'type': 'INVOICE',
-            'status': 'PAID',
-            'totalAmount': 15000,
-            'createdAt': '2026-01-30T10:00:00.000Z',
-            'lines': [
-              {
-                'id': 'line-1',
-                'quoteInvoiceId': 'inv-1',
-                'description': 'Remplacement de l\'ONT',
-                'quantity': 1,
-                'unitPrice': 15000,
-                'totalPrice': 15000,
-              },
-            ],
-            'payment': {
-              'id': 'pay-1',
-              'quoteInvoiceId': 'inv-1',
-              'amount': 15000,
-              'channel': 'MOBILE_MONEY',
-              'reference': 'TRX-1',
-              'proofUrl': null,
-              'status': 'COMPLETED',
-              'createdAt': '2026-01-30T10:00:00.000Z',
-            },
-            'ticket': FakeApiData.ticket('t-2', '#TK-2026-002', 'COMPLETED'),
-          },
-        ],
+        'data': [_invoice],
+      },
+      '/quote-invoices/inv-1': (_, _) => {
+        'data': _invoice,
       },
       '/auth/register': (_, body) => {
         'data': {
@@ -591,6 +598,88 @@ void main() {
     await tester.tap(find.text('Payé').first);
     await settle(tester);
     expect(menu, findsOneWidget);
+  });
+
+  testWidgets('l\'onglet « Accueil » ramène toujours au tableau de bord', (
+    tester,
+  ) async {
+    FlutterSecureStorage.setMockInitialValues(_session);
+    await pumpApp(tester);
+
+    final menu = find.byType(NavigationBar);
+
+    // Le profil est une page enfant de la branche « Accueil ». Une fois
+    // consulté, il devenait la position de retour de l'onglet : revenir sur
+    // « Accueil » depuis « Pannes » rouvrait le profil au lieu du tableau de
+    // bord, et le bouton paraissait ne rien faire.
+    await tester.tap(find.byTooltip('Mon profil'));
+    await settle(tester);
+    expect(find.text('Kouassi Marc'), findsOneWidget);
+
+    await tester.tap(find.text('Pannes').last);
+    await settle(tester);
+    expect(find.text('#TK-2026-001'), findsOneWidget);
+
+    await tester.tap(find.text('Accueil').last);
+    await settle(tester);
+
+    expect(
+      find.text('Bonjour Kouassi Marc'),
+      findsOneWidget,
+      reason: '« Accueil » doit afficher le tableau de bord, pas le profil',
+    );
+    expect(find.text('Kouassi Marc'), findsNothing);
+    expect(
+      tester.widget<NavigationBar>(menu).selectedIndex,
+      ClientTab.branches.indexOf('dashboard'),
+    );
+  });
+
+  testWidgets('l\'onglet « Accueil » ferme aussi les notifications', (
+    tester,
+  ) async {
+    FlutterSecureStorage.setMockInitialValues(_session);
+    await pumpApp(tester);
+
+    // Même règle pour l'autre page enfant de l'accueil.
+    await tester.tap(find.byType(NotificationBell).first);
+    await settle(tester);
+    expect(find.text('Notifications'), findsWidgets);
+
+    await tester.tap(find.text('Factures').last);
+    await settle(tester);
+    expect(find.text('Factures'), findsWidgets);
+
+    await tester.tap(find.text('Accueil').last);
+    await settle(tester);
+
+    expect(find.text('Bonjour Kouassi Marc'), findsOneWidget);
+  });
+
+  testWidgets('les autres onglets conservent leur pile', (tester) async {
+    FlutterSecureStorage.setMockInitialValues(_session);
+    await pumpApp(tester);
+
+    // Contrairement à l'accueil, revenir sur « Factures » doit rouvrir la
+    // facture consultée : une pile qu'on ne peut pas reprendre serait inutile.
+    await tester.tap(find.text('Factures').last);
+    await settle(tester);
+    await tester.tap(find.text('Payé').first);
+    await settle(tester);
+    // Le détail recharge la facture par son identifiant ; son titre vaut
+    // « Facture », absent de la liste.
+    expect(find.text('Facture'), findsWidgets);
+
+    await tester.tap(find.text('Pannes').last);
+    await settle(tester);
+    await tester.tap(find.text('Factures').last);
+    await settle(tester);
+
+    expect(
+      find.text('Facture'),
+      findsWidgets,
+      reason: 'l\'onglet « Factures » doit rouvrir la facture quittée',
+    );
   });
 
   testWidgets('inscription en trois étapes : propriétaire de zone', (tester) async {

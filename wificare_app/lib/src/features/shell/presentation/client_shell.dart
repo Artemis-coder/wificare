@@ -39,9 +39,14 @@ class ClientShell extends StatelessWidget {
         child: NavigationBar(
           selectedIndex: selectedIndex,
           onDestinationSelected: (index) {
-            // Recliquer sur l'onglet courant ramène à sa page racine
-            // (fermeture du formulaire ou du détail ouvert).
-            onSelectTab(index, initialLocation: index == selectedIndex);
+            onSelectTab(
+              index,
+              initialLocation: shouldGoToTabRoot(
+                index: index,
+                selectedIndex: selectedIndex,
+                branches: ClientTab.branches,
+              ),
+            );
           },
           destinations: [
             for (final tab in ClientTab.tabs)

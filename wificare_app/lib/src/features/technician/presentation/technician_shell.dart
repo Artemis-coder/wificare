@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_colors.dart';
 
 /// Coquille de l'espace technicien.
@@ -34,7 +35,14 @@ class TechnicianShell extends StatelessWidget {
         child: NavigationBar(
           selectedIndex: selectedIndex,
           onDestinationSelected: (index) {
-            onSelectTab(index, initialLocation: index == selectedIndex);
+            onSelectTab(
+              index,
+              initialLocation: shouldGoToTabRoot(
+                index: index,
+                selectedIndex: selectedIndex,
+                branches: TechnicianRoutes.branches,
+              ),
+            );
           },
           destinations: const [
             NavigationDestination(

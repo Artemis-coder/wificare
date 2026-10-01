@@ -83,6 +83,30 @@ class ClientTab {
   static const List<String> branches = ['dashboard', 'tickets', 'equipments', 'invoices'];
 }
 
+/// Index de l'onglet « Accueil » dans une liste de branches.
+int dashboardTabIndex(List<String> branches) => branches.indexOf('dashboard');
+
+/// Faut-il revenir à la page racine de l'onglet plutôt que à sa dernière page
+/// visitée ?
+///
+/// Recliquer sur l'onglet courant ramène toujours à sa racine : c'est le geste
+/// pour sortir d'un détail ou d'un formulaire. L'onglet « Accueil » s'y ajoute,
+/// parce que ses pages enfants — profil et notifications — sont des écrans
+/// modaux, ouverts depuis le tableau de bord et refermés avec le bouton retour.
+///
+/// Sans cette exception, une fois le profil consulté, l'onglet « Accueil »>
+/// restaure le profil au lieu du tableau de bord : revenir sur l'onglet ne
+/// change rien à l'écran, et le bouton paraît ne pas fonctionner.
+///
+/// Les autres onglets conservent leur pile : revenir sur « Factures » après
+/// avoir ouvert une facture doit rouvrir cette facture, pas la liste.
+bool shouldGoToTabRoot({
+  required int index,
+  required int selectedIndex,
+  required List<String> branches,
+}) =>
+    index == selectedIndex || index == dashboardTabIndex(branches);
+
 final appRouterProvider = Provider<GoRouter>((ref) {
   final refresh = ref.watch(routerRefreshProvider);
 
