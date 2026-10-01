@@ -1,0 +1,17 @@
+/.gradle
+/captures/
+/local.properties
+GeneratedPluginRegistrant.java
+.cxx/
+
+# Remember to never publicly share your keystore.
+# See https://flutter.dev/to/reference-keystore
+key.properties
+**/*.keystore
+**/*.jks
+
+# Le wrapper Gradle (`gradle-wrapper.jar`, `gradlew`, `gradlew.bat`) est
+# volontairement versionne, contrairement au modele Flutter par defaut :
+# sans lui, un clone ne peut pas compiler l'APK tant que Gradle n'a pas ete
+# telecharge a la main. Il fige aussi la version de Gradle, donc la
+# reconstruction reste identique d'une machine a l'autre.

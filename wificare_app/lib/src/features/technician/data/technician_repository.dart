@@ -1,0 +1,77 @@
+import '../../../core/domain/enums.dart';
+import '../../../core/domain/models.dart';
+import '../../../core/network/api_client.dart';
+
+/// Accès du technicien à ses interventions.
+///
+/// Le technicien n'a pas de dossier client : il est identifié par son
+/// `userId`, passé à l'API comme `technicianId` pour ne renvoyer que les
+/// demandes qui lui sont affectées. Il ne crée ni zone ni équipement.
+class TechnicianRepository {
+  TechnicianRepository(this._api);
+
+  final ApiClient _api;
+
+  /// Demandes affectées au technicien, éventuellement filtrées par statut.
+  Future<Page<Ticket>> myTickets({
+    required String technicianId,
+    int page = 1,
+    int limit = 100,
+    TicketStatus? status,
+  }) async {
+    final response = await _api.get<Map<String, dynamic>>(
+      '/tickets',
+      query: {
+        'technicianId': technicianId,
+        'page': page,
+        'limit': limit,
+        'status': ?status?.wire,
+      },
+    );
+
+    return Page.fromJson(response, Ticket.fromJson);
+  }
+
+  Future<Ticket> byId(String id) async {
+    final response = await _api.get<Map<String, dynamic>>('/tickets/$id');
+    return Ticket.fromJson(response['data'] as Map<String, dynamic>);
+  }
+
+  /// Fait avancer la demande : le technicien est l'acteur du déplacement,
+  /// c'est lui qui fait évoluer le statut jusqu'à la clôture.
+  Future<Ticket> updateStatus(String id, TicketStatus status) async {
+    final response = await _api.patch<Map<String, dynamic>>(
+      '/tickets/$id/status',
+      data: {'status': status.wire},
+    );
+
+    return Ticket.fromJson(response['data'] as Map<String, dynamic>);
+  }
+
+  /// Compte rendu d'intervention : diagnostic, solution et durée.
+  ///
+  /// L'API bascule automatiquement la demande en `DIAGNOSING`.
+  Future<Intervention> report({
+    required String ticketId,
+    required Map<String, bool> checklist,
+    String? diagnostic,
+    String? solution,
+    int? durationMin,
+  }) async {
+    final response = await _api.post<Map<String, dynamic>>(
+      '/tickets/$ticketId/intervention',
+      data: {
+        'checklist': checklist,
+        if (diagnostic case final value? when value.isNotEmpty)
+          'diagnostic': value,
+        if (solution case final value? when value.isNotEmpty) 'solution': value,
+        // Le marqueur null-aware ne convient pas à une entrée clé/valeur :
+        // `durationMin` doit rester absent quand il est inconnu.
+        // ignore: use_null_aware_elements
+        if (durationMin != null) 'durationMin': durationMin,
+      },
+    );
+
+    return Intervention.fromJson(response['data'] as Map<String, dynamic>);
+  }
+}

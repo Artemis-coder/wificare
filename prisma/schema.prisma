@@ -11,13 +11,55 @@ datasource db {
 }
 
 // ----------------------------------------
+// Notifications in-app
+// ----------------------------------------
+// Rappel affiché dans l'application : le backend les écrit, le mobile les
+// affiche. Pas de push : la consultation se fait par polling depuis l'écran
+// dédié.
+model Notification {
+  id String @id @default(uuid())
+  /// Destinataire : un client, un technicien ou un administrateur.
+  userId     String
+  type       NotificationType
+  title      String
+  body       String
+  /// Demande concernée, pour allowonger l'utilisateur vers le détail.
+  ticketId   String?
+  /// Date de lecture. null = non lu.
+  readAt     DateTime?
+  createdAt  DateTime @default(now())
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ticket Ticket? @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@index([userId, createdAt])
+}
+
+enum NotificationType {
+  /// Une demande vient d'être soumise par un client.
+  TICKET_SUBMITTED
+  /// La demande a été affectée à un technicien.
+  TICKET_ASSIGNED
+  /// Le statut de la demande a changé.
+  TICKET_STATUS_CHANGED
+  /// La demande a été annulée.
+  TICKET_CANCELED
+}
+
+// ----------------------------------------
 // Utilisateurs & Authentification
 // ----------------------------------------
 model User {
-  id        String   @id @default(uuid())
-  name      String?
-  phone     String   @unique
-  role      Role     @default(CLIENT)
+  id           String   @id @default(uuid())
+  name         String?
+  firstName    String?
+  lastName     String?
+  phone        String   @unique
+  /// Empreinte du mot de passe de 4 chiffres (scrypt + sel), null tant que le
+  /// compte n'a été créé que par OTP.
+  passwordHash String?
+  role         Role     @default(CLIENT)
   status    UserStatus @default(ACTIVE)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -26,6 +68,7 @@ model User {
   clients     Client[]     @relation("ClientUsers")
   tickets     Ticket[]     @relation("TechnicianTickets")
   evaluations Evaluation[]
+  notifications Notification[]
 }
 
 enum Role {
@@ -106,6 +149,7 @@ model Ticket {
   intervention Intervention?
   quoteInvoice QuoteInvoice?
   evaluation   Evaluation?
+  notifications Notification[]
 }
 
 enum Priority {
