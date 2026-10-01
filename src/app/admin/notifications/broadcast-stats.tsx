@@ -41,7 +41,11 @@ export default function BroadcastStatsPanel({ stats }: { stats: BroadcastStats }
         <Tile
           value={stats.sent}
           label="Messages diffusés"
-          hint={stats.sent === 0 ? 'Aucun envoi pour l\'instant' : `${stats.recipients} destinataires au total`}
+          hint={
+            stats.sent === 0
+              ? 'Aucun envoi pour l’instant'
+              : `${stats.recipients} destinataire${stats.recipients > 1 ? 's' : ''} au total`
+          }
         />
         <Tile
           value={stats.pending}
@@ -58,14 +62,14 @@ export default function BroadcastStatsPanel({ stats }: { stats: BroadcastStats }
           label="Téléphones atteints"
           hint={
             stats.devicesMeasured
-              ? `${stats.subscribedAccounts} comptes abonnés au push`
+              ? `${stats.subscribedAccounts} compte${stats.subscribedAccounts > 1 ? 's' : ''} abonné${stats.subscribedAccounts > 1 ? 's' : ''} au push`
               : 'Non mesuré sur les campagnes déjà envoyées'
           }
         />
         <Tile
           value={`${coverage} %`}
           label="Couverture push"
-          hint={`${stats.subscribedAccounts} comptes sur ${stats.activeAccounts} actifs`}
+          hint={`${stats.subscribedAccounts} compte${stats.subscribedAccounts > 1 ? 's' : ''} sur ${stats.activeAccounts} actif${stats.activeAccounts > 1 ? 's' : ''}`}
           accent={coverage < 100}
         />
         {stats.failed > 0 && (
