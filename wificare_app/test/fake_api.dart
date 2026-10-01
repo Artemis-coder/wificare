@@ -271,6 +271,76 @@ abstract final class FakeApiData {
       'wifiZone': {'name': 'WiFi Zone Angre 8e Tranche'},
     },
   };
+
+/// Portefeuille technicien : deux mois d'encaissements.
+///
+/// Le montant du mois est la somme de ses deux règlements (25 000 + 30 000),
+/// et le cumulé ajoute celui de janvier — c'est cet écart qui vérifie que la
+/// ventilation mensuelle et le total ne sont pas calculés l’un par l’autre.
+static Map<String, dynamic> wallet() => {
+  'data': {
+    'totalAmount': 70000,
+    'currentMonthKey': '2026-02',
+    'currentMonthLabel': 'février 2026',
+    'currentMonthAmount': 55000,
+    'paidInterventions': 3,
+    'byChannel': {'MOBILE_MONEY': 40000, 'CASH': 30000},
+    'monthly': [
+      {
+        'key': '2026-02',
+        'label': 'février 2026',
+        'amount': 55000,
+        'count': 2,
+        'byChannel': {'MOBILE_MONEY': 40000, 'CASH': 15000},
+      },
+      {
+        'key': '2026-01',
+        'label': 'janvier 2026',
+        'amount': 15000,
+        'count': 1,
+        'byChannel': {'CASH': 15000},
+      },
+    ],
+    'payments': [
+      {
+        'id': 'pay-1',
+        'amount': 25000,
+        'channel': 'MOBILE_MONEY',
+        'operator': 'WAVE',
+        'transactionRef': 'WM-8891',
+        'paidAt': '2026-02-18T09:00:00.000Z',
+        'ticketId': 't-tech-1',
+        'ticketReference': '#TK-2026-001',
+        'ticketStatus': 'COMPLETED',
+      },
+      {
+        'id': 'pay-2',
+        'amount': 30000,
+        'channel': 'CASH',
+        'operator': null,
+        'transactionRef': null,
+        'paidAt': '2026-02-10T09:00:00.000Z',
+        'ticketId': 't-tech-1',
+        'ticketReference': '#TK-2026-002',
+        'ticketStatus': 'REPAIRING',
+      },
+    ],
+  },
+};
+
+/// Portefeuille sans aucun encaissement.
+static Map<String, dynamic> emptyWallet() => {
+  'data': {
+    'totalAmount': 0,
+    'currentMonthKey': '2026-02',
+    'currentMonthLabel': 'février 2026',
+    'currentMonthAmount': 0,
+    'paidInterventions': 0,
+    'byChannel': <String, dynamic>{},
+    'monthly': <dynamic>[],
+    'payments': <dynamic>[],
+  },
+};
 }
 
 /// Localisation simulée.

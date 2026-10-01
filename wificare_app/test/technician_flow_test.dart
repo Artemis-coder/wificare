@@ -187,6 +187,7 @@ void main() {
           },
         };
       },
+      '/wallet': (_, _) => FakeApiData.wallet(),
       '/tickets/t-tech-1/tracking/stop': (_, _) => {
         'data': {'stoppedAt': '2026-01-30T10:20:00.000Z'},
       },
@@ -357,6 +358,52 @@ void main() {
     await settle(tester);
     expect(find.text('#TK-2026-001'), findsOneWidget);
     expect(find.text('#TK-2026-002'), findsNothing);
+  });
+
+  testWidgets('technicien : son portefeuille suit ses encaissements', (
+    tester,
+  ) async {
+    FlutterSecureStorage.setMockInitialValues(Map.of(_session));
+    await pumpApp(tester);
+
+    // Le portefeuille est accessible depuis l'accueil, sans onglet : c'est le
+    // premier chiffre que le technicien vient consulter.
+    expect(find.text('Portefeuille'), findsOneWidget);
+    // Le séparateur de milliers est posé par `intl` et varie selon la
+    // plateforme : on vérifie le chiffre, pas sa ponctuation.
+    expect(
+      find.textContaining('55'),
+      findsWidgets,
+      reason: "l'accueil doit afficher le montant du mois courant",
+    );
+
+    await tester.tap(find.text('Portefeuille'));
+    await settle(tester, steps: 20);
+
+    expect(find.text('Mon portefeuille'), findsOneWidget);
+    expect(find.text('Encaissé en février 2026'), findsOneWidget);
+    expect(find.textContaining('70'), findsWidgets);
+    // Deux mois de relevé, et chacun avec le nombre de règlements qu'il contient.
+    expect(find.text('février 2026'), findsWidgets);
+    expect(find.text('janvier 2026'), findsOneWidget);
+    expect(find.text('2 règlements'), findsOneWidget);
+    expect(find.text('1 règlement'), findsOneWidget);
+    // Les moyens de paiement sont regroupés par canal, pas par opérateur :
+    // le total ne distingue pas Wave d'Orange, et l'opérateur ne figure que
+    // sur le règlement détaillé.
+    expect(find.text('Mobile Money'), findsWidgets);
+    expect(find.text('Espèces'), findsWidgets);
+    // Le règlement Mobile Money nomme bien son opérateur. Il est en bas de
+    // l'écran : sans défilement, son absence ne prouverait rien.
+    // Les règlements sont sous le bas de l'écran : on fait glisser la liste
+    // plutôt que de supposer une position.
+    await tester.fling(find.text('Derniers règlements'), const Offset(0, -600), 1200);
+    await settle(tester, steps: 20);
+    // Le règlement Mobile Money nomme son opérateur, en toutes lettres : c'est
+    // ce qui permet de rapprocher la transaction du paiement.
+    expect(find.textContaining('Mobile Money Wave'), findsOneWidget);
+    // Et chaque règlement renvoie vers l'intervention qu'il solde.
+    expect(find.text('#TK-2026-001'), findsOneWidget);
   });
 
   testWidgets('technicien : le devis commande les actions possibles', (

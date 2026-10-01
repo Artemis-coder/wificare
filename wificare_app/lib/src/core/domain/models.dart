@@ -593,3 +593,141 @@ class NotificationFeed {
     );
   }
 }
+
+/// Portefeuille du technicien : ses encaissements, et leur répartition.
+///
+/// Un relevé, pas un solde bancaire : WiFiCare ne retient aucune part sur les
+/// règlements, `totalAmount` est donc la somme effectivement encaissée. Le nom
+/// le précise, pour que personne n'y lise un disponible.
+class TechnicianWallet {
+  const TechnicianWallet({
+    required this.totalAmount,
+    required this.currentMonthKey,
+    required this.currentMonthLabel,
+    required this.currentMonthAmount,
+    required this.paidInterventions,
+    required this.byChannel,
+    required this.monthly,
+    required this.payments,
+  });
+
+  final double totalAmount;
+  final String currentMonthKey;
+  final String currentMonthLabel;
+  final double currentMonthAmount;
+
+  /// Interventions payées, toutes périodes confondues.
+  final int paidInterventions;
+
+  /// Encaissement par moyen de paiement.
+  final Map<PaymentChannel, double> byChannel;
+
+  /// Ventilation mensuelle, du mois le plus récent au plus ancien.
+  final List<WalletMonth> monthly;
+
+  /// Derniers règlements, pour la traçabilité ligne à ligne.
+  final List<WalletPayment> payments;
+
+  /// Le technicien a-t-il déjà encaissé quoi que ce soit ?
+  ///
+  /// Distingué de « zéro » : un relevé vide et un relevé à 0 FCFA ne racontent
+  /// pas la même chose, et le premier mérite une explication plutôt qu'un
+  /// chiffre.
+  bool get isEmpty => totalAmount <= 0;
+
+  factory TechnicianWallet.fromJson(Map<String, dynamic> json) {
+    final byChannel = <PaymentChannel, double>{};
+
+    for (final entry in (JsonX.map(json['byChannel'])).entries) {
+      byChannel[PaymentChannel.fromWire(entry.key)] = JsonX.decimal(entry.value);
+    }
+
+    return TechnicianWallet(
+      totalAmount: JsonX.decimal(json['totalAmount']),
+      currentMonthKey: JsonX.str(json['currentMonthKey']),
+      currentMonthLabel: JsonX.str(json['currentMonthLabel']),
+      currentMonthAmount: JsonX.decimal(json['currentMonthAmount']),
+      paidInterventions: JsonX.integer(json['paidInterventions']),
+      byChannel: byChannel,
+      monthly: JsonX.list(json['monthly']).map(WalletMonth.fromJson).toList(),
+      payments: JsonX.list(json['payments']).map(WalletPayment.fromJson).toList(),
+    );
+  }
+}
+
+/// Encaissement d'un mois.
+class WalletMonth {
+  const WalletMonth({
+    required this.key,
+    required this.label,
+    required this.amount,
+    required this.count,
+    required this.byChannel,
+  });
+
+  /// Mois au format `AAAA-MM`.
+  final String key;
+
+  /// Libellé lisible : « octobre 2026 ».
+  final String label;
+
+  final double amount;
+
+  /// Nombre d'interventions payées ce mois-ci.
+  final int count;
+
+  final Map<PaymentChannel, double> byChannel;
+
+  factory WalletMonth.fromJson(Map<String, dynamic> json) {
+    final byChannel = <PaymentChannel, double>{};
+
+    for (final entry in (JsonX.map(json['byChannel'])).entries) {
+      byChannel[PaymentChannel.fromWire(entry.key)] = JsonX.decimal(entry.value);
+    }
+
+    return WalletMonth(
+      key: JsonX.str(json['key']),
+      label: JsonX.str(json['label']),
+      amount: JsonX.decimal(json['amount']),
+      count: JsonX.integer(json['count']),
+      byChannel: byChannel,
+    );
+  }
+}
+
+/// Un règlement encaissé.
+class WalletPayment {
+  const WalletPayment({
+    required this.id,
+    required this.amount,
+    required this.channel,
+    required this.operator,
+    required this.transactionRef,
+    required this.paidAt,
+    required this.ticketId,
+    required this.ticketReference,
+    required this.ticketStatus,
+  });
+
+  final String id;
+  final double amount;
+  final PaymentChannel channel;
+  final MobileMoneyOperator? operator;
+  final String? transactionRef;
+  final DateTime? paidAt;
+  final String ticketId;
+  final String ticketReference;
+  final TicketStatus ticketStatus;
+
+  factory WalletPayment.fromJson(Map<String, dynamic> json) => WalletPayment(
+    id: JsonX.str(json['id']),
+    amount: JsonX.decimal(json['amount']),
+    channel: PaymentChannel.fromWire(JsonX.strOrNull(json['channel'])),
+    operator: MobileMoneyOperator.fromWire(JsonX.strOrNull(json['operator'])),
+    transactionRef: JsonX.strOrNull(json['transactionRef']),
+    paidAt: JsonX.date(json['paidAt']),
+    ticketId: JsonX.str(json['ticketId']),
+    ticketReference: JsonX.str(json['ticketReference']),
+    ticketStatus: TicketStatus.fromWire(JsonX.strOrNull(json['ticketStatus'])),
+  );
+}

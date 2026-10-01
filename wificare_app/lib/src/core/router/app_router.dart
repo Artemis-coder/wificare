@@ -23,6 +23,7 @@ import '../../features/technician/presentation/technician_profile_screen.dart';
 import '../../features/technician/presentation/technician_shell.dart';
 import '../../features/technician/presentation/technician_ticket_screen.dart';
 import '../../features/technician/presentation/technician_tickets_screen.dart';
+import '../../features/technician/presentation/technician_wallet_screen.dart';
 import '../domain/enums.dart';
 import '../providers/infra_providers.dart';
 import '../widgets/app_logo.dart';
@@ -69,6 +70,13 @@ abstract final class TechnicianRoutes {
 
   /// Avis reçus des clients, en lecture seule.
   static const reviews = '/tech/reviews';
+
+  /// Encaissements du technicien, mois par mois.
+  ///
+  /// Page enfant de l'accueil, comme le profil : un portefeuille n'est pas une
+  /// tâche de terrain, et lui donner un onglet de plus chargerait une barre
+  /// déjà encombrée.
+  static const wallet = '/tech/dashboard/wallet';
 
   static const List<String> branches = ['dashboard', 'tickets', 'reviews'];
 }
@@ -269,6 +277,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                   GoRoute(
                     path: 'notifications',
                     builder: (_, _) => const NotificationsScreen(),
+                  ),
+                  GoRoute(
+                    path: 'wallet',
+                    builder: (_, _) => const TechnicianWalletScreen(),
                   ),
                 ],
               ),

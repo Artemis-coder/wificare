@@ -85,3 +85,13 @@ class TechnicianStats {
     );
   }
 }
+
+/// Portefeuille du technicien.
+///
+/// Mis en cache tant qu'un écran l'observe, comme les autres listes : le
+/// portefeuille est relu au retour sur l'écran, pas en permanence. Un relevé
+/// qui se met à jour tout seul afficherait un total qui bouge sous les yeux, et
+/// le technicien ne saurait plus à quoi correspondre le chiffre qu'il a noté.
+final technicianWalletProvider = FutureProvider<TechnicianWallet>((ref) {
+  return ref.read(technicianRepositoryProvider).wallet();
+});

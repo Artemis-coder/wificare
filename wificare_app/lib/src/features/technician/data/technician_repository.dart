@@ -145,6 +145,16 @@ class TechnicianRepository {
 
     return Intervention.fromJson(response['data'] as Map<String, dynamic>);
   }
+
+  /// Portefeuille : ce que les clients ont réglé sur ses devis.
+  Future<TechnicianWallet> wallet({int months = 12}) async {
+    final response = await _api.get<Map<String, dynamic>>(
+      '/wallet',
+      query: {'months': '$months'},
+    );
+
+    return TechnicianWallet.fromJson(response['data'] as Map<String, dynamic>);
+  }
 }
 
 /// Ligne de devis transmise à l'API.
