@@ -52,7 +52,7 @@ export default async function NotificationConsolePage() {
         <div>
           <h1>Notifications</h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '14px', margin: 0 }}>
-            Prévenez la plateforme, et equippez ce poste pour être prévenu.
+            Prévenez la plateforme, et équipez ce poste pour être prévenu.
           </p>
         </div>
       </div>

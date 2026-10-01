@@ -67,7 +67,15 @@ export default function BroadcastComposer({
         </div>
       </div>
 
-      <div style={{ padding: '24px' }}>
+      <form
+        style={{ padding: '24px' }}
+        onSubmit={(event) => {
+          event.preventDefault();
+          setError(null);
+          setSent(null);
+          setConfirming(true);
+        }}
+      >
         <fieldset style={{ border: 'none', padding: 0, margin: 0 }}>
           <legend
             style={{ fontSize: '13px', fontWeight: 600, marginBottom: '8px', padding: 0 }}
@@ -163,13 +171,8 @@ export default function BroadcastComposer({
 
         <div style={{ display: 'flex', gap: '12px', marginTop: '20px', flexWrap: 'wrap' }}>
           <button
-            type="button"
+            type="submit"
             className="btn btn-primary btn-md"
-            onClick={() => {
-              setError(null);
-              setSent(null);
-              setConfirming(true);
-            }}
             disabled={isPending || !trimmed || !selected || selected.count === 0}
           >
             Envoyer à {selected?.label.toLowerCase() ?? ''}
@@ -214,7 +217,7 @@ export default function BroadcastComposer({
             et sur leur téléphone s&apos;il l&apos;a ouverte.
           </p>
         )}
-      </div>
+      </form>
     </div>
   );
 }
@@ -237,7 +240,7 @@ export function BroadcastHistory({
         <div>
           <h3 style={{ margin: 0 }}>Messages envoyés</h3>
           <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-            Les {audienceLabel.toLowerCase()} ont reçu ces messages.
+            Chaque envoi n&apos;atteint que les comptes actifs de « {audienceLabel} ».
           </span>
         </div>
       </div>
