@@ -1,3 +1,7 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -200,6 +204,10 @@ void main() {
         'data': FakeApiData.zone['equipments'],
       },
     });
+
+    // Le flux temps réel reste silencieux par défaut : les tests qui s'y
+    // intéressent branchent leur propre flux.
+    adapter.streams['/notifications/stream'] = const Stream<Uint8List>.empty();
   });
 
   Widget buildApp() {
@@ -908,6 +916,65 @@ void main() {
       ),
       findsNothing,
     );
+  });
+
+  testWidgets('notifications : le flux temps réel met à jour le badge', (
+    tester,
+  ) async {
+    FlutterSecureStorage.setMockInitialValues(_session);
+
+    // Le flux est piloté par le test : une notification peut être poussée à tout
+    // moment, sans attendre la fin d'un intervalle.
+    final controller = StreamController<Uint8List>();
+
+    adapter.streams['/notifications/stream'] = controller.stream;
+
+    await pumpApp(tester);
+
+    // Aucune notification reçue : le compteur reste celui de l'API.
+    expect(
+      find.descendant(
+        of: find.byType(NotificationBell),
+        matching: find.text('1'),
+      ),
+      findsOneWidget,
+    );
+
+    // Message de la régie : « event: notification » puis sa ligne `data:`.
+    controller.add(
+      Uint8List.fromList(
+        utf8.encode(
+          'event: notification\n'
+          'data: ${jsonEncode({
+                'id': 'n-live',
+                'type': 'BROADCAST',
+                'title': 'Coupure réseau',
+                'body': 'Intervention en cours sur le secteur nord.',
+                'ticketId': null,
+                'readAt': null,
+                'createdAt': '2026-01-30T12:30:00.000Z',
+              })}\n\n',
+        ),
+      ),
+    );
+
+    await settle(tester, steps: 20);
+
+    expect(
+      find.descendant(
+        of: find.byType(NotificationBell),
+        matching: find.text('2'),
+      ),
+      findsOneWidget,
+      reason: 'une notification reçue en direct doit compter sans rechargement',
+    );
+
+    // Le message est consultable sans passer par l'API : il vient du flux.
+    await tester.tap(find.byType(NotificationBell));
+    await settle(tester, steps: 20);
+    expect(find.text('Coupure réseau'), findsOneWidget);
+
+    await controller.close();
   });
 
   testWidgets('notifications : « Tout lire » vide le badge', (tester) async {

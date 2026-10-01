@@ -86,11 +86,37 @@ export default function NotificationBell({
   // Seul lintervalle relit le compteur : le premier rendu est servi par le
   // serveur, et la liste est demandée à l'ouverture du panneau. L'effet ne fait
   // donc que planifier la relève, pas la déclencher pendant le rendu.
+  // L'intervalle est surtout le filet de sécurité : le flux temps réel prend le
+  // relais dès qu'il est ouvert, et une notification de la régie apparaît alors
+  // en une seconde au lieu d'attendre la fin de la période.
   useEffect(() => {
     const timer = window.setInterval(refreshCount, POLL_INTERVAL_MS);
 
     return () => window.clearInterval(timer);
   }, [refreshCount]);
+
+  useEffect(() => {
+    const source = new EventSource('/api/notifications/stream');
+
+    source.addEventListener('notification', (event) => {
+      const incoming = JSON.parse((event as MessageEvent).data) as WebNotification;
+
+      latestUnread.current += 1;
+      setUnreadCount(latestUnread.current);
+      setItems((previous) => [incoming, ...previous].slice(0, 20));
+
+      // Une notification reçue en direct se distingue de celle trouvée au
+      // rechargement : elle mérite d'être signalée, sinon le compteur change sans
+      // que rien n'attire le regard.
+      setJustArrived(true);
+      window.setTimeout(() => setJustArrived(false), 4000);
+    });
+
+    // Le navigateur rouvre seul le flux. Un refus ou une erreur réseau doit rester
+    // sans conséquence : le compteur se met alors à jour au rythme de
+    // l'intervalle, et le push Web Push couvre le poste hors application.
+    return () => source.close();
+  }, []);
 
   // Le clic dehors ferme le panneau : sinon il reste ouvert par-dessus la page
   // après avoir déplacé le regard.

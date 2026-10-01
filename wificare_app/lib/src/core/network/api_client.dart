@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:dio/dio.dart';
 
@@ -131,6 +132,55 @@ class ApiClient {
   }
 
   Dio get raw => _dio;
+
+  /// Ouvre le flux d'événements du serveur (`text/event-stream`).
+  ///
+  /// Le flux n'est pas une requête ordinaire : la réponse reste ouverte et les
+  /// notifications arrivent ligne par ligne. Les intercepteurs sont court-circuités
+  /// à dessein — un `DioException` sur une connexion attendue ferait imagined
+  /// l'appel en échec — et le jeton est ajouté ici, le temps de la connexion
+  /// seulement : le flux ne rejoue pas le renouvellement de jeton à chaque
+  /// reconnexion automatique du navigateur.
+  Stream<String> eventStream(String path) async* {
+    final token = await tokenStorage.readAccessToken();
+
+    final response = await _dio.get<ResponseBody>(
+      path,
+      options: Options(
+        responseType: ResponseType.stream,
+        headers: {
+          if (token != null && token.isNotEmpty)
+            'Authorization': 'Bearer $token',
+        },
+      ),
+    );
+
+    final body = response.data;
+
+    if (body == null) {
+      return;
+    }
+
+    final decoder = const Utf8Decoder();
+
+    // Les morceaux reçus ne correspondent pas aux lignes : une notification
+    // peut être coupée en plein milieu par la réseau. Le reliquat est donc
+    // mis de côté et complété par le morceau suivant avant d'être rendu.
+    var pending = '';
+
+    await for (final chunk in body.stream) {
+      pending += decoder.convert(chunk);
+
+      final lines = pending.split('\n');
+
+      // Le dernier élément est incomplet : il attend la suite.
+      pending = lines.removeLast();
+
+      for (final line in lines) {
+        yield line;
+      }
+    }
+  }
 
   Future<T> get<T>(String path, {Map<String, dynamic>? query}) async {
     try {

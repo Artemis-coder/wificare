@@ -487,4 +487,27 @@ class NotificationFeed {
             .toList(),
         unreadCount: JsonX.integer(json['unreadCount']),
       );
+
+  /// Fusionne les notifications reçues par le flux temps réel.
+  ///
+  /// L'API ne les connaît pas encore : une notification arrivée en direct doit
+  /// apparaître dans la liste sans attendre la prochaine lecture, et compter au
+  /// badge. Celles déjà présentes sont ignorées — une notification lue depuis
+  /// l'application peut revenir par le flux, et serait sinon comptée deux fois.
+  NotificationFeed merge(List<AppNotification> live) {
+    if (live.isEmpty) return this;
+
+    final known = items.map((item) => item.id).toSet();
+
+    final incoming = live.where((item) => !known.contains(item.id));
+
+    if (incoming.isEmpty) return this;
+
+    return NotificationFeed(
+      items: [...incoming, ...items],
+      unreadCount:
+          unreadCount +
+          incoming.where((item) => item.readAt == null).length,
+    );
+  }
 }
