@@ -5,12 +5,7 @@ import { useState, useTransition } from 'react';
 import {
   sendBroadcastAction,
   type AudienceOption,
-  type SentBroadcast,
 } from './actions';
-
-/** Longueurs alignées sur celles validées côté serveur. */
-const TITLE_MAX = 80;
-const BODY_MAX = 240;
 
 /**
  * Composeur de message de la régie.
@@ -19,7 +14,9 @@ const BODY_MAX = 240;
  * partie sur les seuls clients, ou sur tout le monde alors que seuls les
  * techniciens sont concernés, se voit ici et pas après coup, une fois partie.
  *
- * L'envoi ne peut pas être annulé, d'où la confirmation explicite.
+ * L'envoi ne peut pas être annulé, d'où la confirmation explicite. Une campagne
+ * programmée, elle, se reprend tant qu'elle n'est pas partie — c'est la seule
+ * façon de réparer une erreur sans réveiller tout le monde.
  */
 export default function BroadcastComposer({
   audiences,
@@ -29,29 +26,72 @@ export default function BroadcastComposer({
   const [audience, setAudience] = useState(audiences[0]?.value ?? 'ALL');
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
+  const [scheduled, setScheduled] = useState(false);
+  const [scheduledFor, setScheduledFor] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [sent, setSent] = useState<{ title: string; recipients: number } | null>(null);
+  const [sent, setSent] = useState<{
+    title: string;
+    recipients: number;
+    devices: number;
+  } | null>(null);
+  const [programmed, setProgrammed] = useState<{ title: string; at: string } | null>(
+    null
+  );
   const [confirming, setConfirming] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const selected = audiences.find((option) => option.value === audience);
   const trimmed = title.trim().length > 0 && body.trim().length > 0;
+  const dateUsable = !scheduled || scheduledFor.length > 0;
+
+  function reset() {
+    setError(null);
+    setSent(null);
+    setProgrammed(null);
+    setConfirming(true);
+  }
 
   function handleSubmit() {
     setError(null);
 
     startTransition(async () => {
-      const result = await sendBroadcastAction({ audience, title, body });
+      // `datetime-local` rend l'heure locale du navigateur ; c'est cette heure
+      // que la régie a choisie, et elle est convertie en UTC ici. L'affichage
+      // refait le chemin inverse, donc la campagne se lit à la bonne heure quel
+      // que soit le poste qui la consulte.
+      const when = scheduled ? new Date(scheduledFor) : null;
+
+      const result = await sendBroadcastAction({
+        audience,
+        title,
+        body,
+        scheduledFor: when && !Number.isNaN(when.getTime())
+          ? when.toISOString()
+          : undefined,
+      });
 
       if (!result.ok) {
         setError(result.error);
         return;
       }
 
-      setSent({ title: title.trim(), recipients: result.recipients });
+      // Le type de retour du serveur confirme ce que l'écran pensait avoir
+      // demandé : les deux conditions se recoupent volontairement, pour qu'une
+      // heure invalide affichée comme un envoi programmé n'arrive jamais.
+      if (result.kind === 'SCHEDULED' && when) {
+        setProgrammed({ title: title.trim(), at: when.toISOString() });
+      } else if (result.kind === 'SENT') {
+        setSent({
+          title: title.trim(),
+          recipients: result.recipients,
+          devices: result.devices,
+        });
+      }
+
       setConfirming(false);
       setTitle('');
       setBody('');
+      setScheduledFor('');
     });
   }
 
@@ -71,9 +111,7 @@ export default function BroadcastComposer({
         style={{ padding: '24px' }}
         onSubmit={(event) => {
           event.preventDefault();
-          setError(null);
-          setSent(null);
-          setConfirming(true);
+          reset();
         }}
       >
         <fieldset style={{ border: 'none', padding: 0, margin: 0 }}>
@@ -160,7 +198,7 @@ export default function BroadcastComposer({
           id="broadcast-title"
           type="text"
           value={title}
-          maxLength={TITLE_MAX}
+          maxLength={80}
           onChange={(event) => setTitle(event.target.value)}
           placeholder="Coupure réseau sur le secteur nord"
           style={{ width: '100%', padding: '10px 12px', fontSize: '14px', marginBottom: '16px' }}
@@ -175,30 +213,89 @@ export default function BroadcastComposer({
         <textarea
           id="broadcast-body"
           value={body}
-          maxLength={BODY_MAX}
+          maxLength={240}
           rows={4}
           onChange={(event) => setBody(event.target.value)}
           placeholder="Intervention en cours, rétablissement prévu dans l'après-midi."
           style={{ width: '100%', padding: '10px 12px', fontSize: '14px', resize: 'vertical' }}
         />
         <div style={{ fontSize: '12px', color: 'var(--text-disabled)', marginTop: '4px' }}>
-          {body.length} / {BODY_MAX}
+          {body.length} / 240
+        </div>
+
+        {/* Programmation : l'heure est saisie dans le fuseau du poste, et
+            affichée telle quelle — la maintenance planifiée se décide toujours
+            sur l'heure locale de celui qui l'annonce. */}
+        <div style={{ marginTop: '20px' }}>
+          <label
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              fontSize: '14px',
+              cursor: 'pointer',
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={scheduled}
+              onChange={(event) => {
+                setScheduled(event.target.checked);
+                setError(null);
+                setSent(null);
+                setProgrammed(null);
+              }}
+            />
+            Programmer l&apos;envoi
+          </label>
+
+          {scheduled && (
+            <div style={{ marginTop: '10px' }}>
+              <label
+                htmlFor="broadcast-when"
+                style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: 600 }}
+              >
+                Date et heure d&apos;envoi
+              </label>
+              <input
+                id="broadcast-when"
+                type="datetime-local"
+                value={scheduledFor}
+                onChange={(event) => setScheduledFor(event.target.value)}
+                style={{
+                  padding: '10px 12px',
+                  fontSize: '14px',
+                  width: '100%',
+                  maxWidth: '280px',
+                }}
+              />
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '6px' }}>
+                Heure de ce poste. Le départ effectif peut avoir jusqu&apos;à cinq
+                minutes de retard.
+              </div>
+            </div>
+          )}
         </div>
 
         <div style={{ display: 'flex', gap: '12px', marginTop: '20px', flexWrap: 'wrap' }}>
           <button
             type="submit"
             className="btn btn-primary btn-md"
-            disabled={isPending || !trimmed || !selected || selected.count === 0}
+            disabled={isPending || !trimmed || !dateUsable || !selected || selected.count === 0}
           >
-            Envoyer à {selected?.label.toLowerCase() ?? ''}
+            {scheduled
+              ? 'Programmer'
+              : `Envoyer à ${selected?.label.toLowerCase() ?? ''}`}
           </button>
 
           {confirming && (
             <>
               <span style={{ fontSize: '13px', color: 'var(--text-secondary)', alignSelf: 'center' }}>
-                Confirmer l&apos;envoi à {selected?.count} destinataire
-                {selected && selected.count > 1 ? 's' : ''} ?
+                {scheduled
+                  ? `Programmer pour le ${new Date(scheduledFor).toLocaleString('fr-FR')}`
+                  : `Confirmer l'envoi à ${selected?.count} destinataire${
+                      selected && selected.count > 1 ? 's' : ''
+                    } ?`}
               </span>
               <button
                 type="button"
@@ -206,7 +303,7 @@ export default function BroadcastComposer({
                 onClick={handleSubmit}
                 disabled={isPending}
               >
-                {isPending ? 'Envoi…' : 'Oui, envoyer'}
+                {isPending ? 'Envoi…' : 'Oui, confirmer'}
               </button>
               <button
                 type="button"
@@ -229,67 +326,19 @@ export default function BroadcastComposer({
         {sent && (
           <p role="status" style={{ color: 'var(--success-600)', fontSize: '14px', marginTop: '16px' }}>
             « {sent.title} » envoyé à {sent.recipients} destinataire
-            {sent.recipients > 1 ? 's' : ''}. C&apos;est déjà dans leur application,
-            et sur leur téléphone s&apos;il l&apos;a ouverte.
+            {sent.recipients > 1 ? 's' : ''}, dont {sent.devices} téléphone
+            {sent.devices > 1 ? 's' : ''}.
+          </p>
+        )}
+
+        {programmed && (
+          <p role="status" style={{ color: 'var(--success-600)', fontSize: '14px', marginTop: '16px' }}>
+            « {programmed.title} » programmé pour le{' '}
+            {new Date(programmed.at).toLocaleString('fr-FR')}. Vous pourrez
+            l&apos;annuler ou l&apos;envoyer plus tôt.
           </p>
         )}
       </form>
-    </div>
-  );
-}
-
-/** Derniers messages envoyés, avec leur audience et leur date. */
-export function BroadcastHistory({
-  broadcasts,
-  audienceLabel,
-}: {
-  broadcasts: SentBroadcast[];
-  audienceLabel: string;
-}) {
-  if (broadcasts.length === 0) {
-    return null;
-  }
-
-  return (
-    <div className="data-table-wrapper">
-      <div className="data-table-header">
-        <div>
-          <h3 style={{ margin: 0 }}>Messages envoyés</h3>
-          <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-            Chaque envoi n&apos;atteint que les comptes actifs de « {audienceLabel} ».
-          </span>
-        </div>
-      </div>
-      <table className="data-table">
-        <thead>
-          <tr>
-            <th>Message</th>
-            <th>Destinataires</th>
-            <th>Envoyé le</th>
-          </tr>
-        </thead>
-        <tbody>
-          {broadcasts.map((broadcast) => (
-            <tr key={broadcast.id}>
-              <td>
-                <div style={{ fontWeight: 600 }}>{broadcast.title}</div>
-                <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                  {broadcast.body}
-                </div>
-              </td>
-              <td>{broadcast.recipients}</td>
-              <td>
-                {new Date(broadcast.createdAt).toLocaleString('fr-FR', {
-                  day: '2-digit',
-                  month: '2-digit',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
     </div>
   );
 }

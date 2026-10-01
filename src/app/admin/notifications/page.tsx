@@ -7,11 +7,16 @@ import { isStaff } from '@/lib/roles';
 import { isPushConfigured } from '@/lib/push';
 import { isWebPushConfigured } from '@/lib/web-push';
 import PushSettings from '@/app/notifications/push-settings';
-import { fetchBroadcastHistory, loadAudiences } from './actions';
+import {
+  fetchBroadcastHistory,
+  fetchBroadcastStats,
+  fetchScheduledBroadcasts,
+  loadAudiences,
+} from './actions';
 import AndroidPushStatus from './android-push-status';
-import BroadcastComposer, {
-  BroadcastHistory,
-} from './broadcast-composer';
+import BroadcastList from './broadcast-list';
+import BroadcastStatsPanel from './broadcast-stats';
+import BroadcastComposer from './broadcast-composer';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,8 +29,10 @@ export const dynamic = 'force-dynamic';
  * n'arrivaient qu'à passer par la console Firebase — une dépendance externe pour
  * un geste qui relève du back-office.
  *
- * L'écran regroupe donc les deux besoins : composer un message pour une audience,
- * et équiper le poste pour être prévenu hors application.
+ * L'écran regroupe le geste et sa suite : composer, envoyer ou programmer,
+ * savoir ce qui est parti et ce qui reste en attente, et équiper le poste pour
+ * être prévenu hors application. Réservé à l'encadrement : c'est un canal qui
+ * fait sonner le téléphone de toute la plateforme.
  */
 export default async function NotificationConsolePage() {
   const session = await getServerSession(authOptions);
@@ -38,7 +45,7 @@ export default async function NotificationConsolePage() {
     redirect('/');
   }
 
-  const [subscriptions, audiences, broadcasts, pushState] = await Promise.all([
+  const [subscriptions, audiences, broadcasts, scheduled, stats] = await Promise.all([
     prisma.webPushSubscription.findMany({
       where: { userId: session.user.id },
       orderBy: { lastSeenAt: 'desc' },
@@ -46,7 +53,8 @@ export default async function NotificationConsolePage() {
     }),
     loadAudiences(),
     fetchBroadcastHistory(),
-    isPushConfigured(),
+    fetchScheduledBroadcasts(),
+    fetchBroadcastStats(),
   ]);
 
   // L'audience « tout le monde » compte déjà les comptes actifs : elle est la
@@ -66,25 +74,27 @@ export default async function NotificationConsolePage() {
         </div>
       </div>
 
+      {stats && <BroadcastStatsPanel stats={stats} />}
+
       <BroadcastComposer audiences={audiences} />
 
       <AndroidPushStatus
-        configured={pushState}
+        configured={isPushConfigured()}
         subscribedAccounts={subscribedAccounts}
         totalAccounts={activeAccounts}
       />
 
-      <PushSettings
-        vapidConfigured={isWebPushConfigured()}
-        subscriptions={subscriptions.map((subscription) => ({
-          id: subscription.id,
-          label: subscription.label,
-          lastSeenAt: subscription.lastSeenAt.toISOString(),
-        }))}
-      />
+      <BroadcastList scheduled={scheduled} history={broadcasts} />
 
       <div style={{ marginTop: '24px' }}>
-        <BroadcastHistory broadcasts={broadcasts} audienceLabel="la plateforme" />
+        <PushSettings
+          vapidConfigured={isWebPushConfigured()}
+          subscriptions={subscriptions.map((subscription) => ({
+            id: subscription.id,
+            label: subscription.label,
+            lastSeenAt: subscription.lastSeenAt.toISOString(),
+          }))}
+        />
       </div>
     </div>
   );

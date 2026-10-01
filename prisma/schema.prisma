@@ -112,6 +112,69 @@ enum NotificationType {
 }
 
 // ----------------------------------------
+// Campagnes de messages de la régie
+// ----------------------------------------
+
+/// État d'une campagne de message.
+///
+/// `SENDING` existe pour qu'une campagne ne puisse pas partir deux fois : la
+/// reclaim est faite par une écriture conditionnelle, et le passage par cet
+/// état rend la seconde tentative sans effet plutôt que doublant.
+enum BroadcastStatus {
+  /// Programmée, en attente de son heure.
+  SCHEDULED
+  /// Réclamée par un déclencheur, en cours d'envoi.
+  SENDING
+  /// Partie : les notifications et les push ont été déclenchés.
+  SENT
+  /// Annulée avant l'heure par la régie.
+  CANCELLED
+  /// L'envoi a échoué. `failureReason` dit pourquoi.
+  FAILED
+}
+
+/// Un message de la régie à une audience.
+///
+/// L'historique ne pouvait pas être reconstruit à partir des notifications : une
+/// campagne programmée n'a encore produit aucune notification, et il faut savoir
+/// qu'elle est attendue avant de l'envoyer. Cette table est donc la source de
+/// vérité, et les lignes `Notification` n'en sont que la trace chez les
+/// destinataires.
+model Broadcast {
+  id String @id @default(uuid())
+  title String
+  body String
+  /// Audience visée, telle que déclarée dans `BROADCAST_AUDIENCES`.
+  audience String
+  /// Heure d'envoi voulue, en UTC. Une campagne programmée est stockée dans le
+  /// même champ qu'un envoi immédiat : l'heure est celle de l'envoi.
+  scheduledFor DateTime
+  status BroadcastStatus @default(SCHEDULED)
+  /// Date d'envoi effectif, une fois la campagne partie.
+  sentAt DateTime?
+  /// Destinataires au moment de l'envoi : une audience est résolue à cet
+  /// instant-là, pas à la programmation, et l'équipe peut changer d'ici là.
+  recipients Int @default(0)
+  /// Dont joignables hors application, c'est-à-dire possédant un téléphone
+  /// abonné. Mesuré à l'envoi, pour que le chiffre affiché soit exact.
+  /// `null` quand la campagne est antérieure à la console : le nombre n'a pas
+  /// été relevé, et un chiffre deviné dans un indicateur est pire qu'un trou.
+  devices Int?
+  /// Pourquoi l'envoi a échoué, si c'est le cas.
+  failureReason String?
+  createdById String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  createdBy User @relation("Broadcasts", fields: [createdById], references: [id], onDelete: Cascade)
+
+  /// Balayage des campagnes dues : la requête de la reclaim filtre sur ces
+  /// deux colonnes, dans cet ordre.
+  @@index([status, scheduledFor])
+  @@index([createdAt])
+}
+
+// ----------------------------------------
 // Utilisateurs & Authentification
 // ----------------------------------------
 model User {
@@ -139,6 +202,8 @@ model User {
   pushTokens      PushToken[]
   /// Navigateurs du back-office abonnés aux notifications hors application.
   pushSubscriptions WebPushSubscription[]
+  /// Campagnes de messages composées par ce compte.
+  broadcasts Broadcast[] @relation("Broadcasts")
 }
 
 enum Role {

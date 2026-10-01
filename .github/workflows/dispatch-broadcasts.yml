@@ -1,0 +1,39 @@
+name: Envoi des campagnes programmées
+
+# L'hébergement Vercel de ce projet est en plan gratuit, dont les tâches
+# automatiques se limitent à une exécution par jour : une coupure annoncée à
+# 14 h partirait le lendemain matin. Ce workflow appelle donc la route d'envoi
+# toutes les cinq minutes.
+#
+# Il ne fait rien d'autre : la route `/api/cron/broadcasts` envoie les campagnes
+# dont l'heure est atteinte, et rien ne part si le jeton transmis ne correspond
+# pas à BROADCAST_CRON_SECRET.
+
+on:
+  schedule:
+    # Toutes les cinq minutes, en évitant la minute pleine : cinq requêtes
+    # arrivant exactement à la même seconde se concentreraient sur une seule
+    # instance. Deux minutes de décalage ne changent rien de perceptible pour
+    # une campagne.
+    - cron: '3-59/5 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  # Deux exécutions ne doivent pas se chevaucher : la seconde ne ferait rien de
+  # plus, mais ferait échouer la première au contrôle de concurrence.
+  group: broadcast-cron
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Envoyer les campagnes dues
+        env:
+          URL: https://wificare-web.vercel.app/api/cron/broadcasts
+          CRON_SECRET: ${{ secrets.BROADCAST_CRON_SECRET }}
+        run: |
+          curl --silent --show-error --fail-with-body \
+            -H "x-cron-secret: $CRON_SECRET" \
+            "$URL"
