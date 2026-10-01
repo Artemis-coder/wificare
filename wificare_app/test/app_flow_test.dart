@@ -227,7 +227,12 @@ void main() {
     adapter.streams['/notifications/stream'] = const Stream<Uint8List>.empty();
   });
 
-  Widget buildApp() {
+  /// Construit l'application.
+  ///
+  /// [onboardingSeen] vaut `true` par défaut : ces tests portent sur les
+  /// parcours, pas sur les autorisations, et l'écran d'accueil les en
+  /// détournerait tous. Le test qui le vérifie le passe à `false`.
+  Widget buildApp({bool onboardingSeen = true}) {
     final dio = Dio();
     dio.httpClientAdapter = adapter;
     final refreshDio = Dio()..httpClientAdapter = adapter;
@@ -238,6 +243,7 @@ void main() {
         apiClientProvider.overrideWith(
           (ref) => ApiClient(tokenStorage: storage, dio: dio, refreshDio: refreshDio),
         ),
+        onboardingSeenProvider.overrideWithValue(onboardingSeen),
       ],
       child: const WiFiCareApp(),
     );
@@ -251,13 +257,13 @@ void main() {
     }
   }
 
-  Future<void> pumpApp(WidgetTester tester) async {
+  Future<void> pumpApp(WidgetTester tester, {bool onboardingSeen = true}) async {
     // Format proche d'un téléphone réel pour que la mise en page soit représentative.
     tester.view.physicalSize = const Size(1280, 2856);
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 
-    await tester.pumpWidget(buildApp());
+    await tester.pumpWidget(buildApp(onboardingSeen: onboardingSeen));
     await settle(tester);
   }
 

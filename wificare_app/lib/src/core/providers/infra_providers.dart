@@ -7,6 +7,14 @@ import '../storage/token_storage.dart';
 
 final tokenStorageProvider = Provider<TokenStorage>((ref) => TokenStorage());
 
+/// L'écran d'accueil des autorisations a-t-il déjà été vu sur ce téléphone ?
+///
+/// Lu une fois avant `runApp` et figé ici : la redirection du routeur est
+/// synchrone, elle ne peut pas attendre une lecture de stockage à chaque
+/// navigation. Le passage devant l'écran ne remet pas la valeur à faux — il
+/// n'y a rien à rafraîchir, une fois écrit, il n'est plus jamais reproposé.
+final onboardingSeenProvider = Provider<bool>((ref) => false);
+
 final apiClientProvider = Provider<ApiClient>((ref) {
   return ApiClient(tokenStorage: ref.watch(tokenStorageProvider));
 });

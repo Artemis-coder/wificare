@@ -2,6 +2,9 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:geolocator_platform_interface/geolocator_platform_interface.dart';
+import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
 /// Adaptateur Dio qui répond à partir d'un routage `chemin -> réponse`.
 ///
@@ -182,11 +185,19 @@ abstract final class FakeApiData {
   };
 
   /// Devis en attente de décision du client.
-  static Map<String, dynamic> quote({String ticketId = 't-3'}) => {
-    'id': 'inv-q1',
+  ///
+  /// Le statut est paramétrable parce que c'est lui qui commande ce que le
+  /// technicien peut faire : un devis `SENT` bloque la réparation, un devis
+  /// `ACCEPTED` la débloque, un devis `REJECTED` rend la demande au technicien.
+  static Map<String, dynamic> quote({
+    String ticketId = 't-3',
+    String status = 'SENT',
+    String id = 'inv-q1',
+  }) => {
+    'id': id,
     'ticketId': ticketId,
     'type': 'QUOTE',
-    'status': 'SENT',
+    'status': status,
     'totalAmount': 25000,
     'createdAt': '2026-01-30T10:00:00.000Z',
     'lines': [],
@@ -260,4 +271,59 @@ abstract final class FakeApiData {
       'wifiZone': {'name': 'WiFi Zone Angre 8e Tranche'},
     },
   };
+}
+
+/// Localisation simulée.
+///
+/// `geolocator` passe par une interface de plateforme, interceptable en test
+/// sans passer par un canal natif : c'est le seul moyen de faire croire à
+/// l'application qu'une autorisation a été accordée, un test widget n'ayant
+/// aucun accès au PermissionDialog d'Android.
+class FakeGeolocator extends GeolocatorPlatform
+    with MockPlatformInterfaceMixin {
+  FakeGeolocator({
+    this.serviceEnabled = true,
+    this.permission = LocationPermission.whileInUse,
+  });
+
+  bool serviceEnabled;
+  LocationPermission permission;
+
+  /// Nombre de demandes effectivement faites : permet de vérifier qu'un second
+  /// appel n'est pas relancé une fois l'autorisation accordée.
+  int requestCount = 0;
+
+  @override
+  Future<bool> isLocationServiceEnabled() async => serviceEnabled;
+
+  @override
+  Future<LocationPermission> checkPermission() async => permission;
+
+  @override
+  Future<LocationPermission> requestPermission() async {
+    requestCount++;
+    return permission;
+  }
+
+  @override
+  Future<bool> openAppSettings() async => true;
+}
+
+/// Installe une localisation simulée, et rend l'instance pour pouvoir la muter
+/// en cours de test. À retirer avec [removeFakeGeolocator].
+FakeGeolocator installFakeGeolocator({
+  bool serviceEnabled = true,
+  LocationPermission permission = LocationPermission.whileInUse,
+}) {
+  final fake = FakeGeolocator(
+    serviceEnabled: serviceEnabled,
+    permission: permission,
+  );
+
+  GeolocatorPlatform.instance = fake;
+  return fake;
+}
+
+void removeFakeGeolocator() {
+  GeolocatorPlatform.instance = FakeGeolocator();
 }

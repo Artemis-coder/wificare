@@ -8,6 +8,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_button.dart';
+import '../../../core/widgets/trip_map_card.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/states.dart';
 import '../../zones/application/location_share.dart';
@@ -147,6 +148,15 @@ class _ArrivalEstimateCardState extends ConsumerState<ArrivalEstimateCard> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SectionHeader(title: 'Arrivée du technicien'),
+          // La carte vient avant les chiffres : c'est l'image qui répond à « où
+          // en est-il », et les chiffres la précèdent, ils l'expliquent.
+          if (tracking.hasRoute) ...[
+            TripMapCard(
+              tracking: tracking,
+              technicianName: tracking.technicianName ?? 'Le technicien',
+            ),
+            const SizedBox(height: AppSpacing.md),
+          ],
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [

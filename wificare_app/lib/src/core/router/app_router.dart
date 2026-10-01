@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../features/auth/application/auth_controller.dart';
 import '../../features/auth/presentation/login_screen.dart';
+import '../../features/auth/presentation/onboarding_screen.dart';
 import '../../features/auth/presentation/register_screen.dart';
 import '../../features/client/presentation/dashboard_screen.dart';
 import '../../features/client/presentation/equipments_screen.dart';
@@ -28,6 +29,9 @@ import '../widgets/app_logo.dart';
 
 abstract final class Routes {
   static const splash = '/';
+
+  /// Explication des autorisations, à la toute première ouverture.
+  static const onboarding = '/onboarding';
   static const login = '/login';
   static const register = '/register';
   static const home = '/home/dashboard';
@@ -133,6 +137,22 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: Routes.splash,
         builder: (_, _) => const _SplashScreen(),
+      ),
+      // Première ouverture seulement. L'écran explique les deux
+      // autorisations avant de les demander, et ne bloque pas l'application si
+      // l'utilisateur refuse : le drapeau est mémorisé, donc il ne revient pas
+      // au démarrage suivant.
+      GoRoute(
+        path: Routes.onboarding,
+        builder: (context, state) => OnboardingScreen(
+          onDone: () async {
+            // Mémorisé avant la redirection : si l'écriture échoue, on
+            // reproposera l'écran plutôt que de le perdre.
+            await ref.read(tokenStorageProvider).markOnboardingSeen();
+
+            if (context.mounted) context.go(Routes.login);
+          },
+        ),
       ),
       GoRoute(
         path: Routes.login,
@@ -302,6 +322,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       if (!authenticated) {
         // `/register` est atteignable sans session, comme la connexion.
         if (location == Routes.login || location == Routes.register) return null;
+
+        // Première ouverture : l'écran d'accueil précède la connexion, parce
+        // qu'il doit expliquer les autorisations avant de les demander. Une
+        // fois vu, le drapeau fait son travail et l'utilisateur va droit au
+        // formulaire de connexion.
+        if (!ref.read(onboardingSeenProvider)) return Routes.onboarding;
+
         return Routes.login;
       }
 

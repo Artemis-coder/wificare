@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/config/env.dart';
 import '../../../core/location/location_tracking.dart';
 import '../../../core/network/api_exception.dart';
+import '../../../core/permissions/permissions_service.dart';
 import '../../../core/providers/infra_providers.dart';
 import 'technician_providers.dart';
 
@@ -96,6 +97,23 @@ class TechnicianTrackingController extends Notifier<TechnicianTrackingState> {
       state = TechnicianTrackingState(
         ticketId: ticketId,
         message: 'Session expirée : le suivi de position est indisponible.',
+      );
+      return;
+    }
+
+    // Le technicien peut avoir refusé la localisation au premier lancement, ou
+    // ne pas l'avoir accordée du tout. Comme il vient d'appuyer sur « Démarrer
+    // le déplacement », le suivi est précisément ce qu'il vient de demander : on
+    // repose la question, une fois, au moment où elle a du sens. Android la
+    // refusera à nouveau si l'utilisateur l'a déjà refusée définitivement, et
+    // dans ce cas le message ci-dessous lui dit d'ouvrir les réglages.
+    final grant = await PermissionsService.requestLocation();
+
+    if (!grant.isGranted) {
+      state = TechnicianTrackingState(
+        available: grant.deniedForever || !grant.servicesDisabled,
+        ticketId: ticketId,
+        message: grant.message,
       );
       return;
     }

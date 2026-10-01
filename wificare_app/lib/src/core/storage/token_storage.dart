@@ -14,6 +14,21 @@ class TokenStorage {
   static const _accessTokenKey = 'accessToken';
   static const _refreshTokenKey = 'refreshToken';
 
+  /// L'écran d'accueil a-t-il déjà été présenté ?
+  ///
+  /// Une fois pour toutes par installation : le reproposer à chaque démarrage
+  /// l'agresserait, alors que les autorisations, elles, restent modifiables
+  /// dans les réglages du téléphone. Ce drapeau est effacé avec les jetons à la
+  /// déconnexion — ce n'est pas un secret, et la connexion doit rester possible
+  /// ensuite.
+  static const _onboardingKey = 'onboardingSeen';
+
+  Future<bool> hasSeenOnboarding() async =>
+      await _storage.read(key: _onboardingKey) == 'true';
+
+  Future<void> markOnboardingSeen() =>
+      _storage.write(key: _onboardingKey, value: 'true');
+
   Future<String?> readAccessToken() => _storage.read(key: _accessTokenKey);
   Future<String?> readRefreshToken() => _storage.read(key: _refreshTokenKey);
 
@@ -25,5 +40,9 @@ class TokenStorage {
     await _storage.write(key: _refreshTokenKey, value: refreshToken);
   }
 
+  /// Efface la session.
+  ///
+  /// `deleteAll` emporte le drapeau d'accueil : un nouvel utilisateur sur le
+  /// même téléphone doit revoir l'explication des autorisations.
   Future<void> clear() => _storage.deleteAll();
 }

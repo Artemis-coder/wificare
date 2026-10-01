@@ -14,6 +14,7 @@ React Native ni iOS dans ce projet.
 | Stockage chiffré | `flutter_secure_storage` |
 | Photos | `image_picker` |
 | Ouverture d'URL / téléphone / géo | `url_launcher` |
+| Carte du trajet | `flutter_map` + `latlong2` |
 | Cache d'images | `cached_network_image` |
 | Formatage fr-FR | `intl` |
 
@@ -136,6 +137,60 @@ l'API les lui refuse.
 - L'onglet « Avis » est **en lecture seule** : le technicien subit la note, il
   ne la rédige pas. `GET /api/evaluations` le borne à `technicianId`, sans quoi
   il pourrait lire ce que les clients ont pensé d'un collègue.
+
+## Autorisations, et carte du trajet
+
+Deux autorisations portent l'application : les **notifications** et la
+**géolocalisation**. `core/permissions/permissions_service.dart` est leur point
+d'entrée unique.
+
+Android n'affiche la boîte de dialogue **qu'une fois**. Après un refus,
+l'appel suivant ne déclenche rien et rend la main immédiatement : le seul
+retour possible est alors `deniedForever`, qui doit mener aux **réglages du
+téléphone** et pas à un bouton « Autoriser » qui ne mènera nulle part. C'est
+tout l'intérêt de `LocationGrant`, qui sépare « on peut encore demander » de
+« il faut passer par les réglages ».
+
+L'écran d'accueil (`features/auth/presentation/onboarding_screen.dart`)
+précède la connexion et explique les deux autorisations **avant** de les
+demander. Un utilisateur qui refuse une fenêtre surgissante sans explication ne
+la rouvrira jamais, et l'application perd ses notifications et ses ETA sans
+avoir jamais su pourquoi. Le drapeau `onboardingSeen` est lu **avant
+`runApp`** et injecté par override : la redirection du routeur est synchrone, elle
+ne peut pas attendre une lecture de stockage à chaque navigation. L'écran ne
+bloque rien — refuser est légitime, et les autorisations restent
+modifiables dans les réglages.
+
+Le technicien **repose la question au départ**, dans
+`TechnicianTrackingController.start` : il vient d'appuyer sur « Démarrer le
+déplacement », donc le suivi est précisément ce qu'il demande. La demande est
+posée là où elle a du sens, et non au premier lancement seulement.
+
+La carte (`core/widgets/trip_map_card.dart`) est **partagée par les deux
+espaces** : le technicien et le client voient le même trajet, avec le point A
+(technicien) et le point B (zone du client). Une seule implémentation, sinon les
+deux écrans finissent par diverger et le technicien ne voit plus ce que voit le
+client.
+
+Trois règles que la carte tient :
+
+- **L'ETA affichée est celle du serveur**, jamais recalculée localement. Un
+  chiffre différent de l'estimation officielle donnerait deux vérités ;
+- **rien n'est dessiné sans les deux points** (`TicketTracking.hasRoute`) : une
+  carte ne montrant qu'un point immobile dans le vide ferait croire à un suivi
+  cassé ;
+- **la position du technicien est renvoyée au client** (`latitude`/`longitude`
+  dans le résumé de suivi). Le client voit déjà où se trouve celui qui vient
+  vers sa zone, et la position ne quitte jamais le trajet en cours.
+
+Les tuiles viennent d'OpenStreetMap : **pas de clé API, pas de compte**. Le
+passage à Google Maps se ferait dans le seul `_Map` ; l'attribution OSM doit
+rester affichée tant que ce n'est pas fait.
+
+`flutter_map` charge des tuiles réseau : aucun test widget ne peut le laisser
+tourner tel quel. Le suivi se teste avec `installFakeGeolocator`
+(`test/fake_api.dart`), qui intercepte l'interface de plateforme de
+`geolocator` — un PermissionDialog d'Android n'existe pas dans un test.
 
 ## Notifications : in-app et push
 

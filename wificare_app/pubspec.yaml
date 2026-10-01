@@ -45,6 +45,12 @@ dependencies:
   # l'estimation d'arrivée du technicien. Un seul point à la demande : le
   # suivi continu du technicien est fait par un service Android natif, pas ici.
   geolocator: ^14.0.2
+  # Carte de suivi du trajet, côté technicien comme côté client : position du
+  # technicien (point A) et position de la zone du client (point B).
+  # OpenStreetMap, donc sans clé API ni compte : `flutter_map` ne fait que
+  # dessiner les tuiles qu'on lui donne, il ne contacte aucun service de chez lui.
+  flutter_map: ^8.2.2
+  latlong2: ^0.9.1
   cached_network_image: ^4.0.4
   firebase_core: ^4.15.0
   firebase_messaging: ^16.7.0
@@ -53,6 +59,13 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+
+  # `geolocator` expose sa logique derrière une interface de plateforme, qu'un
+  # test simule pour faire croire qu'une autorisation a été accordée. Les
+  # bibliothèques sont déclarées ici parce que les tests les utilisent
+  # directement, pas seulement à travers `geolocator`.
+  geolocator_platform_interface: ^4.2.4
+  plugin_platform_interface: ^2.1.8
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
