@@ -10,6 +10,7 @@ import '../../features/client/presentation/equipments_screen.dart';
 import '../../features/client/presentation/profile_screen.dart';
 import '../../features/invoices/presentation/invoice_detail_screen.dart';
 import '../../features/invoices/presentation/invoices_screen.dart';
+import '../../features/reviews/presentation/reviews_screen.dart';
 import '../../features/notifications/presentation/notifications_screen.dart';
 import '../../features/shell/presentation/client_shell.dart';
 import '../../features/tickets/presentation/ticket_detail_screen.dart';
@@ -44,6 +45,9 @@ abstract final class Routes {
   /// Page enfant de l'accueil, comme le profil : la barre de navigation reste
   /// visible dessus.
   static const notifications = '/home/dashboard/notifications';
+
+  /// Avis déposés par le client sur ses interventions.
+  static const reviews = '/home/reviews';
 }
 
 /// Routes de l'espace technicien.
@@ -74,13 +78,20 @@ class ClientTab {
     ClientTab(path: 'tickets', label: 'Pannes', icon: Icons.report_problem_rounded),
     ClientTab(path: 'equipments', label: 'Équipements', icon: Icons.router_rounded),
     ClientTab(path: 'invoices', label: 'Factures', icon: Icons.receipt_long_rounded),
+    ClientTab(path: 'reviews', label: 'Avis', icon: Icons.star_outline_rounded),
   ];
 
   /// Segments d'URL des onglets, dans le même ordre que [tabs].
   ///
   /// Le profil n'est pas un onglet : c'est une page enfant de l'accueil,
   /// ouverte en touchant l'avatar du tableau de bord.
-  static const List<String> branches = ['dashboard', 'tickets', 'equipments', 'invoices'];
+  static const List<String> branches = [
+    'dashboard',
+    'tickets',
+    'equipments',
+    'invoices',
+    'reviews',
+  ];
 }
 
 /// Index de l'onglet « Accueil » dans une liste de branches.
@@ -196,6 +207,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                         InvoiceDetailScreen(invoiceId: state.pathParameters['id']!),
                   ),
                 ],
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: Routes.reviews,
+                builder: (_, _) => const ReviewsScreen(),
               ),
             ],
           ),

@@ -72,6 +72,8 @@ enum NotificationType {
   QUOTE_SENT
   /// Le client a réglé le devis.
   PAYMENT_RECEIVED
+  /// Un client a déposé un avis sur l'intervention du technicien.
+  EVALUATION_RECEIVED
 }
 
 // ----------------------------------------
@@ -92,12 +94,14 @@ model User {
   updatedAt    DateTime   @updatedAt
 
   // Relations
-  clients       Client[]       @relation("ClientUsers")
-  tickets       Ticket[]       @relation("TechnicianTickets")
-  evaluations   Evaluation[]
-  notifications Notification[]
+  clients         Client[]       @relation("ClientUsers")
+  tickets         Ticket[]       @relation("TechnicianTickets")
+  evaluations     Evaluation[]
+  /// Avis reçus sur leurs interventions.
+  reviewsReceived Evaluation[]   @relation("EvaluatedTechnician")
+  notifications   Notification[]
   /// Jetons de push des appareils de ce compte.
-  pushTokens    PushToken[]
+  pushTokens      PushToken[]
 }
 
 enum Role {
@@ -329,14 +333,27 @@ enum PaymentStatus {
 // ----------------------------------------
 // Évaluations
 // ----------------------------------------
+/// Avis d'un client sur une intervention.
+///
+/// Rattachée à la demande, donc à l'intervention concernée, et au technicien qui
+/// l'a réalisée : sans ce second lien, la régie ne peut pas répondre à « quel
+/// technicien est mal noté » sans parcourir toutes les interventions.
 model Evaluation {
-  id        String   @id @default(uuid())
-  ticketId  String   @unique
-  clientId  String
-  rating    Int // 1 to 5
+  id       String @id @default(uuid())
+  ticketId String @unique
+  clientId String
+
+  /// Technicien ayant réalisé l'intervention, figé à la rédaction de l'avis.
+  technicianId String?
+
+  rating    Int // 1 à 5
   comment   String?
   createdAt DateTime @default(now())
 
-  ticket Ticket @relation(fields: [ticketId], references: [id])
-  client User   @relation(fields: [clientId], references: [id])
+  ticket     Ticket @relation(fields: [ticketId], references: [id])
+  client     User   @relation(fields: [clientId], references: [id])
+  technician User?  @relation("EvaluatedTechnician", fields: [technicianId], references: [id])
+
+  @@index([technicianId])
+  @@index([clientId])
 }

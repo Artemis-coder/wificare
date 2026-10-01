@@ -64,6 +64,10 @@ class ClientShell extends StatelessWidget {
     if (location.startsWith(Routes.tickets)) {
       return ClientTab.branches.indexOf('tickets');
     }
+
+    if (location.startsWith(Routes.reviews)) {
+      return ClientTab.branches.indexOf('reviews');
+    }
     if (location.startsWith(Routes.equipments)) {
       return ClientTab.branches.indexOf('equipments');
     }

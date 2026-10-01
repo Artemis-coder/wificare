@@ -498,13 +498,15 @@ void main() {
     FlutterSecureStorage.setMockInitialValues(_session);
     await pumpApp(tester);
 
-    // Quatre onglets seulement : plus de « Profil ».
+    // Le profil n'est pas un onglet : la barre contient exactement les onglets
+    // déclarés, et aucun ne s'appelle « Profil ». Compter une valeur fixe
+    // casserait à chaque ajout d'onglet sans dire ce que l'on protège.
     final menu = find.byType(NavigationBar);
     expect(menu, findsOneWidget);
     expect(find.text('Profil'), findsNothing);
     expect(
       tester.widget<NavigationBar>(menu).destinations.length,
-      4,
+      ClientTab.tabs.length,
       reason: 'le profil ne doit plus être un onglet',
     );
 
