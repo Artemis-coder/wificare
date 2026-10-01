@@ -211,8 +211,32 @@ flutter pub get
 flutter analyze                        # doit rester à 0 erreur
 flutter test                           # parcours client + technicien
 flutter run --dart-define=API_BASE_URL=http://10.0.2.2:3000/api
-flutter build apk --release --dart-define=API_BASE_URL=http://10.0.2.2:3000/api
+tool/build_release.sh                  # APK release prêt à distribuer
 ```
 
 Avant de déclarer une tâche terminée : `flutter analyze` sans erreur ni
 avertissement.
+
+## Nom du fichier distribué
+
+`flutter build apk` produit `app-release.apk` : le nom vient du module Gradle
+et n'identifie rien pour la personne qui reçoit le fichier. **Ne pas compiler un
+APK à distribuer avec `flutter build apk` directement** — passer par
+`tool/build_release.sh`, qui renomme la sortie en
+`build/app/outputs/flutter-apk/WiFiCare-<version>.apk` (version lue dans
+`pubspec.yaml`) et vise la production par défaut.
+
+Le renommage est fait en script, pas en Gradle : AGP 9 a retiré
+`outputFileName` de son API de variants, il n'existe donc plus de moyen Supported
+de renommer la sortie depuis `build.gradle.kts`.
+
+Le nom de la marque est défini à trois endroits qui doivent rester alignés :
+
+| Emplacement | Valeur |
+| --- | --- |
+| `tool/build_release.sh` (`APP_NAME`) | `WiFiCare` |
+| `android/app/src/main/AndroidManifest.xml` (`android:label`) | `WiFiCare` |
+| libellé et logo du back-office (`src/app/layout.tsx`) | `WiFiCare` |
+
+La signature reste celle de debug : l'APK est installable, mais pas publiable
+sur Google Play tant qu'une keystore de release n'a pas été générée.

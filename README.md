@@ -182,20 +182,34 @@ via `src/lib/user-admin.ts`.
 
 ```bash
 cd wificare_app
-flutter build apk --release --dart-define=API_BASE_URL=http://10.0.2.2:3000/api
-# -> wificare_app/build/app/outputs/flutter-apk/app-release.apk
+tool/build_release.sh
+# -> wificare_app/build/app/outputs/flutter-apk/WiFiCare-1.0.0.apk
 ```
 
-Pour une URL publique, remplacer `10.0.2.2:3000` par l'adresse du serveur
-accessible depuis les appareils. Pour viser la production déployée :
+Le script compile en release, vise la production
+(`https://wificare-web.vercel.app/api`) et renomme la sortie. Passer une autre
+API, par exemple pour un test sur émulateur :
 
 ```bash
-flutter build apk --release \
-  --dart-define=API_BASE_URL=https://wificare-web.vercel.app/api
+API_BASE_URL=http://10.0.2.2:3000/api tool/build_release.sh
 ```
 
-L'APK n'est pas versionné dans Git (binaire de 57 Mo). Les releases
-GitHub fournissent le fichier prêt à installer.
+Le nom du fichier est `WiFiCare-<version>.apk`, la version étant lue dans
+`pubspec.yaml`. `flutter build apk` seul produit `app-release.apk` : ce nom
+accompagne le fichier jusqu'à la personne qui le reçoit, sur un téléphone comme
+dans une liste de téléchargements, et n'identifie pas l'application. Le
+renommage se fait dans le script parce qu'AGP 9 a retiré `outputFileName` de
+son API de variants — il n'existe plus de moyen supported de le faire depuis
+`build.gradle.kts`.
+
+Le nom de la marque est défini à trois endroits qui doivent rester alignés :
+`APP_NAME` dans `tool/build_release.sh`, `android:label` dans
+`AndroidManifest.xml`, et le libellé du back-office dans `src/app/layout.tsx`.
+
+L'APK n'est pas versionné dans Git (binaire de 54 Mo). Les releases GitHub
+fournissent le fichier prêt à installer. Il est signé avec la clé de debug :
+installable, mais pas publiable sur Google Play tant qu'une keystore de release
+n'a pas été générée.
 
 ### Logo
 
