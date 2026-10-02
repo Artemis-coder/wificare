@@ -83,6 +83,17 @@
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
             android:resource="@mipmap/ic_launcher" />
+
+        <!-- PostHog : initialisation manuelle.
+             Le token et l'hôte sont injectés à la compilation
+             (variables dart define, lues par AnalyticsService.setup()),
+             ce qui permet de désactiver PostHog sur un build de développement
+             local sans recompiler le manifeste. Désactiver l'auto-init est
+             donc nécessaire : sinon le SDK s'initialiserait avant le Dart,
+             avec une configuration vide. -->
+        <meta-data
+            android:name="com.posthog.posthog.AUTO_INIT"
+            android:value="false" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

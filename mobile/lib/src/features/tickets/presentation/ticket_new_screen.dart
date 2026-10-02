@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../../core/analytics/analytics_service.dart';
 import '../../../core/domain/enums.dart';
 import '../../../core/media/photo_policy.dart';
 import '../../../core/domain/models.dart';
@@ -90,6 +91,16 @@ class _TicketNewScreenState extends ConsumerState<TicketNewScreen> {
         priority: _priority,
         description: _descriptionController.text.trim(),
       );
+
+      // La demande vient d'être créée : c'est l'action principale
+      // de l'application client. L'événement porte le type et la
+      // priorité — ce qui permet de lire la répartition des pannes
+      // — mais jamais la description, qui est une donnée du client.
+      await AnalyticsService.capture('ticket_created', properties: {
+        'type': category.label,
+        'priority': _priority.name,
+        'has_photos': _photos.isNotEmpty,
+      });
 
       if (_photos.isNotEmpty) {
         setState(() => _uploading = true);

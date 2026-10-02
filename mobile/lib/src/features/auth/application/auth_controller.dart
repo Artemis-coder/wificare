@@ -4,6 +4,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/analytics/analytics_service.dart';
 import '../../../core/domain/models.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/providers/infra_providers.dart';
@@ -102,6 +103,18 @@ class AuthController extends AsyncNotifier<Session?> {
     // destination (accueil client ou technicien).
     ref.read(routerRefreshProvider).trigger();
 
+    // Les événements de cette session doivent être rattachés à ce
+    // compte, et non à l'identité anonyme du téléphone. Un téléphone
+    // partagé — un technicien sur le même appareil qu'un collègue —
+    // sinon verrait les actions des deux sur une seule personne.
+    final session = state.value;
+    if (session != null) {
+      await AnalyticsService.identify(
+        userId: session.user.id,
+        role: session.user.role.wire,
+      );
+    }
+
     // L'appareil doit être déclaré ici aussi, et pas seulement au démarrage :
     // sans cela, une installation neuve — donc le cas le plus fréquent —
     // n'enregistre son jeton qu'au lancement suivant. Un technicien qui
@@ -120,13 +133,48 @@ class AuthController extends AsyncNotifier<Session?> {
     required AccountType accountType,
   }) async {
     state = const AsyncValue.loading();
-    await _run(
-      () => ref.read(authRepositoryProvider).login(
-            phone: phone,
-            password: password,
-            accountType: accountType,
-          ),
-    );
+
+    // Le résultat de la connexion est tracé, pas son contenu : ni le
+    // numéro, ni le mot de passe ne partent. Savoir *pourquoi* une
+    // connexion échoue (mauvais code, compte incohérent) est ce qui
+    // distingue une faute de frappe d'un compte bloqué.
+    try {
+      await _run(
+        () => ref.read(authRepositoryProvider).login(
+              phone: phone,
+              password: password,
+              accountType: accountType,
+            ),
+      );
+
+      await AnalyticsService.capture('login_attempted', properties: {
+        'outcome': 'success',
+        'account_type': accountType.wire,
+      });
+    } on ApiException catch (error) {
+      // Le motif est déduit de l'erreur, jamais pris dans son message :
+      // un message serveur peut porter une donnée que l'on ne veut
+      // pas voir partir. Le code HTTP distingue un refus d'authentification
+      // d'une panne réseau, ce qui est le seul distinction utile ici.
+      await AnalyticsService.capture('login_attempted', properties: {
+        'outcome': 'failure',
+        'reason': error.isNetworkError
+            ? 'network'
+            : (error.statusCode ?? 0).toString(),
+        'account_type': accountType.wire,
+      });
+      rethrow;
+    } catch (_) {
+      // Une erreur inattendue (parsing, format inattendu) est aussi un
+      // échec de connexion : elle doit apparaître dans les stats, sous
+      // un motif qui dit qu'elle n'est ni un refus ni une panne réseau.
+      await AnalyticsService.capture('login_attempted', properties: {
+        'outcome': 'failure',
+        'reason': 'unexpected',
+        'account_type': accountType.wire,
+      });
+      rethrow;
+    }
   }
 
   /// Création de compte puis connexion immédiate.
@@ -140,6 +188,11 @@ class AuthController extends AsyncNotifier<Session?> {
     String? zoneLocation,
   }) async {
     state = const AsyncValue.loading();
+
+    // Le compte est créé et la session ouverte en un appel : l'événement
+    // part ici, après le succès. Ni le nom, ni le numéro, ni le mot de
+    // passe ne l'accompagnent — le type de compte suffit à lire la
+    // répartition des inscriptions.
     await _run(
       () => ref.read(authRepositoryProvider).register(
             accountType: accountType,
@@ -151,6 +204,11 @@ class AuthController extends AsyncNotifier<Session?> {
             zoneLocation: zoneLocation,
           ),
     );
+
+    await AnalyticsService.capture('account_created', properties: {
+      'account_type': accountType.wire,
+      'has_zone': zoneName != null && zoneName.isNotEmpty,
+    });
   }
 
   Future<void> refreshProfile() async {
@@ -188,6 +246,13 @@ class AuthController extends AsyncNotifier<Session?> {
     }
 
     await ref.read(authRepositoryProvider).logout();
+
+    // L'identité PostHog est effacée avec la session : sans `reset()`,
+    // le compte suivant sur ce téléphone hériterait de l'identité du
+    // précédent, et ses événements seraient rattachés à un compte qui
+    // n'est plus le sien.
+    await AnalyticsService.reset();
+
     state = const AsyncValue.data(null);
     ref.read(routerRefreshProvider).trigger();
   }

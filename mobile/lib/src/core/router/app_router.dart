@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:posthog_flutter/posthog_flutter.dart';
 
 import '../../features/auth/application/auth_controller.dart';
 import '../../features/auth/presentation/login_screen.dart';
@@ -24,6 +25,7 @@ import '../../features/technician/presentation/technician_shell.dart';
 import '../../features/technician/presentation/technician_ticket_screen.dart';
 import '../../features/technician/presentation/technician_tickets_screen.dart';
 import '../../features/technician/presentation/technician_wallet_screen.dart';
+import '../config/env.dart';
 import '../domain/enums.dart';
 import '../providers/infra_providers.dart';
 import '../widgets/app_logo.dart';
@@ -141,8 +143,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     initialLocation: Routes.splash,
     refreshListenable: refresh,
     debugLogDiagnostics: false,
+    // Enregistre chaque changement d'écran comme une vue `$screen`.
+    // Sans cet observateur, l'application n'envoie aucune vue
+    // d'écran : le SDK ne les capture pas de lui-même, et un
+    // tableau de bord sans pages vues ne dit rien de l'usage.
+    // Les noms viennent du `name` de chaque route ci-dessous.
+    // L'observateur n'est ajouté que si PostHog est configuré :
+    // un build de développement local n'installe pas un
+    // observateur qui n'a nulle part où envoyer.
+    observers: [
+      if (AppConfig.posthogToken.isNotEmpty) PosthogObserver(),
+    ],
     routes: [
       GoRoute(
+        name: 'splash',
         path: Routes.splash,
         builder: (_, _) => const _SplashScreen(),
       ),
@@ -151,6 +165,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       // l'utilisateur refuse : le drapeau est mémorisé, donc il ne revient pas
       // au démarrage suivant.
       GoRoute(
+        name: 'onboarding',
         path: Routes.onboarding,
         builder: (context, state) => OnboardingScreen(
           onDone: () async {
@@ -163,10 +178,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         ),
       ),
       GoRoute(
+        name: 'login',
         path: Routes.login,
         builder: (_, _) => const LoginScreen(),
       ),
       GoRoute(
+        name: 'register',
         path: Routes.register,
         builder: (_, _) => const RegisterScreen(),
       ),
@@ -185,14 +202,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           StatefulShellBranch(
             routes: [
               GoRoute(
+                name: 'client-dashboard',
                 path: Routes.dashboard,
                 builder: (_, _) => const DashboardScreen(),
                 routes: [
                   GoRoute(
+                    name: 'client-profile',
                     path: 'profile',
                     builder: (_, _) => const ProfileScreen(),
                   ),
                   GoRoute(
+                    name: 'client-notifications',
                     path: 'notifications',
                     builder: (_, _) => const NotificationsScreen(),
                   ),
@@ -203,14 +223,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           StatefulShellBranch(
             routes: [
               GoRoute(
+                name: 'client-tickets',
                 path: Routes.tickets,
                 builder: (_, _) => const TicketsListScreen(),
                 routes: [
                   GoRoute(
+                    name: 'client-ticket-new',
                     path: 'new',
                     builder: (_, _) => const TicketNewScreen(),
                   ),
                   GoRoute(
+                    name: 'client-ticket-detail',
                     path: ':id',
                     builder: (context, state) =>
                         TicketDetailScreen(ticketId: state.pathParameters['id']!),
@@ -222,6 +245,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           StatefulShellBranch(
             routes: [
               GoRoute(
+                name: 'client-equipments',
                 path: Routes.equipments,
                 builder: (_, _) => const EquipmentsScreen(),
               ),
@@ -230,10 +254,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           StatefulShellBranch(
             routes: [
               GoRoute(
+                name: 'client-invoices',
                 path: Routes.invoices,
                 builder: (_, _) => const InvoicesScreen(),
                 routes: [
                   GoRoute(
+                    name: 'client-invoice-detail',
                     path: ':id',
                     builder: (context, state) =>
                         InvoiceDetailScreen(invoiceId: state.pathParameters['id']!),
@@ -245,6 +271,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           StatefulShellBranch(
             routes: [
               GoRoute(
+                name: 'client-reviews',
                 path: Routes.reviews,
                 builder: (_, _) => const ReviewsScreen(),
               ),
@@ -267,18 +294,22 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           StatefulShellBranch(
             routes: [
               GoRoute(
+                name: 'tech-dashboard',
                 path: TechnicianRoutes.dashboard,
                 builder: (_, _) => const TechnicianDashboardScreen(),
                 routes: [
                   GoRoute(
+                    name: 'tech-profile',
                     path: 'profile',
                     builder: (_, _) => const TechnicianProfileScreen(),
                   ),
                   GoRoute(
+                    name: 'tech-notifications',
                     path: 'notifications',
                     builder: (_, _) => const NotificationsScreen(),
                   ),
                   GoRoute(
+                    name: 'tech-wallet',
                     path: 'wallet',
                     builder: (_, _) => const TechnicianWalletScreen(),
                   ),
@@ -289,10 +320,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           StatefulShellBranch(
             routes: [
               GoRoute(
+                name: 'tech-tickets',
                 path: TechnicianRoutes.tickets,
                 builder: (_, _) => const TechnicianTicketsScreen(),
                 routes: [
                   GoRoute(
+                    name: 'tech-ticket-detail',
                     path: ':id',
                     builder: (context, state) => TechnicianTicketScreen(
                       ticketId: state.pathParameters['id']!,
@@ -305,6 +338,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           StatefulShellBranch(
             routes: [
               GoRoute(
+                name: 'tech-reviews',
                 path: TechnicianRoutes.reviews,
                 builder: (_, _) => const TechnicianReviewsScreen(),
               ),

@@ -1,6 +1,7 @@
 "use client";
 
 import { signIn } from "next-auth/react";
+import posthog from "posthog-js";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -51,6 +52,13 @@ export default function LoginPage() {
       // `result.error` porte le code renvoyé par `authorize` (voir
       // LoginRejected dans lib/auth.ts).
       const code = decodeURIComponent(result.error);
+
+      // Le motif du refus est enregistré tel que `authorize` l'a nommé, sans le
+      // numéro ni le mot de passe : savoir *pourquoi* une connexion échoue
+      // (mot de passe erroné, compte inactif, mauvais produit) est ce qui
+      // permet de distinguer un lot de fautes de frappe d'un compte bloqué.
+      captureLogin(code, false);
+
       const message = LOGIN_ERROR_MESSAGE[code as keyof typeof LOGIN_ERROR_MESSAGE]
         ?? LOGIN_ERROR_MESSAGE.CredentialsSignin;
 
@@ -65,6 +73,8 @@ export default function LoginPage() {
       setLoading(false);
       return;
     }
+
+    captureLogin('success', true);
 
     router.push("/");
     router.refresh();
@@ -156,4 +166,18 @@ export default function LoginPage() {
       </div>
     </div>
   );
+}
+
+/**
+ * Enregistre une tentative de connexion.
+ *
+ * Le motif est envoyé séparément de l'événement lui-même : une série de refus
+ * pour un même motif se lit alors d'un coup d'œil, là où il faudrait énumérer
+ * tous les échecs pour retrouver le même motif. Le numéro et le mot de passe ne
+ * sont jamais transmis — un mot de passe dans PostHog y resterait pour toujours.
+ */
+function captureLogin(outcome: string, success: boolean): void {
+  if (!posthog.__loaded) return;
+
+  posthog.capture('login_attempted', { outcome, success });
 }

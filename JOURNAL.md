@@ -4,6 +4,63 @@ Ce qui a changé dans le produit, et pourquoi. Les détails d'implémentation so
 dans l'historique git et le README ; ici, on retient ce qui est utile à savoir
 six mois plus tard.
 
+## 1.4.2 — 2 octobre 2026
+
+PostHog arrive dans le back-office, en trois volets.
+
+### Ajouté
+
+**Analytics, suivi des erreurs, et la préparation pour l'observabilité
+LLM.** La régie ne sait plus ce qui se passe sur son propre outil :
+quel compte s'est connecté, quelle zone a été validée, quelle
+demande a été créée, quelle action a échoué. Les événements métier
+sont tracés côté navigateur (pageviews, clics) et côté serveur
+(server actions), et les exceptions — serveur et rendu — remontent
+avec leur pile complète et le contexte de la requête.
+
+Ce qui est tracé est **délibérément pauvre** : des noms de champs et
+des identifiants, jamais de valeurs. Aucun numéro de téléphone, aucun
+mot de passe, aucune description de demande, aucun nom de client ne
+quitte le back-office pour PostHog. Une pile d'exception peut en
+contenir, ce qui est un argument de plus pour ne jamais y mettre de
+donnée personnelle.
+
+**Le replay de session est désactivé par défaut**, et son activation
+ne se fait pas par une variable d'environnement seule : filmer les
+écrans de la régie suppose d'abord de masquer le texte sensible
+sélectivement. Masquer toute la page ne laisserait qu'un replay de
+boutons vides ; tout filmer enverrait les dossiers clients à un
+service tiers.
+
+**AI Observability est installé mais inactif.** Aucun appel LLM n'existe
+dans le code. Le helper qui rapportera une génération est là, pour que
+le jour où le back-office appellera un modèle, la trace soit déjà
+routable plutôt que reconstruite après coup.
+
+### Corrigé
+
+**Un envoi de source maps raté ne fait plus échouer le build.** Une clé
+personnelle sans les bons scopes, un quota dépassé ou une coupure
+réseau interrompaient le déploiement d'une application par ailleurs
+correctement construite. Le build continue désormais, les cartes sont
+supprimées du dossier servi — un `.map` publié expose le code source —
+et l'avertissement dit quelles clés manquent.
+
+**La déconnexion réinitialise l'identité PostHog.** Sans `reset()`, le
+compte suivant sur un même poste de régie héritait de l'identité du
+précédent : ses actions étaient rattachées à un compte qui n'était
+plus le sien.
+
+### À faire
+
+**Exception autocapture** doit être activé une fois dans l'interface
+PostHog (Settings → Error tracking → Configuration). Le SDK web lit la
+config distante du projet, qui désactive la capture des erreurs non
+gérées du navigateur par défaut. Les exceptions serveur, elles, sont
+déjà capturées. Les source maps, elles, exigent une clé personnelle
+portant les scopes `error_tracking:read` et `error_tracking:write`,
+à déclarer sur Vercel pour que le build de production les envoie.
+
 ## 1.4.1 — 2 octobre 2026
 
 Le back-office se consulte au téléphone, mais il n'avait pas été conçu pour.

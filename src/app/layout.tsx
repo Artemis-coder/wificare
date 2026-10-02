@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { navItemsFor } from '@/lib/roles';
 import { prisma } from '@/lib/prisma';
 import AppShell from './shell/app-shell';
+import { PostHogIdentity } from './posthog-identity';
 
 export const metadata: Metadata = {
   title: 'WiFi Zone Assist - Dashboard',
@@ -33,6 +34,17 @@ export default async function RootLayout({
   return (
     <html lang="fr">
       <body>
+        {/* Le compte est connu ici, côté serveur : le rattacher à PostHog dès le
+            rendu évite que tout ce qui précède — premier écran, première
+            action — reste rattaché à une personne anonyme. */}
+        {session && (
+          <PostHogIdentity
+            userId={session.user.id}
+            role={session.user.role}
+            phone={session.user.phone}
+          />
+        )}
+
         {/* L'écran de connexion est rendu sans coquille : il n'y a pas encore
             de navigation à proposer à quelqu'un qui n'est pas connecté. */}
         {!session ? (

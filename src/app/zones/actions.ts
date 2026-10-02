@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { getServerSession } from 'next-auth';
 
 import { authOptions } from '@/lib/auth';
+import { captureForUser } from '@/lib/posthog-server';
 import { deleteZone, updateZone, type ZoneActor } from '@/lib/zones';
 
 /**
@@ -47,6 +48,8 @@ export async function validateZoneAction(zoneId: string): Promise<ActionResult> 
     return { ok: false, error: result.error };
   }
 
+  await captureForUser(actor.userId, 'zone_validated');
+
   revalidateZoneViews();
 
   return { ok: true };
@@ -65,6 +68,8 @@ export async function rejectZoneAction(zoneId: string): Promise<ActionResult> {
   if (!result.ok) {
     return { ok: false, error: result.error };
   }
+
+  await captureForUser(actor.userId, 'zone_rejected');
 
   revalidateZoneViews();
 
@@ -88,6 +93,12 @@ export async function editZoneAction(
     return { ok: false, error: result.error };
   }
 
+  // Seuls les champs modifiés sont signalés, jamais les valeurs : le nom et
+  // l'emplacement d'une zone sont des données de client.
+  await captureForUser(actor.userId, 'zone_edited', {
+    fields: Object.keys(patch),
+  });
+
   revalidateZoneViews();
 
   return { ok: true };
@@ -109,9 +120,15 @@ export async function deleteZoneAction(zoneId: string): Promise<ActionResult> {
 
   const result = await deleteZone(actor, zoneId);
 
+  // Le refus est signalé avant l'échec : c'est le cas le plus fréquent, et il
+  // n'est visible nulle part ailleurs. L'événement porte le motif, jamais le
+  // contenu de la zone.
   if (!result.ok) {
+    await captureForUser(actor.userId, 'zone_delete_refused');
     return { ok: false, error: result.error };
   }
+
+  await captureForUser(actor.userId, 'zone_deleted');
 
   revalidateZoneViews();
 

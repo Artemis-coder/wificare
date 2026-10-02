@@ -52,10 +52,40 @@ OUTPUT_DIR="build/app/outputs/flutter-apk"
 BUILT_APK="$OUTPUT_DIR/app-release.apk"
 FINAL_APK="$OUTPUT_DIR/${APP_NAME}-${VERSION}.apk"
 
+# Injection à la compilation. L'API est obligatoire ; le token PostHog
+# est optionnel — sans lui, l'APK est distribué avec l'observabilité
+# désactivée, ce qui est un choix de déploiement, pas un défaut.
+#
+# Le token est lu dans l'environnement, jamais écrit ici : c'est une
+# valeur publique (elle embarque dans l'APK), mais elle ne doit pas
+# être figée dans un script versionné.
+DART_DEFINES=("API_BASE_URL=${API_BASE_URL}")
+
+if [ -n "${POSTHOG_TOKEN:-}" ]; then
+  DART_DEFINES+=("POSTHOG_TOKEN=${POSTHOG_TOKEN}")
+fi
+
+if [ -n "${POSTHOG_HOST:-}" ]; then
+  DART_DEFINES+=("POSTHOG_HOST=${POSTHOG_HOST}")
+fi
+
+# Assemble les `--dart-define` : `flutter build` en accepte plusieurs,
+# séparés. Le tableau évite de casser une valeur qui contiendrait un
+# espace (ce qu'un token PostHog ne fait pas, mais l'API pourrait).
+DART_DEFINE_ARGS=()
+for define in "${DART_DEFINES[@]}"; do
+  DART_DEFINE_ARGS+=("--dart-define=${define}")
+done
+
 echo "Compilation de ${APP_NAME} ${VERSION}…"
 echo "API : ${API_BASE_URL}"
+if [ -n "${POSTHOG_TOKEN:-}" ]; then
+  echo "PostHog : activé"
+else
+  echo "PostHog : désactivé (définir POSTHOG_TOKEN pour l'activer)"
+fi
 
-flutter build apk --release --dart-define="API_BASE_URL=${API_BASE_URL}"
+flutter build apk --release "${DART_DEFINE_ARGS[@]}"
 
 if [ ! -f "$BUILT_APK" ]; then
   echo "APK introuvable à l'emplacement attendu : ${BUILT_APK}" >&2

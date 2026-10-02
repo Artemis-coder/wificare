@@ -3,12 +3,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'src/app.dart';
+import 'src/core/analytics/analytics_service.dart';
 import 'src/core/push/push_service.dart';
 import 'src/core/providers/infra_providers.dart';
 import 'src/core/storage/token_storage.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // PostHog avant `runApp` : l'initialisation est asynchrone, et les
+  // événements du démarrage (vue de l'écran d'accueil) partiraient
+  // sans destination si le SDK n'était prêt qu'après le premier cadre.
+  // Sans token — un build de développement local — la méthode rend la
+  // main sans rien faire, et l'application fonctionne comme avant.
+  await AnalyticsService.setup();
 
   // Enregistré avant `runApp` : une notification reçue alors que l'application
   // est en arrière-plan doit pouvoir être affichée, même avant le premier

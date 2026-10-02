@@ -5,6 +5,7 @@ import { getServerSession } from 'next-auth';
 import { redirect } from 'next/navigation';
 
 import { authOptions } from '@/lib/auth';
+import { captureForUser } from '@/lib/posthog-server';
 import { isStaff } from '@/lib/roles';
 import { createTicket, assignTicket } from '@/lib/tickets';
 
@@ -20,6 +21,8 @@ export async function createTicketAction(formData: FormData) {
   const priority = formData.get('priority') as string;
   const description = formData.get('description') as string;
 
+  const session = await getServerSession(authOptions);
+
   const result = await createTicket({
     wifiZoneId,
     type,
@@ -29,6 +32,16 @@ export async function createTicketAction(formData: FormData) {
 
   if (!result.ok) {
     throw new Error(result.error);
+  }
+
+  // Ni la description ni le nom de la zone ne partent : ce sont des données de
+  // client. Ce qui compte ici est le type et la priorité — comment la régie
+  // traite ses demandes, pas ce qu'elles contiennent.
+  if (session) {
+    await captureForUser(session.user.id, 'ticket_created', {
+      type,
+      priority,
+    });
   }
 
   revalidatePath('/tickets');
@@ -58,6 +71,8 @@ export async function assignTicketAction(ticketId: string, technicianId: string)
   if (!result.ok) {
     throw new Error(result.error);
   }
+
+  await captureForUser(session.user.id, 'ticket_assigned', { ticketId });
 
   revalidatePath(`/tickets/${ticketId}`);
   revalidatePath('/tickets');

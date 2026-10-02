@@ -427,6 +427,10 @@ L'application écoute sur <http://localhost:3000>. Son état est vérifiable via
 | `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | non | push Web Push, browsers du back-office |
 | `VAPID_PRIVATE_KEY` | non | idem |
 | `VAPID_SUBJECT` | non | contact exigé par la spécification Web Push (`mailto:…`) |
+| `NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN` | non | jeton de projet PostHog (`phc_…`) — analytics, suivi des erreurs |
+| `NEXT_PUBLIC_POSTHOG_HOST` | non | point d'ingestion PostHog : `https://us.i.posthog.com` (US) ou `https://eu.i.posthog.com` (EU) |
+| `POSTHOG_API_KEY` | non | clé **personnelle** (`phx_…`), build seul — envoi des source maps |
+| `POSTHOG_PROJECT_ID` | non | ID du projet PostHog (nombre), requis par l'envoi des source maps |
 
 Le push Android et le push Web Push sont **deux choses distinctes** :
 Firebase pour les téléphones, VAPID pour les navigateurs. Les activer suppose
@@ -1042,6 +1046,23 @@ Variables à définir dans l'environnement de production :
 | `BROADCAST_CRON_SECRET` | oui, si l'envoi programmé est utilisé |
 | `FIREBASE_SERVICE_ACCOUNT` | pour le push Android |
 | `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | pour le push Web Push |
+| `NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN` | pour PostHog (analytics + erreurs) |
+| `POSTHOG_API_KEY`, `POSTHOG_PROJECT_ID` | pour l'envoi des source maps au build |
+
+`POSTHOG_API_KEY` est une clé **personnelle** (`phx_…`), jamais `NEXT_PUBLIC_` :
+elle n'autorise que l'envoi des source maps au moment du build. Elle doit
+porter les scopes `error_tracking:read` et `error_tracking:write`
+(Settings → Personal API keys). Sans elle, le build passe et les piles
+d'exception restent illisibles — l'envoi raté ne fait pas échouer le
+build, il ne supprime pas non plus les cartes, et un `.map` publié
+expose le code source.
+
+> **À faire une fois dans l'interface PostHog** (Settings → Error tracking →
+> Configuration) : activer **Exception autocapture**. Le SDK web en
+> dépend : la config distante du projet (`autocaptureExceptions: false`
+> par défaut) surcharge la config locale, et sans ce réglage les erreurs
+> non gérées du navigateur ne sont pas capturées — celles du serveur,
+> elles, le sont par `src/instrumentation.ts`.
 
 Le déclencheur des campagnes est un appel planifié à `GET /api/cron/broadcasts`
 portant l'en-tête `x-cron-secret: <BROADCAST_CRON_SECRET>`.
@@ -1058,6 +1079,62 @@ silence ne passe pas pour un succès.
 | Décision | Raison |
 | --- | --- |
 | Un seul profil d'administration | `ADMIN` et `SUPER_ADMIN` n'avaient aucune différence de droits ; la frontière ne coûtait qu'à être maintenue |
+
+---
+
+## 18. Observabilité (PostHog)
+
+Trois volets, trois couches de code distinctes. Aucun ne dépend
+d'un autre : retirer PostHog d'un déploiement ne casse rien, il
+suffit de vider `NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN`.
+
+| Volet | Où | Couvre |
+| --- | --- | --- |
+| **Analytics** | `src/instrumentation-client.ts` (navigateur), `src/lib/posthog-server.ts` (serveur) | pageviews, autocapture des clics, événements métier |
+| **Suivi des erreurs** | `src/instrumentation.ts` (`onRequestError`), `src/app/global-error.tsx` (rendu), `src/lib/posthog-server.ts` | exceptions serveur, erreurs de rendu, erreurs non gérées du navigateur |
+| **AI Observability** | `src/lib/posthog-ai.ts` | futur — aucun appel LLM aujourd'hui |
+
+**Ce qui est tracé, et ce qui ne l'est pas.** Les événements métier
+(`login_attempted`, `ticket_created`, `ticket_assigned`,
+`zone_validated`, `zone_rejected`, `zone_edited`, `zone_deleted`,
+`zone_delete_refused`, `account_created`, `account_updated`,
+`signed_out`) portent des **noms de champs et des identifiants,
+jamais de valeurs** : ni numéro de téléphone, ni mot de passe, ni
+description de demande, ni nom de client. Une pile d'exception est
+envoyée telle quelle — elle peut contenir ce que l'appelant y a
+mis, ce qui est un argument de plus pour ne jamais y mettre de
+donnée personnelle.
+
+**Replay de session : désactivé.** `disable_session_recording` est
+vrai par défaut. Le back-office affiche des dossiers, pas des
+pages produit : numéros, adresses, photos d'incident, montants.
+Activer suppose de masquer le texte sensible sélectivement
+(voir le commentaire dans `instrumentation-client.ts`) —
+`NEXT_PUBLIC_POSTHOG_SESSION_RECORDING="true"` ne suffit pas.
+
+**Les personnes.** `person_profiles: 'identified_only'` : aucune
+personne n'est créée tant qu'un compte ne s'est pas connecté.
+L'`identify` (`src/app/posthog-identity.tsx`) utilise l'id de base,
+pas le numéro — le numéro change, et PostHog n'a pas à le connaître.
+La déconnexion appelle `reset()` : sans elle, le compte suivant sur
+un même poste hériterait de l'identité du précédent.
+
+**Le serveur ne se rate pas pour PostHog.** Chaque envoi est enveloppé
+dans un `try/catch` qui avale l'échec. Un outil d'observabilité qui
+casse l'appel qu'il observe est pire qu'un outil muet. À l'inverse,
+un envoi de source maps raté au build est **toléré mais signalé** :
+le build continue, les cartes sont supprimées du dossier servi
+(un `.map` publié expose le code source), et l'avertissement dit
+quelles clés manquent.
+
+**AI Observability n'attend rien.** `src/lib/posthog-ai.ts` enveloppe
+un appel LLM futur et envoie un `$ai_generation` par appel, avec
+`$ai_trace_id` pour regrouper les étapes. Le module n'est appelé
+par personne : aucun LLM n'existe dans le code aujourd'hui. Quand
+un SDK instrumenté sera introduit (Vercel AI, OpenAI, Anthropic),
+`npx @posthog/wizard ai-observability` remplace ce fichier —
+les deux ne doivent pas coexister, sinon les appels sont comptés
+deux fois.
 | Affectation au technicien le moins chargé | l'affectation automatique devait continuer à fonctionner dès le deuxième technicien, sans revenir à une décision humaine par demande |
 | Validation des zones avant exploitation | une zone déclarée par un particulier n'est pas un emplacement repris par la plateforme ; y envoyer un technicien serait promettre une prise en charge non décidée |
 | Suppression définitive, refusée s'il y a des demandes | l'historique d'intervention est la seule trace de qui est intervenu, quand et pour quoi |

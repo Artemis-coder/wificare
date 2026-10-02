@@ -10,6 +10,7 @@ import {
   type AccountPatch,
 } from '@/lib/user-admin';
 import { ROLE_LABEL } from '@/lib/roles';
+import { captureForUser } from '@/lib/posthog-server';
 
 /**
  * Actions de la page Utilisateurs.
@@ -44,6 +45,12 @@ export async function createUserAction(
     return { ok: false, error: result.error };
   }
 
+  // Le compte créé est identifié, pas décrit : ni le numéro de téléphone ni le
+  // nom ne partent. Ce qui compte est le rôle accordé et par qui.
+  await captureForUser(auth.userId, 'account_created', {
+    account_role: result.data.role,
+  });
+
   revalidatePath('/admin/utilisateurs');
 
   return {
@@ -70,6 +77,15 @@ export async function updateUserAction(
   if (!result.ok) {
     return { ok: false, error: result.error };
   }
+
+  // Un changement de rôle ou de statut est l'acte le plus sensible du
+  // back-office : il est tracé par l'administrateur qui l'a fait. Les champs
+  // modifiés sont nommés, jamais leurs valeurs.
+  await captureForUser(auth.userId, 'account_updated', {
+    account_role: result.data.role,
+    account_status: result.data.status,
+    fields: Object.keys(patch),
+  });
 
   revalidatePath('/admin/utilisateurs');
 
