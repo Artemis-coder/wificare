@@ -92,6 +92,17 @@ Map<String, dynamic> _notificationById(
   String id,
 ) => items.firstWhere((item) => item['id'] == id);
 
+/// Demande dont le technicien a arrêté de partager sa position : le suivi est
+/// inactif, donc le serveur n'a plus d'ETA à rendre. Elle sert au test de la
+/// relance, qui n'a aucun chiffre à afficher mais un bouton à proposer.
+final Map<String, dynamic> _perduTicket = FakeApiData.ticket(
+  't-perdu',
+  '#TK-2026-011',
+  'EN_ROUTE',
+  technicianId: 'tech-1',
+  tracking: FakeApiData.tracking(active: false, etaMinutes: null),
+);
+
 /// Parcours client vérifié de bout en bout contre une API simulée :
 /// connexion, redirection, onglets, liste des pannes, création d'une demande.
 void main() {
@@ -142,6 +153,8 @@ void main() {
           tracking: FakeApiData.tracking(),
         ),
       },
+      // Demande dont le technicien a arrêté de partager sa position : plus
+      // d'ETA, et le client doit pouvoir le relancer.
       // Demande dont le technicien a envoyé un devis : le client doit voir
       // l'étape « Devis en attente » dans le suivi.
       '/tickets/t-3': (_, _) => {
@@ -976,6 +989,40 @@ void main() {
 
     // La demande est diagnostiquée, pas en route : aucune promesse d'arrivée.
     expect(find.text('Arrivée du technicien'), findsNothing);
+  });
+
+  testWidgets('client : relance le technicien dont le suivi s\'est arrêté', (
+    tester,
+  ) async {
+    FlutterSecureStorage.setMockInitialValues(_session);
+
+    // Les routes sont posées **avant** `pumpApp` : le tableau de bord lit déjà
+    // les demandes au démarrage, donc une route installée ensuite ne serait
+    // jamais consultée — le fournisseur Riverpod servirait sa réponse en cache.
+    // Une seule demande dans la liste : sa carte tient dans le premier écran,
+    // et le test n'a pas à faire défiler pour la toucher.
+    adapter.routes['/tickets'] = (_, _) => FakeApiData.ticketPage([_perduTicket]);
+    adapter.routes['/tickets/t-perdu'] = (_, _) => {'data': _perduTicket};
+    adapter.routes['/tickets/t-perdu/tracking/nudge'] = (_, _) => {
+      'data': {'ok': true},
+    };
+    await pumpApp(tester);
+
+    await tester.tap(find.text('Pannes'));
+    await settle(tester);
+
+    await tester.tap(find.text('#TK-2026-011'));
+    await settle(tester, steps: 20);
+
+    // Suivi arrêté : ni ETA ni distance ne doivent être affirmées au client.
+    expect(find.text('dans 7 min'), findsNothing);
+    expect(find.text('à 2,4 km'), findsNothing);
+
+    await tester.tap(find.text('Relancer le technicien'));
+    await settle(tester, steps: 20);
+
+    expect(adapter.calls, contains('POST /tickets/t-perdu/tracking/nudge'));
+    expect(find.text('Le technicien a été prévenu.'), findsOneWidget);
   });
   testWidgets('notifications : badge, ouverture et redirection vers la panne', (
     tester,

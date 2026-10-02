@@ -88,27 +88,6 @@ export async function unregisterWebPushAction(endpoint: string): Promise<{ ok: b
   return { ok: true };
 }
 
-/** Abonnements du compte connecté, pour l'écran de réglages. */
-export async function fetchWebPushSubscriptions(): Promise<
-  { endpoint: string; label: string | null; lastSeenAt: string }[]
-> {
-  const session = await getServerSession(authOptions);
-
-  if (!session) return [];
-
-  const rows = await prisma.webPushSubscription.findMany({
-    where: { userId: session.user.id },
-    orderBy: { lastSeenAt: 'desc' },
-    select: { endpoint: true, label: true, lastSeenAt: true },
-  });
-
-  return rows.map((row) => ({
-    endpoint: row.endpoint,
-    label: row.label,
-    lastSeenAt: row.lastSeenAt.toISOString(),
-  }));
-}
-
 /**
  * Notification d'essai, envoyée au compte connecté.
  *

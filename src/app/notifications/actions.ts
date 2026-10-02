@@ -29,17 +29,6 @@ export type NotificationFeed = {
   unreadCount: number;
 };
 
-/** Nombre de notifications non lues, pour le badge de la cloche. */
-export async function fetchUnreadCount(): Promise<number> {
-  const session = await getServerSession(authOptions);
-
-  if (!session) return 0;
-
-  return prisma.notification.count({
-    where: { userId: session.user.id, readAt: null },
-  });
-}
-
 /**
  * Notifications du compte connecté, et nombre de non-lus.
  *

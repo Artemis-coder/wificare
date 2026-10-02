@@ -79,16 +79,6 @@ export async function listZonesFor(actor: ZoneActor): Promise<ZoneWithOwner[]> {
   });
 }
 
-/**
- * Zones dont la validation est en attente, tous propriétaires confondus.
- *
- * C'est la file de travail du super administrateur : une zone déclarée attend
- * d'être validée avant de pouvoir recevoir une demande d'intervention.
- */
-export async function pendingZoneCount(): Promise<number> {
-  return prisma.wifiZone.count({ where: { status: "PENDING" } });
-}
-
 export type ZoneInput = {
   name?: unknown;
   location?: unknown;

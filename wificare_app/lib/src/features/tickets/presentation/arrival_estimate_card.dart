@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/domain/models.dart';
+import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/formatters.dart';
@@ -30,7 +31,9 @@ const Duration _refreshInterval = Duration(seconds: 20);
 /// - le technicien partage mais le client n'a jamais donné sa position : le
 ///   serveur n'a nulle part où calculer l'arrivée, donc on le dit et on propose
 ///   le bouton qui règle le problème ;
-/// - le technicien a arrêté : le suivi est terminé, la carte disparaît.
+/// - le technicien a arrêté : plus d'ETA à afficher, et l'ETA figée mentirait.
+///   La carte se réduit à une demande de relance, seul le technicien pouvant y
+///   répondre.
 ///
 /// Une ETA fausse est pire que pas d'ETA : elle engage l'attente du client, et
 /// il verrait le compteur arriver à zéro sans que personne soit à sa porte.
@@ -56,6 +59,7 @@ class ArrivalEstimateCard extends ConsumerStatefulWidget {
 
 class _ArrivalEstimateCardState extends ConsumerState<ArrivalEstimateCard> {
   Timer? _refresh;
+  bool _nudging = false;
 
   @override
   void initState() {
@@ -96,16 +100,59 @@ class _ArrivalEstimateCardState extends ConsumerState<ArrivalEstimateCard> {
     );
   }
 
+  /// Demande au technicien de reprendre le partage de position.
+  ///
+  /// Le bouton disparaît dès l'envoi et ne revient qu'avec un suivi actif : le
+  /// serveur répond toujours en succès, donc le laisser en place donnerait au
+  /// client l'illusion d'avoir une nouvelle ETA alors qu'il n'y en a toujours
+  /// aucune.
+  Future<void> _nudgeTechnician() async {
+    setState(() => _nudging = true);
+
+    try {
+      await ref.read(ticketRepositoryProvider).nudgeTracking(widget.ticketId);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() => _nudging = false);
+      showAppSnackBar(context, e.message, isError: true);
+      return;
+    }
+
+    if (!mounted) return;
+    setState(() => _nudging = false);
+    showAppSnackBar(context, 'Le technicien a été prévenu.');
+  }
+
   @override
   Widget build(BuildContext context) {
     final tracking = widget.tracking;
     final share = ref.watch(locationShareProvider);
     final colors = context.colors;
 
-    // Suivi arrêté : la carte n'a plus rien à annoncer. Le client le voit
-    // disparaître, ce qui est plus honnête qu'une ETA figée.
+    // Suivi arrêté : plus d'ETA à afficher, et une ETA figée serait un mensonge.
+    // La carte disparaît donc — mais pas seule : le client peut demander au
+    // technicien de reprendre, lui seul le peut. Sans ce bouton, un téléphone
+    // qui a vidé sa batterie en chemin laissait le client sans rien.
     if (tracking != null && !tracking.active) {
-      return const SizedBox.shrink();
+      return AppCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SectionHeader(title: 'Arrivée du technicien'),
+            Text(
+              'Le technicien ne partage plus sa position.',
+              style: TextStyle(fontSize: 14, color: colors.onSurfaceVariant),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            AppButton(
+              label: _nudging ? 'Envoi en cours…' : 'Relancer le technicien',
+              icon: Icons.notifications_active_rounded,
+              loading: _nudging,
+              onPressed: _nudging ? null : _nudgeTechnician,
+            ),
+          ],
+        ),
+      );
     }
 
     if (tracking == null || tracking.etaMinutes == null) {

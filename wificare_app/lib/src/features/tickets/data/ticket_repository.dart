@@ -80,4 +80,19 @@ class TicketRepository {
 
     return Evaluation.fromJson(response['data'] as Map<String, dynamic>);
   }
+
+  /// Demande au technicien de réactiver le partage de position.
+  ///
+  /// Un suivi arrêté laisse le client sans ETA, et personne d'autre que le
+  /// technicien n'y peut rien : batterie vide, réseau perdu, application
+  /// fermée. Le serveur répond toujours en succès, même si personne n'a pu être
+  /// prévenu — un client ne peut pas corriger ce qui s'est passé sur le
+  /// téléphone du technicien, et une erreur ici l'inviterait à réessayer sans
+  /// changement.
+  ///
+  /// L'appel ne renvoie donc rien : il n'y a pas d'état à lire, seulement une
+  /// demande à avoir émise.
+  Future<void> nudgeTracking(String ticketId) async {
+    await _api.post<Map<String, dynamic>>('/tickets/$ticketId/tracking/nudge');
+  }
 }

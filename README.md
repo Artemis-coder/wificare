@@ -473,7 +473,6 @@ Un refus est motivé : le message dit **pourquoi**, pas seulement qu'il y a refu
 | `GET` | `/api/tickets` | client (ses demandes) ou technicien (ses affectations) |
 | `POST` | `/api/tickets` | client — refusée si la zone n'est pas validée ; affectation automatique |
 | `GET` | `/api/tickets/:id` | le propriétaire concerné, le technicien affecté, ou la super administration |
-| `PATCH` | `/api/tickets/:id/assign` | super administrateur — réaffectation |
 | `PATCH` | `/api/tickets/:id/status` | technicien affecté ou super administration |
 | `POST` | `/api/tickets/:id/intervention` | technicien affecté ou super administration |
 | `PATCH` | `/api/tickets/:id/intervention` | technicien affecté ou super administration |
@@ -742,13 +741,16 @@ n'existe plus de moyen supporté de le faire depuis `build.gradle.kts`.
 
 | Emplacement | Usage |
 | --- | --- |
-| `public/logo-wificare.png` | barre latérale, écran de connexion, favicon |
-| `public/logo-wificare.jpg` | fichier source d'origine |
+| `public/logo-wificare.png` | barre latérale, écran de connexion |
+| `src/app/icon.png` | favicon |
 | `wificare_app/assets/logo/logo_wificare.png` | connexion et splash |
 | `wificare_app/android/app/src/main/res/mipmap-*/ic_launcher.png` | icône du lanceur |
 
-Un changement de logo se dérive de `logo wificare.jpg`. L'icône Android doit
-être régénérée pour chaque densité (`mdpi` 48 px → `xxxhdpi` 192 px).
+Un changement de logo remplace `public/logo-wificare.png` et
+`wificare_app/assets/logo/logo_wificare.png`. L'icône Android doit être
+régénérée pour chaque densité (`mdpi` 48 px → `xxxhdpi` 192 px). Il n'y a pas
+de fichier source dans le dépôt : le PNG est la source, et sa version `.jpg`
+qui doublait le poids n'était référencée nulle part.
 
 ### 14.4 Ce qui est versionné, et pourquoi
 
@@ -830,3 +832,4 @@ silence ne passe pas pour un succès.
 | Stockage (mobile) | `flutter_secure_storage` |
 | Carte du trajet | `flutter_map` (OpenStreetMap, **sans clé API**) |
 | Formatage | `intl` (fr-FR) |
+| Styles du back-office | CSS maison dans `src/app/globals.css` |

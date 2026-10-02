@@ -189,6 +189,14 @@ Trois règles que la carte tient :
   dans le résumé de suivi). Le client voit déjà où se trouve celui qui vient
   vers sa zone, et la position ne quitte jamais le trajet en cours.
 
+Quand le technicien **arrête** son partage, l'ETA disparaît au lieu de rester
+figée, et `ArrivalEstimateCard` rend un bouton « Relancer le technicien »
+(`POST /api/tickets/:id/tracking/nudge`). Sans ce bouton, un téléphone à
+batterie vide en chemin laissait le client sans rien — et personne d'autre que le
+technicien ne peut y remédier. Le serveur répond toujours en succès, même sans
+appareil abonné : une erreur ici ferait réessayer le client sans qu'il puisse
+rien changer.
+
 Les tuiles viennent d'OpenStreetMap : **pas de clé API, pas de compte**. Le
 passage à Google Maps se ferait dans le seul `_Map` ; l'attribution OSM doit
 rester affichée tant que ce n'est pas fait.
