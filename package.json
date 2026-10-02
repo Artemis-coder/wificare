@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "wipe:demo": "tsx prisma/wipe-demo.ts",
+    "wipe:demo:dry": "tsx prisma/wipe-demo.ts --dry-run"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

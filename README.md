@@ -361,6 +361,36 @@ Le jeu de démonstration crée aussi un dossier client, une zone Wi-Fi validée 
 ses équipements, et trois demandes dans trois états différents (nouvelle,
 affectée, terminée et payée).
 
+### 7.1 Repartir d'une base vide
+
+Quand la démonstration a servi, ou avant d'accueillir de vraies données :
+
+```bash
+npm run wipe:demo:dry     # compte ce qui partirait, n'écrit rien
+npm run wipe:demo         # exécute
+```
+
+Le script (`prisma/wipe-demo.ts`) supprime les zones, dossiers client,
+équipements, demandes, rapports, devis, paiements, avis, suivis, notifications
+et diffusions, puis tous les comptes **sauf un super administrateur**.
+
+Ce compte survit pour une raison précise : sans lui, plus personne ne peut se
+connecter au back-office. La connexion par numéro crée un compte `CLIENT`, et
+aucun écran ne permet de se promouvoir soi-même en administrateur. Vider la
+base sans conserver d'administrateur verrouillerait la plateforme derrière sa
+seule porte d'entrée.
+
+Le numéro conservé est passé par `--keep`, et le script refuse de s'exécuter si
+ce compte n'existe pas ou n'est pas `SUPER_ADMIN` — plutôt que de vider la base
+en laissant personne pour la gérer. Sur une base Neon, préférer une branche à un
+`pg_dump` pour pouvoir remonter le temps : les suppressions sont irréversibles.
+
+Pour repartir d'une base vide puis rejouer la démonstration, enchaîner :
+
+```bash
+npm run wipe:demo && npx prisma db seed
+```
+
 ---
 
 ## 8. Modèle de données
