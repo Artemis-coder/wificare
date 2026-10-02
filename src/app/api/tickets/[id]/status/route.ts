@@ -3,6 +3,7 @@ import { NotificationType, TicketStatus } from "@prisma/client";
 import { getApiUser } from "@/lib/api-auth";
 import { notify } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
+import { quoteAuthorizesRepair } from "@/lib/quotes";
 import { loadWritableTicket } from "@/lib/tickets";
 import { PUBLIC_USER_SELECT } from "@/lib/user-public";
 
@@ -53,10 +54,17 @@ export async function PATCH(
     // autorisation. Le refus ramène la demande en réparation, où il reste
     // légitime d'intervenir — d'où la condition ci-dessous, qui ne vise que le
     // passage depuis un devis en attente.
+    //
+    // Un devis payé autorise autant qu'un devis accepté, voire plus : c'est le
+    // même accord, déjà honoré. Exiger `ACCEPTED` ici produisait une impasse —
+    // le client pouvait régler avant que le technicien n'ait fait avancer la
+    // demande, et celle-ci restait en devis en attente avec un devis payé,
+    // que cette règle refusait de franchir. Ni l'API ni l'écran du technicien
+    // n'étaient alors plus aucun recours.
     if (
       existing.status === TicketStatus.PENDING_QUOTE &&
       status === TicketStatus.REPAIRING &&
-      existing.quoteInvoice?.status !== "ACCEPTED"
+      !quoteAuthorizesRepair(existing.quoteInvoice?.status)
     ) {
       return NextResponse.json(
         {

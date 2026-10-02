@@ -5,8 +5,10 @@ import { redirect, notFound } from 'next/navigation';
 import Link from 'next/link';
 
 import { isStaff } from '@/lib/roles';
+import { loadReadableTicket } from '@/lib/tickets';
 import { listTechnicians } from '@/lib/technicians';
 import AssignTechnicianForm from './assign-technician-form';
+import QuotePanel from './quote-panel';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,6 +56,21 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
 
   const resolvedParams = await params;
   const ticketId = resolvedParams.id;
+
+  // La page chargeait la demande par son identifiant, sans vérifier à qui elle
+  // appartient : n'importe quel compte connecté pouvait en lire une autre en
+  // changeant l'URL, et voir le nom du client, sa zone et le montant de son
+  // devis. `loadReadableTicket` applique la même portée que l'API — un client
+  // ne lit que ses demandes, un technicien celles qui lui sont affectées, la
+  // régie toutes.
+  const readable = await loadReadableTicket(
+    { userId: session.user.id, role: session.user.role },
+    ticketId
+  );
+
+  if (!readable.ok) {
+    notFound();
+  }
 
   const ticket = await prisma.ticket.findUnique({
     where: { id: ticketId },
@@ -180,55 +197,45 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
             )}
           </div>
 
-          {/* Section 3: Facturation & Reçu */}
+          {/* Section 3: Devis, decision et reglement */}
           {ticket.quoteInvoice && (
             <div style={{ backgroundColor: 'var(--bg-primary)', borderRadius: 'var(--radius-xl)', padding: '24px', border: '1px solid var(--border-default)', boxShadow: 'var(--elevation-1)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <h3 style={{ fontSize: '16px', margin: 0 }}>Facturation Associée</h3>
-                <span className={`badge ${ticket.quoteInvoice.status === 'PAID' ? 'badge-success' : 'badge-warning'}`}>
-                  {ticket.quoteInvoice.status === 'PAID' ? 'PAYÉ' : 'EN ATTENTE DE PAIEMENT'}
-                </span>
-              </div>
-
-              <table className="data-table" style={{ marginBottom: '16px' }}>
-                <thead>
-                  <tr>
-                    <th>Désignation</th>
-                    <th>Qté</th>
-                    <th>Prix unitaire</th>
-                    <th>Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {ticket.quoteInvoice.lines.map((line) => (
-                    <tr key={line.id}>
-                      <td>{line.description}</td>
-                      <td>{line.quantity}</td>
-                      <td>{line.unitPrice.toLocaleString('fr-FR')} FCFA</td>
-                      <td style={{ fontWeight: 600 }}>{line.totalPrice.toLocaleString('fr-FR')} FCFA</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '12px', borderTop: '1px solid var(--border-default)' }}>
-                <div style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>Montant Total TTC</div>
-                <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--brand-700)' }}>
-                  {ticket.quoteInvoice.totalAmount.toLocaleString('fr-FR')} FCFA
-                </div>
-              </div>
-
-              {ticket.quoteInvoice.payment && (
-                <div style={{ marginTop: '16px', padding: '12px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--success-50)', border: '1px solid var(--success-100)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <div style={{ fontWeight: 700, color: 'var(--success-600)', fontSize: '13px' }}>PAIEMENT REÇU PAR LE TECHNICIEN</div>
-                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                      Moyen : {ticket.quoteInvoice.payment.channel} • Réf : {ticket.quoteInvoice.payment.reference || 'Encaissement direct'}
-                    </div>
-                  </div>
-                  <span className="badge badge-success">Confirmé</span>
-                </div>
-              )}
+              <QuotePanel
+                quote={{
+                  id: ticket.quoteInvoice.id,
+                  ticketId: ticket.id,
+                  status: ticket.quoteInvoice.status,
+                  totalAmount: ticket.quoteInvoice.totalAmount,
+                  notes: ticket.quoteInvoice.notes,
+                  sentAt: ticket.quoteInvoice.sentAt?.toISOString() ?? null,
+                  acceptedAt: ticket.quoteInvoice.acceptedAt?.toISOString() ?? null,
+                  rejectedAt: ticket.quoteInvoice.rejectedAt?.toISOString() ?? null,
+                  lines: ticket.quoteInvoice.lines.map((line) => ({
+                    id: line.id,
+                    description: line.description,
+                    quantity: line.quantity,
+                    unitPrice: line.unitPrice,
+                    totalPrice: line.totalPrice,
+                  })),
+                  payment: ticket.quoteInvoice.payment
+                    ? {
+                        channel: ticket.quoteInvoice.payment.channel,
+                        operator: ticket.quoteInvoice.payment.operator,
+                        // La route de reglement n'ecrit que `transactionRef` ;
+                        // `reference` reste vide pour un paiement Mobile Money,
+                        // ou l'ancien decre ne le remplissait pas. Lire les deux
+                        // evite d'afficher « Encaissement direct » a cote d'une
+                        // reference que le client a pourtant saisie.
+                        transactionRef:
+                          ticket.quoteInvoice.payment.transactionRef ??
+                          ticket.quoteInvoice.payment.reference,
+                        reference: ticket.quoteInvoice.payment.reference,
+                        createdAt: ticket.quoteInvoice.payment.createdAt.toISOString(),
+                      }
+                    : null,
+                }}
+                isClient={session.user.id === ticket.client.userId}
+              />
             </div>
           )}
         </div>

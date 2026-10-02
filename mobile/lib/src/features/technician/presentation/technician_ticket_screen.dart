@@ -198,12 +198,19 @@ data: (ticket) {
           // en a connaissance et tranche. Voir pourquoi plus bas.
           final hasQuote = ticket.quoteInvoice != null;
 
-          // La réparation se décide sur un devis accepté, pas sur un devis
-          // rédigé : c'est le client qui autorise qu'on touche à son
-          // installation. Sans acceptation, le technicien peut encore corriger
-          // son devis ou annuler — pas réparer.
-          final quoteAccepted =
-              ticket.quoteInvoice?.status == DocumentStatus.accepted;
+          // La réparation se décide sur un devis que le client a autorisé, pas
+          // sur un devis rédigé : c'est lui qui autorise qu'on touche à son
+          // installation. Sans autorisation, le technicien peut encore
+          // corriger son devis ou annuler — pas réparer.
+          //
+          // Un devis payé autorise autant qu'un devis accepté : même accord,
+          // déjà honoré en argent. Ne retenir que `accepted` cachait le bouton
+          // dès que le client règlait, et le serveur refusait la transition —
+          // le technicien n'avait plus alors aucun recours. Le refus, lui,
+          // n'autorise rien : le client a écarté le montant.
+          final quoteAuthorizes =
+              ticket.quoteInvoice?.status == DocumentStatus.accepted ||
+              ticket.quoteInvoice?.status == DocumentStatus.paid;
 
           // Le refus ne laisse pas la demande coincée : il la rend au
           // technicien, qui peut corriger son devis ou signaler une impossibilité.
@@ -222,7 +229,7 @@ data: (ticket) {
                 (status) =>
                     status != TicketStatus.repairing ||
                     !awaitingQuoteDecision ||
-                    quoteAccepted,
+                    quoteAuthorizes,
               )
               .toList();
 
@@ -418,7 +425,7 @@ data: (ticket) {
               // n'est pas accepté. Le dire explicitement évite que le bouton
               // manquant passe pour un défaut : l'attente est normale, elle a
               // un auteur et une issue.
-              if (awaitingQuoteDecision && !quoteAccepted)
+              if (awaitingQuoteDecision && !quoteAuthorizes)
                 AppCard(
                   child: Row(
                     children: [

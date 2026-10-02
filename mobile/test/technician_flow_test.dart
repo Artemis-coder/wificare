@@ -451,6 +451,35 @@ void main() {
     expect(find.text('Signaler une impossibilité'), findsNothing);
   });
 
+  testWidgets('technicien : un devis payé ne bloque plus la réparation', (
+    tester,
+  ) async {
+    FlutterSecureStorage.setMockInitialValues(Map.of(_session));
+
+    // Le client a accepté puis réglé avant que le technicien n'ait fait avancer
+    // la demande : elle est donc restée en devis en attente, avec un devis
+    // payé. C'est cet état qui rendait la demande impossible à déplacer — le
+    // bouton disparaissait et le serveur refusait la transition. Un paiement
+    // vaut au moins autant qu'une acceptation : la réparation doit donc
+    // redevenir possible.
+    hasQuote = true;
+    status = 'PENDING_QUOTE';
+    quoteStatus = 'PAID';
+
+    await pumpApp(tester);
+    await tester.tap(find.text('Demandes'));
+    await settle(tester);
+    await tester.tap(find.text('#TK-2026-001'));
+    await settle(tester, steps: 20);
+
+    expect(find.text('Passer en réparation'), findsOneWidget);
+    expect(
+      find.textContaining('attend la décision du client'),
+      findsNothing,
+      reason: 'le devis est payé, le client n\'a plus rien à décider',
+    );
+  });
+
   testWidgets('technicien : le refus du devis rend la demande', (
     tester,
   ) async {

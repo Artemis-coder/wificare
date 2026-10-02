@@ -209,7 +209,11 @@ abstract final class FakeApiData {
   ///
   /// Le statut est paramétrable parce que c'est lui qui commande ce que le
   /// technicien peut faire : un devis `SENT` bloque la réparation, un devis
-  /// `ACCEPTED` la débloque, un devis `REJECTED` rend la demande au technicien.
+  /// `ACCEPTED` ou `PAID` la débloque, un devis `REJECTED` rend la demande au
+  /// technicien.
+  ///
+  /// `PAID` porte son règlement : sans lui, le devis semblerait payé sans
+  /// trace de paiement, et un écran qui lit `payment` n'aurait rien à montrer.
   static Map<String, dynamic> quote({
     String ticketId = 't-3',
     String status = 'SENT',
@@ -222,7 +226,19 @@ abstract final class FakeApiData {
     'totalAmount': 25000,
     'createdAt': '2026-01-30T10:00:00.000Z',
     'lines': [],
-    'payment': null,
+    'payment': status == 'PAID'
+        ? {
+            'id': 'pay-1',
+            'quoteInvoiceId': id,
+            'amount': 25000,
+            'channel': 'MOBILE_MONEY',
+            'operator': 'WAVE',
+            'transactionRef': 'TRX-4821930',
+            'reference': null,
+            'status': 'COMPLETED',
+            'createdAt': '2026-01-30T11:00:00.000Z',
+          }
+        : null,
   };
 
   static Map<String, dynamic> ticketPage(List<Map<String, dynamic>> items) => {

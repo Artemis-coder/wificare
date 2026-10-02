@@ -1,19 +1,59 @@
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
+import type { Prisma } from '@prisma/client';
 import { authOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
 
+/**
+ * Les mêmes libellés que le panneau de devis, pour qu'une facture lue dans la
+ * liste et la même facture lue dans la demande se nomment pareil.
+ */
+const STATUS_LABEL: Record<string, string> = {
+  DRAFT: 'Brouillon',
+  SENT: 'En attente de décision',
+  ACCEPTED: 'À régler',
+  REJECTED: 'Refusé',
+  PAID: 'Payé',
+};
+
+const STATUS_BADGE: Record<string, string> = {
+  DRAFT: 'badge-neutral',
+  SENT: 'badge-warning',
+  ACCEPTED: 'badge-brand',
+  REJECTED: 'badge-danger',
+  PAID: 'badge-success',
+};
+
+const CHANNEL_LABEL: Record<string, string> = {
+  MOBILE_MONEY: 'Mobile Money',
+  CASH: 'Espèces',
+  BANK_TRANSFER: 'Virement',
+};
+
 export default async function InvoicesPage() {
   const session = await getServerSession(authOptions);
-  
+
   if (!session) {
     redirect('/login');
   }
 
+  // La page listait tous les devis de la plateforme, sans distinction : un
+  // client connecté y lisait les montants et le nom des zones de tous les
+  // autres. L'API borne déjà sa liste (`GET /api/quote-invoices`) ; l'écran
+  // appliquait la même portée et ne l'avait pas. La régie voit tout, un
+  // client ses propres devis, un technicien ceux de ses interventions.
+  const scope: Prisma.QuoteInvoiceWhereInput =
+    session.user.role === 'CLIENT'
+      ? { ticket: { client: { userId: session.user.id } } }
+      : session.user.role === 'TECHNICIAN'
+        ? { ticket: { technicianId: session.user.id } }
+        : {};
+
   const invoices = await prisma.quoteInvoice.findMany({
+    where: scope,
     orderBy: { createdAt: 'desc' },
     include: {
       ticket: {
@@ -31,9 +71,14 @@ export default async function InvoicesPage() {
     .filter((inv) => inv.status === 'PAID')
     .reduce((sum, inv) => sum + inv.totalAmount, 0);
 
+  // Un devis en attente de décision n'attend pas un paiement : le client n'a
+  // pas encore tranché, et compter son montant ici présentait une facture
+  // comme due. Seul un devis accepté est une facture à encaisser.
   const totalPending = invoices
-    .filter((inv) => inv.status !== 'PAID')
+    .filter((inv) => inv.status === 'ACCEPTED')
     .reduce((sum, inv) => sum + inv.totalAmount, 0);
+
+  const awaitingDecision = invoices.filter((inv) => inv.status === 'SENT').length;
 
   return (
     <div>
@@ -68,10 +113,15 @@ export default async function InvoicesPage() {
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
             </div>
           </div>
-          <div className="kpi-value" style={{ color: 'var(--warning-600)' }}>
-            {totalPending.toLocaleString('fr-FR')} FCFA
-          </div>
-          <div className="kpi-trend neutral">En attente de règlement client</div>
+            <div className="kpi-value" style={{ color: 'var(--warning-600)' }}>
+              {totalPending.toLocaleString('fr-FR')} FCFA
+            </div>
+            <div className="kpi-trend neutral">
+              Devis acceptés, à encaisser
+              {awaitingDecision > 0
+                ? ` · ${awaitingDecision} en attente de décision`
+                : ''}
+            </div>
         </div>
       </div>
 
@@ -85,11 +135,11 @@ export default async function InvoicesPage() {
           <thead>
             <tr>
               <th>Ticket Associé</th>
-              <th>Client & Wi-Fi Zone</th>
+              <th>Client &amp; Wi-Fi Zone</th>
               <th>Montant Total</th>
-              <th>Mode de Règlement</th>
-              <th>Déclaration Technicien</th>
-              <th>Statut Facture</th>
+              <th>Moyen de règlement</th>
+              <th>Technicien</th>
+              <th>Statut</th>
             </tr>
           </thead>
           <tbody>
@@ -111,7 +161,8 @@ export default async function InvoicesPage() {
                 <td>
                   {inv.payment ? (
                     <span className="badge badge-brand">
-                      {inv.payment.channel === 'MOBILE_MONEY' ? '📱 Mobile Money' : inv.payment.channel === 'CASH' ? '💵 Espèces' : '🏦 Virement'}
+                      {CHANNEL_LABEL[inv.payment.channel] ?? inv.payment.channel}
+                      {inv.payment.operator ? ` ${inv.payment.operator}` : ''}
                     </span>
                   ) : (
                     <span style={{ fontSize: '13px', color: 'var(--text-disabled)' }}>Non renseigné</span>
@@ -119,26 +170,19 @@ export default async function InvoicesPage() {
                 </td>
                 <td>
                   {inv.ticket.technician ? (
-                    <div style={{ fontSize: '13px' }}>
-                      <span style={{ fontWeight: 600 }}>{inv.ticket.technician.name}</span>
-                      {inv.payment && <div style={{ fontSize: '11px', color: 'var(--success-600)' }}>✓ Déclaré reçu</div>}
-                    </div>
+                    <span style={{ fontWeight: 600 }}>{inv.ticket.technician.name}</span>
                   ) : (
                     <span style={{ color: 'var(--text-disabled)', fontSize: '13px' }}>-</span>
                   )}
                 </td>
                 <td>
-                  {inv.status === 'PAID' ? (
-                    <span className="badge badge-success">
-                      <span className="badge-dot"></span>
-                      PAYÉ
-                    </span>
-                  ) : (
-                    <span className="badge badge-warning">
-                      <span className="badge-dot"></span>
-                      EN ATTENTE
-                    </span>
-                  )}
+                  {/* Un refus n'est pas une attente : la pastille le disait
+                      « en attente », comme un devis qui n'a pas encore été
+                      lu par le client. */}
+                  <span className={`badge ${STATUS_BADGE[inv.status] ?? 'badge-neutral'}`}>
+                    <span className="badge-dot"></span>
+                    {STATUS_LABEL[inv.status] ?? inv.status}
+                  </span>
                 </td>
               </tr>
             ))}

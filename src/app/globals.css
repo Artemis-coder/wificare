@@ -512,6 +512,12 @@ h3 { font-size: 16px; font-weight: 700; line-height: 1.4; }
 .badge-neutral { background-color: var(--neutral-100); color: var(--neutral-600); }
 .badge-neutral .badge-dot { background-color: var(--neutral-400); }
 
+/* Un devis refusé n'est pas une attente : le client a tranché, dans un sens
+   qui appelle une couleur distincte du vert et de l'ambre. Les variables
+   `--error-*` existaient sans pastille qui les consomme. */
+.badge-danger { background-color: var(--error-50); color: var(--error-600); }
+.badge-danger .badge-dot { background-color: var(--error-500); }
+
 /* Réservé aux lecteurs d'écran : rend un texte invisible sans le retirer du
    flux, contrairement à `display: none`. Utilisé pour les en-têtes de colonne
    qui n'ont pas de libellé visible (colonne du chevron de navigation). */

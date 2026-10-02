@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import type { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
@@ -15,7 +16,19 @@ export default async function TicketsPage() {
     redirect('/login');
   }
 
+  // La liste n'était pas bornée : un client connecté y voyait toutes les
+  // demandes de la plateforme, avec le nom et la zone de chaque client. Le
+  // détail est protégé depuis toujours par `loadReadableTicket` côté API ; la
+  // liste applique la même portée.
+  const scope: Prisma.TicketWhereInput =
+    session.user.role === 'CLIENT'
+      ? { client: { userId: session.user.id } }
+      : session.user.role === 'TECHNICIAN'
+        ? { technicianId: session.user.id }
+        : {};
+
   const tickets = await prisma.ticket.findMany({
+    where: scope,
     orderBy: { createdAt: 'desc' },
     include: {
       client: true,

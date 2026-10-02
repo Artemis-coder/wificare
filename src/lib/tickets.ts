@@ -19,7 +19,8 @@ export type TicketResult<T> =
   | { ok: true; data: T }
   | { ok: false; error: string; status: number };
 
-const fail = <T>(error: string, status: number): TicketResult<T> => ({
+/** Refus motivé, à renvoyer tel quel par les appelants. */
+export const fail = <T>(error: string, status: number): TicketResult<T> => ({
   ok: false,
   error,
   status,
