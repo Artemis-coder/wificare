@@ -119,15 +119,17 @@ export default function AssignTechnicianForm({
         onChange={(event) => setQuery(event.target.value)}
         placeholder="Rechercher un technicien (nom ou téléphone)"
         aria-label="Rechercher un technicien"
-        style={{ width: '100%', padding: '8px 10px', fontSize: '14px', marginBottom: '8px' }}
+        className="field"
+        style={{ marginBottom: '8px' }}
       />
-      <div style={{ display: 'flex', gap: '8px' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
         <select
           id="technician-assignment"
+          className="field"
           value={selected}
           onChange={(event) => setSelected(event.target.value)}
           disabled={isPending || technicians.length === 0}
-          style={{ flex: 1, padding: '8px 10px', fontSize: '14px' }}
+          style={{ flex: '1 1 160px' }}
         >
           <option value="">— Choisir un technicien —</option>
           {filtered.map((technician) => (
@@ -167,7 +169,7 @@ export default function AssignTechnicianForm({
       )}
 
       {technicians.length > 0 && availableCount === 0 && (
-        <p role="alert" style={{ marginTop: '8px', fontSize: '13px', color: 'var(--danger-600)' }}>
+        <p role="alert" style={{ marginTop: '8px', fontSize: '13px', color: 'var(--error-600)' }}>
           Aucun technicien n&apos;est en service : tous les comptes sont inactifs ou
           suspendus. Réactivez-en un pour affecter cette demande.
         </p>
@@ -193,7 +195,7 @@ export default function AssignTechnicianForm({
       )}
 
       {error && (
-        <p role="alert" style={{ marginTop: '8px', fontSize: '13px', color: 'var(--danger-600)' }}>
+        <p role="alert" style={{ marginTop: '8px', fontSize: '13px', color: 'var(--error-600)' }}>
           {error}
         </p>
       )}

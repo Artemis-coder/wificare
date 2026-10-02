@@ -48,8 +48,8 @@ export default async function ProfilePage() {
   return (
     <div style={{ maxWidth: '800px', margin: '0 auto' }}>
       <div className="page-header" style={{ marginBottom: '24px' }}>
-        <div>
-          <h1>Mon Profil & Compte</h1>
+        <div className="page-header-text">
+          <h1>Mon Profil &amp; Compte</h1>
           <p className="body-m" style={{ color: 'var(--text-secondary)' }}>
             Consultez les informations de votre compte et vos identifiants Wi-Fi Zone.
           </p>
@@ -57,19 +57,19 @@ export default async function ProfilePage() {
       </div>
 
       {/* Main Profile Card */}
-      <div style={{ backgroundColor: 'var(--bg-primary)', borderRadius: 'var(--radius-xl)', border: '1px solid var(--border-default)', boxShadow: 'var(--elevation-2)', overflow: 'hidden', marginBottom: '24px' }}>
+      <div className="panel panel-lg" style={{ overflow: 'hidden', marginBottom: '24px', padding: 0 }}>
         {/* Banner Header */}
         <div style={{ height: '120px', background: 'linear-gradient(135deg, var(--brand-700) 0%, var(--accent-purple) 100%)', position: 'relative' }}></div>
         
-        <div style={{ padding: '0 32px 32px 32px', position: 'relative', marginTop: '-40px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '24px' }}>
-            <div style={{ display: 'flex', alignItems: 'flex-end', gap: '20px' }}>
+        <div className="profile-body">
+          <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '24px' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: '20px' }}>
               <div style={{ width: '88px', height: '88px', borderRadius: '50%', backgroundColor: 'var(--brand-600)', color: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px', fontWeight: 800, border: '4px solid var(--bg-primary)', boxShadow: 'var(--elevation-2)' }}>
                 {user?.name?.[0] || 'U'}
               </div>
               <div>
                 <h2 style={{ fontSize: '22px', fontWeight: 800, margin: 0 }}>{user?.name || session.user?.name || 'Détenteur Wi-Fi'}</h2>
-                <div style={{ color: 'var(--text-secondary)', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
+                <div style={{ color: 'var(--text-secondary)', fontSize: '14px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
                   <span className="badge badge-brand">
                     <span className="badge-dot"></span>
                     {user ? ROLE_LABEL[user.role] : ROLE_LABEL[session.user.role]}
@@ -81,7 +81,7 @@ export default async function ProfilePage() {
           </div>
 
           {/* Details Section */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', paddingTop: '16px', borderTop: '1px solid var(--border-default)' }}>
+          <div className="two-col-grid" style={{ gap: '20px', paddingTop: '16px', borderTop: '1px solid var(--border-default)' }}>
             <div>
               <div className="label" style={{ marginBottom: '6px' }}>Numéro de Téléphone (Identifiant)</div>
               <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)' }}>
@@ -122,11 +122,11 @@ export default async function ProfilePage() {
 
       {/* Mes Wi-Fi Zones Rattachées */}
       {user?.clients && user.clients.length > 0 && (
-        <div style={{ backgroundColor: 'var(--bg-primary)', borderRadius: 'var(--radius-xl)', border: '1px solid var(--border-default)', padding: '24px', boxShadow: 'var(--elevation-1)' }}>
-          <h3 style={{ marginBottom: '16px' }}>Emplacements & Wi-Fi Zones associées</h3>
+        <div className="panel">
+          <h3 style={{ marginBottom: '16px' }}>Emplacements &amp; Wi-Fi Zones associées</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {user.clients.flatMap(c => c.wifiZones).map(zone => (
-              <div key={zone.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-default)', backgroundColor: 'var(--neutral-50)' }}>
+              <div key={zone.id} style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '12px', padding: '12px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-default)', backgroundColor: 'var(--neutral-50)' }}>
                 <div>
                   <div style={{ fontWeight: 700, fontSize: '15px' }}>{zone.name}</div>
                   <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>📍 {zone.location}</div>

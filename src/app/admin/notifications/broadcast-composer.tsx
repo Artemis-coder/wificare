@@ -98,7 +98,7 @@ export default function BroadcastComposer({
   return (
     <div className="data-table-wrapper" style={{ marginBottom: '24px' }}>
       <div className="data-table-header">
-        <div>
+        <div className="page-header-text">
           <h3 style={{ margin: 0 }}>Envoyer un message</h3>
           <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
             Le message apparaît dans l&apos;application et sur le téléphone des
@@ -108,7 +108,7 @@ export default function BroadcastComposer({
       </div>
 
       <form
-        style={{ padding: '24px' }}
+        className="panel-body"
         onSubmit={(event) => {
           event.preventDefault();
           reset();
@@ -150,7 +150,7 @@ export default function BroadcastComposer({
                   style={{ marginTop: 3 }}
                 />
                 <span>
-                  <span style={{ display: 'block', fontSize: '14px', fontWeight: 600 }}>
+                  <span className="broadcast-option-title">
                     {option.label}
                     <span
                       style={{
@@ -201,7 +201,8 @@ export default function BroadcastComposer({
           maxLength={80}
           onChange={(event) => setTitle(event.target.value)}
           placeholder="Coupure réseau sur le secteur nord"
-          style={{ width: '100%', padding: '10px 12px', fontSize: '14px', marginBottom: '16px' }}
+          className="field"
+          style={{ marginBottom: '16px' }}
         />
 
         <label
@@ -217,7 +218,8 @@ export default function BroadcastComposer({
           rows={4}
           onChange={(event) => setBody(event.target.value)}
           placeholder="Intervention en cours, rétablissement prévu dans l'après-midi."
-          style={{ width: '100%', padding: '10px 12px', fontSize: '14px', resize: 'vertical' }}
+          className="field"
+          style={{ height: 'auto', padding: '10px 12px', resize: 'vertical' }}
         />
         <div style={{ fontSize: '12px', color: 'var(--text-disabled)', marginTop: '4px' }}>
           {body.length} / 240
@@ -262,12 +264,8 @@ export default function BroadcastComposer({
                 type="datetime-local"
                 value={scheduledFor}
                 onChange={(event) => setScheduledFor(event.target.value)}
-                style={{
-                  padding: '10px 12px',
-                  fontSize: '14px',
-                  width: '100%',
-                  maxWidth: '280px',
-                }}
+                className="field"
+                style={{ maxWidth: '280px' }}
               />
               <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '6px' }}>
                 Heure de ce poste. Le départ effectif peut avoir jusqu&apos;à cinq
@@ -277,7 +275,7 @@ export default function BroadcastComposer({
           )}
         </div>
 
-        <div style={{ display: 'flex', gap: '12px', marginTop: '20px', flexWrap: 'wrap' }}>
+        <div className="form-actions" style={{ marginTop: '20px' }}>
           <button
             type="submit"
             className="btn btn-primary btn-md"

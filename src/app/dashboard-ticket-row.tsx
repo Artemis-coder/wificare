@@ -36,13 +36,18 @@ export function isInstallationType(type: string): boolean {
  * tableau de bord ne servait qu'à lire, et la régie devait repasser par la liste
  * pour agir. La référence est un vrai lien, pour que la ligne reste atteignable
  * au clavier.
+ *
+ * Chaque cellule porte son intitulé de colonne dans `data-label`. Sur téléphone,
+ * le tableau bascule en cartes empilées et c'est cet attribut qui devient le
+ * libellé affiché à gauche de la valeur : sans lui, la valeur se retrouve seule
+ * sans plus rien dire de ce qu'elle vaut.
  */
 export default function DashboardTicketRow({ ticket }: { ticket: RowTicket }) {
   const router = useRouter();
 
   return (
     <tr style={{ cursor: 'pointer' }} onClick={() => router.push(`/tickets/${ticket.id}`)}>
-      <td style={{ fontWeight: 700, color: 'var(--brand-600)' }}>
+      <td data-label="Référence" style={{ fontWeight: 700, color: 'var(--brand-600)' }}>
         <Link
           href={`/tickets/${ticket.id}`}
           onClick={(event) => event.stopPropagation()}
@@ -51,13 +56,13 @@ export default function DashboardTicketRow({ ticket }: { ticket: RowTicket }) {
           {ticket.reference}
         </Link>
       </td>
-      <td>
+      <td data-label="Client / Emplacement">
         <div style={{ fontWeight: 600 }}>{ticket.wifiZone.name}</div>
         <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
           {ticket.client.name} • {ticket.wifiZone.location}
         </div>
       </td>
-      <td style={{ fontWeight: 500 }}>
+      <td data-label="Type de demande" style={{ fontWeight: 500 }}>
         {isInstallationType(ticket.type) ? (
           <span style={{ color: 'var(--accent-purple)', fontWeight: 600 }}>
             {ticket.type}
@@ -66,12 +71,12 @@ export default function DashboardTicketRow({ ticket }: { ticket: RowTicket }) {
           <span>{ticket.type}</span>
         )}
       </td>
-      <td>
+      <td data-label="Priorité">
         <span className={`badge ${getPriorityBadgeClass(ticket.priority)}`}>
           {ticket.priority}
         </span>
       </td>
-      <td>
+      <td data-label="Technicien">
         {ticket.technician ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <div
@@ -98,13 +103,13 @@ export default function DashboardTicketRow({ ticket }: { ticket: RowTicket }) {
           </span>
         )}
       </td>
-      <td>
+      <td data-label="Statut">
         <span className={`badge ${getStatusBadgeClass(ticket.status)}`}>
           {ticket.status}
         </span>
       </td>
       {/* Chevron : rien n'indique autrement que la ligne s'ouvre. */}
-      <td style={{ color: 'var(--text-disabled)', textAlign: 'right' }}>
+      <td className="cell-actions" style={{ color: 'var(--text-disabled)', textAlign: 'right' }}>
         <svg
           width="16"
           height="16"

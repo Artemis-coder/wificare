@@ -73,14 +73,15 @@ const date = (value: string | null) =>
 export default function QuotePanel({ quote }: { quote: QuoteView }) {
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
         <h3 style={{ fontSize: '16px', margin: 0 }}>Devis</h3>
         <span className={`badge ${STATUS_BADGE[quote.status] ?? 'badge-neutral'}`}>
           {STATUS_LABEL[quote.status] ?? quote.status}
         </span>
       </div>
 
-      <table className="data-table" style={{ marginBottom: '16px' }}>
+      <div className="table-scroll" style={{ marginBottom: '16px' }}>
+      <table className="data-table">
         <thead>
           <tr>
             <th>Désignation</th>
@@ -92,14 +93,15 @@ export default function QuotePanel({ quote }: { quote: QuoteView }) {
         <tbody>
           {quote.lines.map((line) => (
             <tr key={line.id}>
-              <td>{line.description}</td>
-              <td>{line.quantity}</td>
-              <td>{amount(line.unitPrice)}</td>
-              <td style={{ fontWeight: 600 }}>{amount(line.totalPrice)}</td>
+              <td data-label="Désignation">{line.description}</td>
+              <td data-label="Qté">{line.quantity}</td>
+              <td data-label="Prix unitaire">{amount(line.unitPrice)}</td>
+              <td data-label="Total" style={{ fontWeight: 600 }}>{amount(line.totalPrice)}</td>
             </tr>
           ))}
         </tbody>
       </table>
+      </div>
 
       {quote.notes && (
         <div style={{ marginBottom: '16px', padding: '12px', backgroundColor: 'var(--neutral-50)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-default)', fontSize: '14px' }}>
@@ -119,7 +121,7 @@ export default function QuotePanel({ quote }: { quote: QuoteView }) {
           « Encaissement direct » à côté d'une référence que le client a
           pourtant saisie. */}
       {quote.payment && (
-        <div style={{ marginTop: '16px', padding: '12px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--success-50)', border: '1px solid var(--success-100)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ marginTop: '16px', padding: '12px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--success-50)', border: '1px solid var(--success-100)', display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
           <div>
             <div style={{ fontWeight: 700, color: 'var(--success-600)', fontSize: '13px' }}>PAIEMENT ENREGISTRÉ PAR LE CLIENT</div>
             <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>

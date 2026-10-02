@@ -67,7 +67,7 @@ export default async function ReviewsPage() {
   return (
     <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
       <div className="page-header">
-        <div>
+        <div className="page-header-text">
           <h1>Avis clients</h1>
           <p className="body-m" style={{ color: 'var(--text-secondary)' }}>
             Notes laissées par les clients sur les interventions réalisées.
@@ -77,20 +77,13 @@ export default async function ReviewsPage() {
 
       {reviews.length === 0 ? (
         <div className="data-table-wrapper" style={{ marginTop: '24px' }}>
-          <div style={{ padding: '48px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+          <div className="table-empty" style={{ padding: '48px', textAlign: 'center', color: 'var(--text-secondary)' }}>
             Aucun avis pour le moment.
           </div>
         </div>
       ) : (
         <>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-              gap: '16px',
-              marginTop: '24px',
-            }}
-          >
+          <div className="stat-grid" style={{ marginTop: '24px' }}>
             <div className="stat-card">
               <div className="stat-label">Note moyenne</div>
               <div className="stat-value">{average.toFixed(1).replace('.', ',')} / 5</div>
@@ -109,6 +102,7 @@ export default async function ReviewsPage() {
             Moyenne par technicien
           </h2>
           <div className="data-table-wrapper">
+            <div className="table-scroll">
             <table className="data-table">
               <thead>
                 <tr>
@@ -124,27 +118,29 @@ export default async function ReviewsPage() {
 
                   return (
                     <tr key={id}>
-                      <td style={{ fontWeight: 600 }}>{entry.name}</td>
-                      <td>{reviews.find((r) => r.technicianId === id)?.technician?.phone ?? '—'}</td>
-                      <td>
+                      <td data-label="Technicien" style={{ fontWeight: 600 }}>{entry.name}</td>
+                      <td data-label="Téléphone">{reviews.find((r) => r.technicianId === id)?.technician?.phone ?? '—'}</td>
+                      <td data-label="Note moyenne">
                         <span
                           className={`badge ${technicianAverage >= 4 ? 'badge-success' : technicianAverage >= 3 ? 'badge-warning' : 'badge-error'}`}
                         >
                           {technicianAverage.toFixed(1).replace('.', ',')} / 5
                         </span>
                       </td>
-                      <td>{entry.count}</td>
+                      <td data-label="Avis">{entry.count}</td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
+            </div>
           </div>
 
           <h2 style={{ marginTop: '32px', marginBottom: '12px', fontSize: '18px' }}>
             Avis détaillés
           </h2>
           <div className="data-table-wrapper">
+            <div className="table-scroll">
             <table className="data-table">
               <thead>
                 <tr>
@@ -159,36 +155,37 @@ export default async function ReviewsPage() {
               <tbody>
                 {reviews.map((review) => (
                   <tr key={review.id}>
-                    <td>
+                    <td data-label="Intervention">
                       <div style={{ fontWeight: 600 }}>{review.ticket.reference}</div>
                       <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
                         {review.ticket.wifiZone.name} · {review.ticket.type}
                       </div>
                     </td>
-                    <td>
+                    <td data-label="Client">
                       <div>{review.client.name}</div>
                       <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
                         {review.client.phone}
                       </div>
                     </td>
-                    <td>{review.technician?.name ?? '—'}</td>
-                    <td>
+                    <td data-label="Technicien">{review.technician?.name ?? '—'}</td>
+                    <td data-label="Note">
                       <span
                         className={`badge ${review.rating >= 4 ? 'badge-success' : review.rating >= 3 ? 'badge-warning' : 'badge-error'}`}
                       >
                         {review.rating} / 5
                       </span>
                     </td>
-                    <td style={{ maxWidth: '280px' }}>
+                    <td data-label="Commentaire" className="cell-text">
                       {review.comment ?? '—'}
                     </td>
-                    <td>
+                    <td data-label="Date">
                       {new Date(review.createdAt).toLocaleDateString('fr-FR')}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         </>
       )}

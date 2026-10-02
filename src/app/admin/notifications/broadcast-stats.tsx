@@ -21,7 +21,7 @@ export default function BroadcastStatsPanel({ stats }: { stats: BroadcastStats }
   return (
     <div className="data-table-wrapper" style={{ marginBottom: '24px' }}>
       <div className="data-table-header">
-        <div>
+        <div className="page-header-text">
           <h3 style={{ margin: 0 }}>Diffusion</h3>
           <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
             Ce qui est parti, ce qui reste en attente, ce qui a atteint un
@@ -30,14 +30,7 @@ export default function BroadcastStatsPanel({ stats }: { stats: BroadcastStats }
         </div>
       </div>
 
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-          gap: '1px',
-          background: 'var(--border-default)',
-        }}
-      >
+      <div className="stats-tiles">
         <Tile
           value={stats.sent}
           label="Messages diffusés"
@@ -106,7 +99,7 @@ function Tile({
   danger?: boolean;
 }) {
   return (
-    <div style={{ background: 'var(--bg-card)', padding: '18px 20px' }}>
+    <div className="stat-tile">
       <div
         style={{
           fontSize: '28px',

@@ -83,7 +83,7 @@ export default async function AdminUsersPage() {
   return (
     <div>
       <div className="page-header">
-        <div>
+        <div className="page-header-text">
           <h1>Utilisateurs</h1>
           <p className="body-m" style={{ color: 'var(--text-secondary)' }}>
             Comptes de la plateforme, leurs rôles et leur statut d&apos;accès.

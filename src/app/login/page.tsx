@@ -71,8 +71,8 @@ export default function LoginPage() {
   };
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--bg-secondary)', padding: '24px' }}>
-      <div style={{ backgroundColor: 'var(--bg-primary)', padding: '40px', borderRadius: 'var(--radius-xl)', boxShadow: 'var(--elevation-3)', width: '100%', maxWidth: '460px' }}>
+    <div className="login-shell">
+      <div className="login-card">
         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -103,7 +103,8 @@ export default function LoginPage() {
                 if (phoneError) setPhoneError("");
               }}
               aria-invalid={Boolean(phoneError)}
-              style={{ height: '44px', padding: '0 12px', borderRadius: 'var(--radius-md)', border: `1px solid ${phoneError ? 'var(--error-600)' : 'var(--border-strong)'}`, fontSize: '16px', outline: 'none' }}
+              className="field"
+              style={phoneError ? { borderColor: 'var(--error-600)' } : undefined}
               required
             />
             {phoneError && (
@@ -124,7 +125,8 @@ export default function LoginPage() {
                 if (passwordError) setPasswordError("");
               }}
               aria-invalid={Boolean(passwordError)}
-              style={{ height: '44px', padding: '0 12px', borderRadius: 'var(--radius-md)', border: `1px solid ${passwordError ? 'var(--error-600)' : 'var(--border-strong)'}`, fontSize: '16px', outline: 'none' }}
+              className="field"
+              style={passwordError ? { borderColor: 'var(--error-600)' } : undefined}
               required
             />
             {passwordError ? (

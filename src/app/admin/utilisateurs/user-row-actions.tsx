@@ -12,17 +12,6 @@ const STATUS_LABEL: Record<UserListItem['status'], string> = {
   SUSPENDED: 'Suspendu',
 };
 
-const selectStyle = {
-  height: '32px',
-  padding: '0 8px',
-  borderRadius: 'var(--radius-sm)',
-  border: '1px solid var(--border-strong)',
-  fontSize: '13px',
-  backgroundColor: 'var(--bg-primary)',
-  color: 'var(--text-primary)',
-  outline: 'none',
-} as const;
-
 /**
  * Actions d'un compte, réservées au super administrateur.
  *
@@ -78,10 +67,10 @@ export function UserRowActions({
   }
 
   return (
-    <div style={{ position: 'relative' }}>
+    <div style={{ position: 'relative', display: 'inline-block' }}>
       <button
         type="button"
-        className="btn btn-secondary btn-md"
+        className="btn btn-secondary btn-sm"
         disabled={pending}
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
@@ -90,26 +79,11 @@ export function UserRowActions({
       </button>
 
       {open && (
-        <div
-          style={{
-            position: 'absolute',
-            right: 0,
-            top: '38px',
-            zIndex: 20,
-            minWidth: '260px',
-            backgroundColor: 'var(--bg-primary)',
-            border: '1px solid var(--border-default)',
-            borderRadius: 'var(--radius-lg)',
-            boxShadow: 'var(--elevation-3)',
-            padding: '16px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '12px',
-          }}
-        >
+        <div className="row-popover">
           <div>
             <div className="label" style={{ marginBottom: '6px' }}>Rôle</div>
             <select
+              className="field"
               value={user.role}
               disabled={pending}
               onChange={(event) =>
@@ -118,7 +92,6 @@ export function UserRowActions({
                   `Rôle mis à jour : ${ROLE_LABEL[event.target.value as AppRole]}.`
                 )
               }
-              style={{ ...selectStyle, width: '100%' }}
               aria-label={`Rôle de ${user.name ?? user.phone}`}
             >
               {APP_ROLES.map((role) => (
@@ -132,6 +105,7 @@ export function UserRowActions({
           <div>
             <div className="label" style={{ marginBottom: '6px' }}>Statut</div>
             <select
+              className="field"
               value={user.status}
               disabled={pending}
               onChange={(event) =>
@@ -142,7 +116,6 @@ export function UserRowActions({
                     : 'Compte suspendu.'
                 )
               }
-              style={{ ...selectStyle, width: '100%' }}
               aria-label={`Statut de ${user.name ?? user.phone}`}
             >
               <option value="ACTIVE">Actif</option>
@@ -187,6 +160,7 @@ function ResetPasswordButton({
       {open && (
         <div style={{ marginTop: '8px', display: 'flex', gap: '6px' }}>
           <input
+            className="field"
             type="text"
             inputMode="numeric"
             maxLength={4}
@@ -194,7 +168,7 @@ function ResetPasswordButton({
             onChange={(event) => setPassword(event.target.value.replace(/\D/g, ''))}
             placeholder="4 chiffres"
             aria-label="Nouveau mot de passe"
-            style={{ ...selectStyle, flex: 1, height: '34px' }}
+            style={{ flex: 1 }}
           />
           <button
             type="button"

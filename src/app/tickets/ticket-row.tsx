@@ -28,6 +28,10 @@ type RowTicket = {
  *
  * La référence est en outre un vrai lien, pour que la ligne reste atteignable
  * au clavier et annoncée comme un lien par les lecteurs d'écran.
+ *
+ * Chaque cellule porte son intitulé de colonne dans `data-label`. Sur téléphone,
+ * le tableau bascule en cartes empilées et c'est cet attribut qui devient le
+ * libellé affiché à gauche de la valeur.
  */
 export default function TicketRow({ ticket }: { ticket: RowTicket }) {
   const router = useRouter();
@@ -37,7 +41,7 @@ export default function TicketRow({ ticket }: { ticket: RowTicket }) {
       style={{ cursor: 'pointer' }}
       onClick={() => router.push(`/tickets/${ticket.id}`)}
     >
-      <td style={{ fontWeight: 600, color: 'var(--brand-600)' }}>
+      <td data-label="Référence" style={{ fontWeight: 600, color: 'var(--brand-600)' }}>
         <Link
           href={`/tickets/${ticket.id}`}
           onClick={(event) => event.stopPropagation()}
@@ -46,20 +50,20 @@ export default function TicketRow({ ticket }: { ticket: RowTicket }) {
           {ticket.reference}
         </Link>
       </td>
-      <td>{new Date(ticket.createdAt).toLocaleDateString('fr-FR')}</td>
-      <td>
+      <td data-label="Date">{new Date(ticket.createdAt).toLocaleDateString('fr-FR')}</td>
+      <td data-label="Client / Zone">
         <div style={{ fontWeight: 500 }}>{ticket.wifiZone.name}</div>
         <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
           {ticket.client.name}
         </div>
       </td>
-      <td>{ticket.type}</td>
-      <td>
+      <td data-label="Problème">{ticket.type}</td>
+      <td data-label="Priorité">
         <span className={`badge ${getPriorityBadgeClass(ticket.priority)}`}>
           {ticket.priority}
         </span>
       </td>
-      <td>
+      <td data-label="Technicien">
         {ticket.technician ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <div
@@ -84,14 +88,14 @@ export default function TicketRow({ ticket }: { ticket: RowTicket }) {
           <span style={{ color: 'var(--text-disabled)' }}>Non affecté</span>
         )}
       </td>
-      <td>
+      <td data-label="Statut">
         <span className={`badge ${getStatusBadgeClass(ticket.status)}`}>
           {ticket.status}
         </span>
       </td>
       {/* Chevron : sans lui, rien n'indique que la ligne s'ouvre. Le
           parcours se faisait à l'aveugle, la ligne paraissant décorative. */}
-      <td style={{ color: 'var(--text-disabled)', textAlign: 'right' }}>
+      <td className="cell-actions" style={{ color: 'var(--text-disabled)', textAlign: 'right' }}>
         <svg
           width="16"
           height="16"

@@ -52,7 +52,7 @@ export default async function TicketsPage() {
   return (
     <div>
       <div className="page-header">
-        <div>
+        <div className="page-header-text">
           <h1>Gestion des tickets</h1>
           <p className="body-m" style={{ color: 'var(--text-secondary)' }}>
             Suivez et gérez toutes les interventions sur vos Wi-Fi Zones.
@@ -67,11 +67,12 @@ export default async function TicketsPage() {
       <div className="data-table-wrapper" style={{ marginTop: '24px' }}>
         <div className="data-table-header">
           <h3>Tous les tickets ({tickets.length})</h3>
-          <div style={{ display: 'flex', gap: '12px' }}>
-            <input 
-              type="text" 
-              placeholder="Rechercher..." 
-              style={{ padding: '8px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-default)' }}
+          <div className="filter-row">
+            <input
+              type="search"
+              className="field field-wide"
+              placeholder="Rechercher..."
+              aria-label="Rechercher un ticket"
             />
             <button className="btn btn-secondary btn-md">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
@@ -79,6 +80,7 @@ export default async function TicketsPage() {
             </button>
           </div>
         </div>
+        <div className="table-scroll">
         <table className="data-table">
           <thead>
             <tr>
@@ -103,7 +105,7 @@ export default async function TicketsPage() {
             
             {tickets.length === 0 && (
               <tr>
-                <td colSpan={8} style={{ textAlign: 'center', padding: '48px', color: 'var(--text-secondary)' }}>
+                <td colSpan={8} className="table-empty" style={{ color: 'var(--text-secondary)' }}>
                   <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ margin: '0 auto 16px', display: 'block', opacity: 0.5 }}>
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
                   </svg>
@@ -113,6 +115,7 @@ export default async function TicketsPage() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );

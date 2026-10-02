@@ -63,15 +63,7 @@ export default async function NewZonePage() {
         </p>
       </div>
 
-      <div
-        style={{
-          backgroundColor: 'var(--bg-primary)',
-          padding: '36px',
-          borderRadius: 'var(--radius-xl)',
-          border: '1px solid var(--border-default)',
-          boxShadow: 'var(--elevation-2)',
-        }}
-      >
+      <div className="panel panel-lg">
         {clients.length === 0 ? (
           <p style={{ margin: 0, color: 'var(--text-secondary)' }}>
             Aucun dossier client n&apos;existe. Une zone doit appartenir à un
@@ -90,16 +82,7 @@ export default async function NewZonePage() {
                 id="clientId"
                 name="clientId"
                 required
-                style={{
-                  height: '48px',
-                  padding: '0 14px',
-                  borderRadius: 'var(--radius-md)',
-                  border: '1px solid var(--border-strong)',
-                  fontSize: '15px',
-                  backgroundColor: 'var(--bg-primary)',
-                  color: 'var(--text-primary)',
-                  outline: 'none',
-                }}
+                className="field field-lg"
               >
                 <option value="">Sélectionnez le propriétaire...</option>
                 {clients.map((client) => (
@@ -119,16 +102,7 @@ export default async function NewZonePage() {
                 name="name"
                 required
                 placeholder="Ex: WiFi Zone Angré 8e Tranche"
-                style={{
-                  height: '48px',
-                  padding: '0 14px',
-                  borderRadius: 'var(--radius-md)',
-                  border: '1px solid var(--border-strong)',
-                  fontSize: '15px',
-                  backgroundColor: 'var(--bg-primary)',
-                  color: 'var(--text-primary)',
-                  outline: 'none',
-                }}
+                className="field field-lg"
               />
             </div>
 
@@ -140,20 +114,11 @@ export default async function NewZonePage() {
                 id="location"
                 name="location"
                 placeholder="Ex: Abidjan, Cocody Angré"
-                style={{
-                  height: '48px',
-                  padding: '0 14px',
-                  borderRadius: 'var(--radius-md)',
-                  border: '1px solid var(--border-strong)',
-                  fontSize: '15px',
-                  backgroundColor: 'var(--bg-primary)',
-                  color: 'var(--text-primary)',
-                  outline: 'none',
-                }}
+                className="field field-lg"
               />
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+            <div className="form-actions">
               <Link href="/zones" className="btn btn-secondary btn-lg">
                 Annuler
               </Link>

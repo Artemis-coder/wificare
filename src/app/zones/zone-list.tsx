@@ -47,17 +47,6 @@ type StatusFilter = 'ALL' | ZoneRow['status'];
 
 const STATUSES: readonly StatusFilter[] = ['ALL', 'PENDING', 'ACTIVE'];
 
-const inputStyle = {
-  height: '38px',
-  padding: '0 12px',
-  borderRadius: 'var(--radius-md)',
-  border: '1px solid var(--border-strong)',
-  fontSize: '14px',
-  backgroundColor: 'var(--bg-primary)',
-  color: 'var(--text-primary)',
-  outline: 'none',
-} as const;
-
 export function ZoneList({
   zones,
   canManage,
@@ -121,53 +110,34 @@ export function ZoneList({
   return (
     <div>
       {error && (
-        <div
-          role="alert"
-          style={{
-            backgroundColor: 'var(--error-50)',
-            color: 'var(--error-600)',
-            padding: '12px 16px',
-            borderRadius: 'var(--radius-md)',
-            marginBottom: '16px',
-            fontSize: '14px',
-          }}
-        >
+        <div role="alert" className="alert alert-error">
           {error}
         </div>
       )}
       {notice && (
-        <div
-          style={{
-            backgroundColor: 'var(--success-50)',
-            color: 'var(--success-600)',
-            padding: '12px 16px',
-            borderRadius: 'var(--radius-md)',
-            marginBottom: '16px',
-            fontSize: '14px',
-          }}
-        >
+        <div role="status" className="alert alert-success">
           {notice}
         </div>
       )}
 
       <div className="data-table-wrapper">
         <div className="data-table-header">
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <div className="filter-row">
             <input
               type="search"
+              className="field field-wide"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Rechercher une zone, un emplacement ou un propriétaire"
               aria-label="Rechercher une Wi-Fi Zone"
-              style={{ ...inputStyle, minWidth: '320px' }}
             />
             <select
+              className="field"
               value={status}
               onChange={(event) =>
                 setStatus(event.target.value as StatusFilter)
               }
               aria-label="Filtrer par statut de validation"
-              style={inputStyle}
             >
               <option value="ALL">Tous les statuts</option>
               {STATUSES.filter((item) => item !== 'ALL').map((item) => (
@@ -182,7 +152,7 @@ export function ZoneList({
           </span>
         </div>
 
-        <div style={{ overflowX: 'auto' }}>
+        <div className="table-scroll">
           <table className="data-table">
             <thead>
               <tr>
@@ -196,7 +166,7 @@ export function ZoneList({
             <tbody>
               {visible.map((zone) => (
                 <tr key={zone.id}>
-                  <td>
+                  <td data-label="Zone">
                     <div style={{ fontWeight: 600 }}>{zone.name}</div>
                     <div
                       style={{
@@ -216,7 +186,7 @@ export function ZoneList({
                       {new Date(zone.createdAt).toLocaleDateString('fr-FR')}
                     </div>
                   </td>
-                  <td>
+                  <td data-label="Propriétaire">
                     <div style={{ fontWeight: 500 }}>
                       {zone.ownerName}
                     </div>
@@ -229,7 +199,7 @@ export function ZoneList({
                       {zone.ownerContact}
                     </div>
                   </td>
-                  <td>
+                  <td data-label="Validation">
                     <span
                       className={`badge ${STATUS_BADGE[zone.status]}`}
                     >
@@ -238,6 +208,7 @@ export function ZoneList({
                     </span>
                   </td>
                   <td
+                    data-label="Activité"
                     style={{
                       fontSize: '13px',
                       color: 'var(--text-secondary)',
@@ -246,7 +217,7 @@ export function ZoneList({
                     {zone.equipmentCount} équipement(s) ·{' '}
                     {zone.ticketCount} demande(s)
                   </td>
-                  <td>
+                  <td className="cell-actions" data-label="Actions">
                     {editing === zone.id ? (
                       <ZoneEditForm
                         zone={zone}
@@ -260,13 +231,7 @@ export function ZoneList({
                         }
                       />
                     ) : (
-                      <div
-                        style={{
-                          display: 'flex',
-                          gap: '6px',
-                          flexWrap: 'wrap',
-                        }}
-                      >
+                      <div className="filter-row">
                         {canManage && zone.status === 'PENDING' && (
                           <button
                             type="button"
@@ -319,8 +284,7 @@ export function ZoneList({
 
                             <button
                               type="button"
-                              className="btn btn-secondary btn-md"
-                              style={{ color: 'var(--error-600)' }}
+                              className="btn btn-secondary btn-md btn-danger"
                               onClick={() =>
                                 run(
                                   () => deleteZoneAction(zone.id),
@@ -342,11 +306,8 @@ export function ZoneList({
                 <tr>
                   <td
                     colSpan={5}
-                    style={{
-                      textAlign: 'center',
-                      padding: '40px',
-                      color: 'var(--text-secondary)',
-                    }}
+                    className="table-empty"
+                    style={{ color: 'var(--text-secondary)' }}
                   >
                     Aucune Wi-Fi Zone ne correspond à ces critères.
                   </td>
@@ -381,14 +342,14 @@ function ZoneEditForm({
         event.preventDefault();
         onSubmit({ name, location });
       }}
-      style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: '260px' }}
+      style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}
     >
       <input
         value={name}
         onChange={(event) => setName(event.target.value)}
         placeholder="Nom de la zone"
         aria-label={`Nom de la zone ${zone.name}`}
-        style={inputStyle}
+        className="field"
         required
       />
       <input
@@ -396,7 +357,7 @@ function ZoneEditForm({
         onChange={(event) => setLocation(event.target.value)}
         placeholder="Emplacement"
         aria-label={`Emplacement de la zone ${zone.name}`}
-        style={inputStyle}
+        className="field"
         required
       />
       <div style={{ display: 'flex', gap: '6px' }}>

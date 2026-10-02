@@ -89,19 +89,19 @@ export default async function Dashboard() {
     <div>
       {/* Hero Welcome Banner */}
       <div className="hero-banner">
-        <div>
-          <span style={{ fontSize: '13px', fontWeight: 600, color: '#a5b4fc', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        <div className="hero-banner-text">
+          <span className="hero-banner-eyebrow">
             Portail Super Administration WiFiCare
           </span>
-          <h1 style={{ color: '#ffffff', margin: '6px 0 8px 0', fontSize: '28px' }}>
+          <h1 className="hero-banner-title">
             Bienvenue, {session.user?.name || 'Administrateur'} 👋
           </h1>
-          <p style={{ color: '#c7d2fe', fontSize: '14px', maxWidth: '520px' }}>
+          <p className="hero-banner-lead">
             Supervisez le parc Wi-Fi, validez les zones déclarées et suivez les interventions en temps réel.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '12px' }}>
-          <Link href="/tickets/new" className="btn btn-primary btn-lg" style={{ background: '#ffffff', color: '#312e81', boxShadow: '0 4px 14px rgba(0,0,0,0.15)' }}>
+        <div className="hero-banner-actions">
+          <Link href="/tickets/new" className="btn btn-lg btn-on-dark">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             Nouvelle demande / Ticket
           </Link>
@@ -233,7 +233,7 @@ export default async function Dashboard() {
       {/* Main Table: Demandes & Interventions */}
       <div className="data-table-wrapper" style={{ marginTop: '32px' }}>
         <div className="data-table-header">
-          <div>
+          <div className="page-header-text">
             <h3 style={{ margin: 0 }}>Dernières Demandes & Interventions</h3>
             <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Installations d&apos;antennes, équipements et dépannages urgents</span>
           </div>
@@ -241,7 +241,8 @@ export default async function Dashboard() {
             Voir tout ({recentTickets.length})
           </Link>
         </div>
-        
+
+        <div className="table-scroll">
         <table className="data-table">
           <thead>
             <tr>
@@ -265,13 +266,14 @@ export default async function Dashboard() {
 
             {recentTickets.length === 0 && (
               <tr>
-                <td colSpan={7} style={{ textAlign: 'center', padding: '36px', color: 'var(--text-secondary)' }}>
+                <td colSpan={7} className="table-empty" style={{ color: 'var(--text-secondary)' }}>
                   Aucune demande en cours.
                 </td>
               </tr>
             )}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );

@@ -40,6 +40,8 @@ auparavant, et ce qui a changé, est dans [JOURNAL.md](JOURNAL.md).
 12. [Migrations de schéma](#12-migrations-de-schéma)
 13. [Tests et qualité](#13-tests-et-qualité)
 14. [Architecture du code](#14-architecture-du-code)
+    - [13.1 Back-office et API](#131-back-office-et-api)
+    - [13.2 Adapter le back-office à un écran étroit](#132-adapter-le-back-office-à-un-écran-étroit)
 15. [Construire et distribuer l'APK](#15-construire-et-distribuer-lapk)
 16. [Déploiement](#16-déploiement)
 17. [Décisions et choix de conception](#17-décisions-et-choix-de-conception)
@@ -833,6 +835,69 @@ les ombres de référence sont dans
 [`design-system/wifi-care-mobile/MASTER.md`](design-system/wifi-care-mobile/MASTER.md) —
 attention, sa section « Écarts constatés » signale les points où le web et le
 mobile ne suivent pas la même palette.
+
+### 13.2 Adapter le back-office à un écran étroit
+
+La régie consulte le back-office autant sur téléphone que sur poste de bureau :
+elle vérifie une intervention depuis le parc, pas depuis son écran. Tout ce qui
+tient dans une largeur fixe est donc une règle de la section
+**« Adaptation aux écrans étroits »** de `src/app/globals.css`, et **jamais un
+style inline** — un style inline ne peut pas être surchargé par un media query.
+
+**Trois points de rupture, et un seul rôle pour chacun :**
+
+| Largeur | Ce qui change |
+| --- | --- |
+| 1024 px | une page de détail à deux colonnes passe sur une colonne |
+| 768 px | la navigation devient un tiroir, les tableaux deviennent des cartes |
+| 480 px | marges réduites, une seule colonne de champs |
+
+**La règle qui commande tout : aucun contenu n'exige un défilement horizontal.**
+Un tableau qui déborde sur un téléphone se lit en pinçant l'écran, et l'on ne
+pincent pas pour lire un numéro de téléphone. Un tableau trop large ne se réduit
+pas : **il devient une carte par ligne**, chaque cellule portant son intitulé de
+colonne dans `data-label`.
+
+```tsx
+// Obligatoire pour toute cellule d'un tableau `data-table` :
+<td data-label="Téléphone">{user.phone}</td>
+// La cellule d'état vide est la seule à ne pas en porter :
+<td colSpan={7} className="table-empty">Aucun compte.</td>
+```
+
+**Les indicateurs sont deux par rangée, et le dernier occupe la ligne entière
+quand ils sont en nombre impair** :
+
+```
+5 cartes   [▢▢]      4 cartes   [▢▢]
+          [▢▢]                 [▢▢]
+          [▢▢▢▢▢▢]  ← pleine largeur
+```
+
+Une demi-rangée vide en bas d'un écran de téléphone est du temps perdu ; la
+grille le fait seule avec `:last-child:nth-child(odd) { grid-column: 1 / -1 }`.
+
+**Trois règles de plus, chacune payée par un défaut observé :**
+
+- **Aucun champ de saisie sous 16 px.** Android comme iOS agrandissent la page
+  dès qu'un champ est plus petit, et ne reviennent pas tout seuls à la bonne
+  échelle : il faut quitter la page pour la relire. C'est la règle que
+  `mobile/lib/src/core/widgets/app_input.dart` applique déjà côté Flutter.
+- **Une liste déroulante garde l'ouverture du système.** `select.field` redessine
+  la flèche pour s'aligner sur les champs voisins, mais laisse le navigateur
+  ouvrir sa liste : c'est la seule qui sache faire défiler une longue liste au
+  doigt. Une feuille maison coûterait cette qualité pour un gain nul. Les
+  panneaux d'action d'une ligne, eux, deviennent un feuillet ancré en bas de
+  l'écran — la position qu'emploie l'application Android, et la seule d'où la
+  fermeture reste à portée de pouce.
+- **`100dvh`, pas `100vh`.** La barre d'adresse du téléphone grandit et se
+  réduit : en `100vh`, le contenu passe dessous ou laisse une bande vide.
+
+Une surface qui dépasse son conteneur se vérifie sans image : mesurer
+`scrollWidth` contre `clientWidth` sur chaque largeur, et `:not([data-label])`
+pour les cellules sans intitulé. Un test de débordement qui regarde
+`documentElement.scrollWidth` se trompe — `overflow-x: hidden` laisse
+`scrollWidth` dépasser alors que la page ne bouge pas.
 
 ---
 

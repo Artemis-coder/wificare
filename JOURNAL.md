@@ -4,6 +4,63 @@ Ce qui a changé dans le produit, et pourquoi. Les détails d'implémentation so
 dans l'historique git et le README ; ici, on retient ce qui est utile à savoir
 six mois plus tard.
 
+## 1.4.1 — 2 octobre 2026
+
+Le back-office se consulte au téléphone, mais il n'avait pas été conçu pour.
+
+### Corrigé
+
+**Le back-office n'était lisible qu'assis devant un écran.** 260 px de navigation
+fixe, des grilles calibrées pour 1 100 px de large, des tableaux de sept colonnes
+et des champs qui refusaient de rétrécir. Rien n'était cassé : c'était la version
+bureau, affichée sur un téléphone. La régie, elle, vérifie une intervention
+depuis le parc.
+
+La navigation devient un tiroir sous 768 px. Il se referme au voile, à la touche
+Échap et en changeant de page — cette dernière fermeture n'est pas un effet mais
+un état : le tiroir retient la route sur laquelle il a été ouvert, donc il se
+referme seul quand la route change, sans rendu intermédiaire où il resterait
+ouvert par-dessus l'écran venu d'ouvrir.
+
+**Les tableaux sont devenus illisibles avant d'être interdits.** Un tableau de
+sept colonnes sur 375 px ne se réduit pas : il devient **une carte par ligne**,
+chaque cellule portant son intitulé dans `data-label`. La même information, mais
+empilée au lieu d'être répartie sur une largeur impossible.
+
+**Les indicateurs sont deux par rangée, et le dernier pleine largeur quand ils
+sont en nombre impair.** Cinq cartes donnaient une demi-rangée vide en bas d'un
+écran de téléphone. La grille le fait seule, et le résultat tient sur une règle :
+un tableau à deux colonnes ne s'étire pas pour remplir le vide, un tableau à
+trois non plus.
+
+**Aucune mise en page ne tient dans un style inline** — non par principe, mais
+parce qu'un style inline ne peut pas être surchargé par un media query. La
+première version du correctif en comptait un très grand nombre, qu'il a fallu
+déloger un par un.
+
+**La modale de création de compte n'avait qu'une sortie**, le bouton « Annuler »
+en bas d'un formulaire qui peut déborder sur téléphone. Elle se ferme désormais
+à la touche Échap et rend le focus au bouton qui l'a ouverte.
+
+**Le panneau de notifications sortait de l'écran.** Il était calé sur la cloche,
+qui n'est pas au bord de l'écran : l'avatar du compte est à sa droite.
+
+**Six classes CSS étaient consommées sans être déclarées** — `.stat-card`,
+`.badge-error`, `.btn-sm`, `.search-bar`, `.user-profile`, et `--bg-card`, qui
+rendait les tuiles de diffusion transparentes faute d'avoir été déclarée.
+`globals.css` est le seul endroit où l'on déclare : un composant qui a besoin
+d'une classe la réclame là, il ne l'invente pas dans son rendu.
+
+### Ce qui vaut d'être retenu
+
+Un test de débordement se trompe si l'on se contente de comparer
+`documentElement.scrollWidth` à `clientWidth` : dès qu'un `overflow-x: hidden`
+s'interpose, le premier dépasse le second alors que la page ne bouge pas au
+doigt. La méthode retenue est de mesurer le débordement sur chaque largeur, puis
+de vérifier qu'il est **atteignable** — le tableau trop large défile dans son
+propre conteneur, la page, elle, ne bouge pas.
+
+
 ## 1.4.0 — 2 octobre 2026
 
 Une carte invisible, des photos illisibles en grand, une base qui grossit, des

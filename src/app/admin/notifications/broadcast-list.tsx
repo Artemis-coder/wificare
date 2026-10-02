@@ -55,6 +55,7 @@ function ScheduledList({ scheduled }: { scheduled: BroadcastRow[] }) {
       </div>
 
       {scheduled.length === 0 ? null : (
+        <div className="table-scroll">
         <table className="data-table">
           <thead>
             <tr>
@@ -70,6 +71,7 @@ function ScheduledList({ scheduled }: { scheduled: BroadcastRow[] }) {
             ))}
           </tbody>
         </table>
+        </div>
       )}
     </div>
   );
@@ -105,9 +107,9 @@ function ScheduledRow({ broadcast }: { broadcast: BroadcastRow }) {
 
   return (
     <tr>
-      <td>
+      <td data-label="Message">
         <strong>{broadcast.title}</strong>
-        <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+        <div className="cell-text" style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
           {broadcast.body}
         </div>
         {error && (
@@ -116,15 +118,15 @@ function ScheduledRow({ broadcast }: { broadcast: BroadcastRow }) {
           </div>
         )}
       </td>
-      <td>{audienceLabel(broadcast.audience)}</td>
-      <td>
+      <td data-label="Audience">{audienceLabel(broadcast.audience)}</td>
+      <td data-label="Envoi prévu">
         {new Date(broadcast.scheduledFor).toLocaleString('fr-FR', {
           dateStyle: 'medium',
           timeStyle: 'short',
         })}
       </td>
-      <td>
-        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+      <td className="cell-actions" data-label="Actions">
+        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
           <button
             type="button"
             className="btn btn-secondary btn-sm"
@@ -164,6 +166,7 @@ function HistoryList({ history }: { history: BroadcastRow[] }) {
           Aucun message envoyé pour l&apos;instant.
         </div>
       ) : (
+        <div className="table-scroll">
         <table className="data-table">
           <thead>
             <tr>
@@ -177,9 +180,9 @@ function HistoryList({ history }: { history: BroadcastRow[] }) {
           <tbody>
             {history.map((broadcast) => (
               <tr key={broadcast.id}>
-                <td>
+                <td data-label="Message">
                   <strong>{broadcast.title}</strong>
-                  <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                  <div className="cell-text" style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
                     {broadcast.body}
                   </div>
                   {broadcast.failureReason && (
@@ -188,8 +191,8 @@ function HistoryList({ history }: { history: BroadcastRow[] }) {
                     </div>
                   )}
                 </td>
-                <td>{audienceLabel(broadcast.audience)}</td>
-                <td>
+                <td data-label="Audience">{audienceLabel(broadcast.audience)}</td>
+                <td data-label="Destinataires">
                   {broadcast.status === 'SENT'
                     ? broadcast.devices === null
                       ? `${broadcast.recipients} (téléphones non mesurés)`
@@ -198,12 +201,12 @@ function HistoryList({ history }: { history: BroadcastRow[] }) {
                         }`
                     : '—'}
                 </td>
-                <td>
+                <td data-label="État">
                   <span style={{ color: statusColor(broadcast.status) }}>
                     {STATUS_LABEL[broadcast.status] ?? broadcast.status}
                   </span>
                 </td>
-                <td>
+                <td data-label="Date">
                   {new Date(broadcast.sentAt ?? broadcast.scheduledFor).toLocaleString(
                     'fr-FR',
                     { dateStyle: 'medium', timeStyle: 'short' }
@@ -213,6 +216,7 @@ function HistoryList({ history }: { history: BroadcastRow[] }) {
             ))}
           </tbody>
         </table>
+        </div>
       )}
     </div>
   );

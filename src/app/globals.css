@@ -44,6 +44,10 @@
   /* Semantic */
   --bg-primary: #ffffff;
   --bg-secondary: #f6f8fa;
+  /* Fond d'une carte posée sur le fond secondaire. La variable était
+     consommée sans être déclarée : les tuiles de diffusion rendaient un fond
+     transparent et laissaient voir la bordure de leur grille. */
+  --bg-card: var(--bg-primary);
   --bg-inverse: var(--neutral-900);
   
   --text-primary: var(--neutral-900);
@@ -69,6 +73,29 @@
   --radius-lg: 14px;
   --radius-xl: 20px;
   --radius-full: 9999px;
+
+/* Points de rupture du back-office. Un media query ne peut pas lire une
+     variable CSS : ces trois valeurs sont donc documentées ici, et reprises
+     telles quelles dans les media query en fin de fichier.
+
+       480px  téléphone étroit — une colonne, marges réduites
+       768px  téléphone et petite tablette — la navigation devient un tiroir
+       1024px tablette large et poste de bureau — la navigation redevient fixe
+
+     Toute modification ici doit être reportée dans la section « Adaptation
+     aux écrans étroits » du même fichier. */
+
+  /* Hauteur de la barre supérieure. Le panneau de notifications s'y accroche :
+     il doit suivre la barre quand celle-ci se réduit sur téléphone. */
+  --top-bar-h: 70px;
+}
+
+/* La zone de contenu ne doit jamais déborder horizontalement : une carte trop
+   large ferait défiler la page entière sur le téléphone, geste qu'aucun écran
+   d'administration ne rend exploitable. */
+html,
+body {
+  overflow-x: hidden;
 }
 
 * {
@@ -97,17 +124,71 @@ h3 { font-size: 16px; font-weight: 700; line-height: 1.4; }
 /* Layout */
 .app-shell {
   display: flex;
+  /* `100dvh` suit la hauteur réelle de la fenêtre quand la barre d'adresse du
+     téléphone se cache ou apparaît ; `100vh` laissait une bande vide sous le
+     contenu, ou le faisait passer sous la barre du système. */
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
 }
 
 .sidebar {
   width: 260px;
+  flex-shrink: 0;
   background-color: #0b1329;
   display: flex;
   flex-direction: column;
   padding: 24px 16px;
   color: #94a3b8;
+  overflow-y: auto;
+}
+
+/* Voile qui assombrit la page quand le tiroir de navigation est ouvert sur
+   téléphone. Il porte aussi la fermeture : sur téléphone, le geste de sortie
+   doit être atteignable sans viser la croix. */
+.sidebar-scrim {
+  display: none;
+}
+
+/* Bouton qui ouvre le tiroir. Invisible au-dessus du point de rupture où la
+   navigation redevient fixe : il n'aurait alors rien à faire. */
+.nav-toggle {
+  display: none;
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.nav-toggle:hover {
+  background-color: var(--neutral-50);
+}
+
+/* Croix de fermeture, propre au tiroir. */
+.sidebar-close {
+  display: none;
+  margin-left: auto;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--radius-sm);
+  background-color: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+}
+
+.sidebar-close:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
 }
 
 .sidebar-logo {
@@ -165,13 +246,61 @@ h3 { font-size: 16px; font-weight: 700; line-height: 1.4; }
 }
 
 .top-bar {
-  height: 70px;
+  height: var(--top-bar-h);
+  flex-shrink: 0;
   background-color: var(--bg-primary);
   border-bottom: 1px solid var(--border-default);
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   padding: 0 32px;
+}
+
+.top-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* Réservé à la recherche globale. Vide pour l'instant, il occupe la place
+   disponible pour que la barre reste équilibrée. */
+.search-bar {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Pastille de compte : sur téléphone, le libellé du rôle laisse la place à la
+   cloche, qui porte une information qu'aucune autre surface ne montre. */
+.user-profile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: inherit;
+  border-radius: var(--radius-md);
+}
+
+.user-profile-identity {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.2;
+}
+
+.user-avatar {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background-color: var(--brand-600);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 14px;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
 }
 
 .page-content {
@@ -218,10 +347,12 @@ h3 { font-size: 16px; font-weight: 700; line-height: 1.4; }
 
 .notif-panel {
   position: absolute;
-  top: 48px;
+  top: calc(var(--top-bar-h) - 22px);
   right: 0;
-  width: 380px;
-  max-height: 460px;
+  /* `min()` plutôt qu'une largeur fixe : sur téléphone, 380 px débordent de
+     l'écran et le panneau devenait partiellement illisible. */
+  width: min(380px, calc(100vw - 32px));
+  max-height: min(460px, 70vh);
   overflow-y: auto;
   background-color: var(--bg-primary);
   border: 1px solid var(--border-default);
@@ -271,8 +402,53 @@ h3 { font-size: 16px; font-weight: 700; line-height: 1.4; }
 .page-header {
   margin-bottom: 32px;
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: flex-end;
+  gap: 16px;
+}
+
+/* Bloc de texte qui accompagne un titre d'en-tête. Sur téléphone, le bouton
+   d'action passe en dessous : il reste à la hauteur du pouce. */
+.page-header-text {
+  min-width: 0;
+}
+
+.page-header-text p {
+  margin: 0;
+}
+
+/* Bandeau d'alerte en ligne : badge de validation, avertissement de la
+   console, message d'erreur global. */
+.alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 18px;
+  margin-bottom: 24px;
+  border-radius: var(--radius-lg);
+  font-size: 14px;
+}
+
+.alert-warning {
+  background-color: var(--warning-50);
+  border: 1px solid var(--warning-600);
+  color: var(--text-primary);
+}
+
+.alert-error {
+  background-color: var(--error-50);
+  color: var(--error-600);
+}
+
+.alert-success {
+  background-color: var(--success-50);
+  color: var(--success-600);
+}
+
+.alert svg {
+  flex-shrink: 0;
+  margin-top: 2px;
 }
 
 /* Banner Gradient Header */
@@ -283,11 +459,50 @@ h3 { font-size: 16px; font-weight: 700; line-height: 1.4; }
   color: #ffffff;
   margin-bottom: 32px;
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
+  gap: 20px;
   box-shadow: 0 10px 25px -5px rgba(49, 46, 129, 0.3);
   position: relative;
   overflow: hidden;
+}
+
+.hero-banner-text {
+  min-width: 0;
+  position: relative;
+}
+
+.hero-banner-title {
+  color: #ffffff;
+  margin: 6px 0 8px 0;
+  font-size: 28px;
+}
+
+.hero-banner-lead {
+  color: #c7d2fe;
+  font-size: 14px;
+  max-width: 520px;
+}
+
+.hero-banner-eyebrow {
+  font-size: 13px;
+  font-weight: 600;
+  color: #a5b4fc;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Le bouton du bandeau est blanc sur fond indigo : sa couleur ne peut pas
+   venir de `.btn-primary`, d'où une classe dédiée. */
+.btn-on-dark {
+  background: #ffffff;
+  color: #312e81;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+}
+
+.btn-on-dark:hover {
+  background: #f3f4f6;
 }
 
 .hero-banner::after {
@@ -373,6 +588,37 @@ h3 { font-size: 16px; font-weight: 700; line-height: 1.4; }
 .kpi-trend.negative { color: var(--error-600); }
 .kpi-trend.neutral { color: var(--text-secondary); }
 
+/* Chiffre-clé plus léger qu'une carte d'indicateur : pas d'icône, pas de
+   tendance, juste la mesure et son intitulé. Utilisé quand une page annonce
+   trois totaux côte à côte (note moyenne, avis collectés, techniciens). */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 32px;
+}
+
+.stat-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  box-shadow: var(--elevation-1);
+}
+
+.stat-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.stat-value {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin-top: 4px;
+}
+
 /* Quick Actions Cards Grid */
 .actions-grid {
   display: grid;
@@ -411,6 +657,247 @@ h3 { font-size: 16px; font-weight: 700; line-height: 1.4; }
   flex-shrink: 0;
 }
 
+/* Panneau de contenu : bloc blanc posé sur le fond secondaire, utilisé par les
+   pages de formulaire et de lecture (détail d'un ticket, profil, déclaration
+   d'une zone). */
+.panel {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--elevation-1);
+  padding: 24px;
+}
+
+/* Même espacement que `.panel`, sans le cadre : le contenu d'un corps de
+   tableau est déjà posé sur une carte, une seconde bordure y tracerait un
+   rectangle dans le rectangle. */
+.panel-body {
+  padding: 24px;
+}
+
+.panel-lg {
+  padding: 36px;
+  box-shadow: var(--elevation-2);
+}
+
+/* Rangée de tuiles de chiffres séparées par un filet : le vide entre deux
+   tuiles fait la séparation, la grille porte la couleur de la bordure. */
+.stats-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1px;
+  background-color: var(--border-default);
+}
+
+.stat-tile {
+  background-color: var(--bg-card);
+  padding: 18px 20px;
+}
+
+.broadcast-option-title {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* Colonne principale et colonne latérale d'une page de détail. */
+.detail-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 24px;
+}
+
+/* Deux champs côte à côte dans un formulaire. */
+.two-col-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+/* Pile verticale de panneaux, l'un sous l'autre. */
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.stack-lg {
+  gap: 24px;
+}
+
+/* Barre de boutons en fin de formulaire : les boutons restent à droite sur
+   grand écran et s'étirent sur toute la largeur sur téléphone, à portée de
+   pouce. */
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* Modale : voile plein écran et panneau centré. */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 80;
+}
+
+.modal-panel {
+  background-color: var(--bg-card);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--elevation-3);
+  padding: 28px;
+  width: 100%;
+  max-width: 420px;
+  max-height: calc(100dvh - 48px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Volet d'action d'une ligne de tableau.
+ *
+ * Sur téléphone, un volet calé sur son bouton sort de l'écran dès que la ligne
+ * est proche du bord droit, et le fermer devient impossible — il n'y a plus de
+ * bouton sous le doigt. Il devient donc un feuillet ancré en bas de l'écran,
+ * calé sur toute la largeur : c'est la position que l'application Android
+ * emploie pour ses propres feuilles de saisie, et la seule d'où le geste de
+ * fermeture reste à portée. */
+.row-popover {
+  position: absolute;
+  right: 0;
+  top: 38px;
+  z-index: 20;
+  min-width: 260px;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--elevation-3);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Champ de formulaire : hauteur de touche confortable et largeur cédant aux
+   petits écrans, là où une largeur fixe forçait un débordement. */
+.field {
+  height: 44px;
+  width: 100%;
+  min-width: 0;
+  padding: 0 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-strong);
+  font-family: inherit;
+  font-size: 16px;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  outline: none;
+}
+
+.field-lg {
+  height: 48px;
+  padding: 0 14px;
+  font-size: 16px;
+}
+
+.field:focus-visible {
+  border-color: var(--brand-500);
+  box-shadow: 0 0 0 3px var(--brand-100);
+}
+
+/* Liste déroulante.
+ *
+ * Le sélecteur natif garde sa propre flèche et son propre remplissage, qui ne
+ * correspondent ni au reste des champs ni au bouton posé à côté : deux
+ * contrôles censés dire la même chose n'ont pas la même taille. `appearance`
+ * est retiré et la flèche est redessinée, pour que recherche et filtre
+ * Alignent leurs bords sur la même verticale.
+ *
+ * L'ouverture, elle, reste celle du système : c'est la seule qui sache faire
+ * défiler une longue liste au doigt et se refermer quand on choisit. La
+ * remplacer par un menu maison coûterait cette qualité pour ungain nul.
+ */
+select.field {
+  appearance: none;
+  -webkit-appearance: none;
+  background-color: var(--bg-primary);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px 16px;
+  padding-right: 36px;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+select.field:disabled {
+  background-color: var(--neutral-100);
+  color: var(--text-disabled);
+  cursor: not-allowed;
+}
+
+select.field option {
+  /* Les options reprennent le fond du champ : sur Android, une liste
+     héritant du fond de la page rendait les choix presque illisibles. */
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+/* Écran de connexion : seul écran rendu hors de la coquille, il porte donc sa
+   propre mise en page. */
+.login-shell {
+  display: flex;
+  min-height: 100vh;
+  min-height: 100dvh;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--bg-secondary);
+  padding: 24px;
+}
+
+.login-card {
+  background-color: var(--bg-card);
+  padding: 40px;
+  border-radius: var(--radius-xl);
+  box-shadow: var(--elevation-3);
+  width: 100%;
+  max-width: 460px;
+}
+
+/* Coque du profil : le bandeau colorectal déborde volontairement sous le
+   gabarit du compte, le contenu suit avec une marge qui se réduit sur
+   téléphone. */
+.profile-body {
+  padding: 0 32px 32px;
+  position: relative;
+  margin-top: -40px;
+}
+
+/* Ligne de filtres : recherche et sélecteurs. `flex: 1` sur la recherche lui
+   laisse la largeur restante, et les `min-width` fixes qui l'empêchaient de
+   rétrécir ont disparu. */
+.filter-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.filter-row > .field {
+  flex: 1 1 180px;
+}
+
+.filter-row > .field-wide {
+  flex: 2 1 220px;
+}
+
 /* Buttons */
 .btn {
   display: inline-flex;
@@ -427,14 +914,31 @@ h3 { font-size: 16px; font-weight: 700; line-height: 1.4; }
 }
 .btn:active { transform: scale(0.97); }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
+.btn-sm { height: 32px; padding: 0 12px; font-size: 13px; }
 .btn-md { height: 40px; padding: 0 18px; font-size: 14px; }
 .btn-lg { height: 46px; padding: 0 22px; font-size: 15px; }
 .btn-primary { background: linear-gradient(135deg, var(--brand-600) 0%, var(--brand-700) 100%); color: var(--text-inverse); box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25); }
 .btn-primary:hover { opacity: 0.95; box-shadow: 0 6px 16px rgba(37, 99, 235, 0.35); }
 .btn-secondary { background-color: var(--bg-primary); border: 1px solid var(--border-strong); color: var(--text-primary); }
 .btn-secondary:hover { background-color: var(--neutral-100); }
+.btn-danger { color: var(--error-600); }
+
+/* Les boutons ne changent pas d'apparence au focus : sur fond blanc, une
+   bordure seule passe inapercue et la navigation au clavier devient muette. */
+.btn:focus-visible {
+  outline: 2px solid var(--brand-600);
+  outline-offset: 2px;
+}
 
 /* Tables */
+/* Débordement horizontal du tableau sur grand écran. Devenu inutile sur
+   téléphone, où le tableau bascule en cartes — voir la section « Adaptation
+   aux écrans étroits ». */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 .data-table-wrapper {
   background-color: var(--bg-primary);
   border-radius: var(--radius-xl);
@@ -469,6 +973,9 @@ h3 { font-size: 16px; font-weight: 700; line-height: 1.4; }
   text-transform: uppercase;
   letter-spacing: 0.06em;
   background-color: var(--neutral-50);
+  /* Un en-tête de tableau ne doit pas se couper en deux lignes sur téléphone,
+     même si la colonne devient étroite. */
+  white-space: nowrap;
 }
 
 .data-table td {
@@ -478,6 +985,20 @@ h3 { font-size: 16px; font-weight: 700; line-height: 1.4; }
 
 .data-table tr:hover td {
   background-color: #fafbfc;
+}
+
+/* Colonne de texte long (commentaire d'avis, corps d'un message). La limite
+   existe pour ne pas écraser les colonnes voisines ; elle est levée sur
+   téléphone, où chaque cellule occupe sa propre ligne. */
+.cell-text {
+  max-width: 280px;
+}
+
+/* Cellule d'actions : alignée à droite sur grand écran, la pleine largeur sur
+   téléphone où elle passe sous les données. */
+.cell-actions {
+  width: 1%;
+  white-space: nowrap;
 }
 
 /* Badges */
@@ -512,6 +1033,11 @@ h3 { font-size: 16px; font-weight: 700; line-height: 1.4; }
 .badge-neutral { background-color: var(--neutral-100); color: var(--neutral-600); }
 .badge-neutral .badge-dot { background-color: var(--neutral-400); }
 
+/* Note insuffisante : la pastille était demandée par la page des avis, qui
+   n'avait pas de couleur pour elle et rendait un texte sans fond. */
+.badge-error { background-color: var(--error-50); color: var(--error-600); }
+.badge-error .badge-dot { background-color: var(--error-500); }
+
 /* Un devis refusé n'est pas une attente : le client a tranché, dans un sens
    qui appelle une couleur distincte du vert et de l'ambre. Les variables
    `--error-*` existaient sans pastille qui les consomme. */
@@ -531,4 +1057,451 @@ h3 { font-size: 16px; font-weight: 700; line-height: 1.4; }
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+/* ==========================================================================
+   Adaptation aux écrans étroits
+
+   La régie consulte le back-office autant sur téléphone que sur poste de
+   bureau : elle vérifie une intervention depuis le parc, pas depuis son
+   écran. Cette section regroupe tous les points de rupture du back-office.
+
+     1024px  tablette large et petit poste de bureau : deux colonnes en une
+     768px   téléphone et petite tablette : la navigation devient un tiroir,
+             les tableaux deviennent des cartes empilées
+     480px   téléphone étroit : marges réduites, une seule colonne de KPI
+
+   Règle appliquée partout : aucun contenu n'exige un défilement horizontal.
+   Un tableau qui déborde sur un téléphone se lit en pinçant l'écran, et l'on
+   ne pincent pas pour lire un numéro de téléphone.
+
+   Convention : toute mise en page qui tient dans une largeur fixe doit devenir
+   une règle de cette section, jamais un style inline. Un style inline ne peut
+   pas être surchargé par un media query.
+   ========================================================================== */
+
+@media (max-width: 1024px) {
+  /* Détail d'un ticket : la colonne latérale passe sous le contenu principal
+     plutôt que d'être réduite à un ruban illisible. */
+  .detail-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  /* --- Navigation : le tiroir ------------------------------------------------
+     La navigation fixe coûte 260 px de largeur sur un écran de 375 px : il ne
+     restait plus de place pour lire la page. Elle devient un tiroir que la
+     barre supérieure ouvre, et que le voile referme. */
+  .app-shell {
+    position: relative;
+  }
+
+  .sidebar {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 60;
+    width: min(280px, 82vw);
+    transform: translateX(-100%);
+    transition: transform 220ms ease-out;
+    box-shadow: var(--elevation-3);
+  }
+
+  .sidebar[data-open='true'] {
+    transform: translateX(0);
+  }
+
+  .sidebar-scrim {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: 55;
+    background-color: rgba(15, 23, 42, 0.5);
+    border: none;
+    padding: 0;
+    cursor: pointer;
+  }
+
+  .nav-toggle,
+  .sidebar-close {
+    display: flex;
+  }
+
+  /* --- Barre supérieure et contenu ------------------------------------------ */
+  .top-bar {
+    --top-bar-h: 60px;
+    padding: 0 16px;
+  }
+
+  /* Le panneau de notifications s'ouvre sous la cloche, mais la cloche n'est
+     pas au bord de l'écran : l'avatar du compte est à sa droite. Calé sur elle,
+     le panneau sortait de l'écran par la gauche. Il se cale donc sur l'écran,
+     en suivant la hauteur de la barre pour ne pas la recouvrir. */
+  .notif-panel {
+    position: fixed;
+    top: var(--top-bar-h);
+    left: 12px;
+    right: 12px;
+    width: auto;
+    max-height: calc(100dvh - var(--top-bar-h) - 12px);
+    border-radius: var(--radius-md);
+  }
+
+  /* Le nom et le rôle laissent la place à la cloche, qui porte une
+     information qu'aucune autre surface du back-office n'affiche. Le lien vers
+     le profil reste entier : c'est lui qu'on touche. */
+  .user-profile-identity {
+    display: none;
+  }
+
+  .page-content {
+    padding: 16px;
+  }
+
+  /* --- En-têtes de page -----------------------------------------------------
+     Le bouton d'action passe sous le titre et occupe la largeur : à cette
+     taille, un bouton à moitié large reste hors de portée du pouce. */
+  .page-header {
+    align-items: stretch;
+    margin-bottom: 24px;
+  }
+
+  .page-header > .btn {
+    flex: 1 1 100%;
+  }
+
+  .data-table-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 16px;
+  }
+
+  /* --- Bandeau d'accueil ---------------------------------------------------- */
+  .hero-banner {
+    padding: 22px 20px;
+  }
+
+  .hero-banner-title {
+    font-size: 22px;
+  }
+
+  .hero-banner-actions {
+    width: 100%;
+  }
+
+  .hero-banner-actions .btn {
+    width: 100%;
+  }
+
+  /* --- Grilles --------------------------------------------------------------
+     Les largeurs minimales des grilles étaient calibrées pour un poste de
+     bureau : à 375 px elles ne laissaient plus qu'une colonne, chacune haute
+     de trois lignes. Les indicateurs passent à deux par rangée — le nombre que
+     l'œil sait comparer sans lecture — et les grilles de contenu restent sur une
+     colonne. */
+  .dashboard-grid,
+  .stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  /* Un nombre impair d'indicateurs laisserait une demi-rangée vide en bas de
+     l'écran. La dernière carte occupe la ligne entière plutôt que de laisser
+     une place vide à côté d'elle : deux par deux tant qu'il y en a, puis la
+     dernière seule et centrée sur toute la largeur. */
+  .dashboard-grid > *:last-child:nth-child(odd),
+  .stat-grid > *:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+
+  .actions-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+
+  .dashboard-grid,
+  .stat-grid {
+    margin-bottom: 24px;
+  }
+
+  .kpi-card {
+    padding: 18px;
+  }
+
+  .kpi-value {
+    font-size: 26px;
+  }
+
+  .stat-value {
+    font-size: 22px;
+  }
+
+  /* --- Panneaux et formulaires ---------------------------------------------- */
+  .panel,
+  .panel-lg,
+  .panel-body {
+    padding: 18px;
+  }
+
+  .login-shell {
+    padding: 16px;
+  }
+
+  .profile-body {
+    padding: 0 18px 18px;
+  }
+
+  .two-col-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .form-actions .btn {
+    flex: 1 1 140px;
+  }
+
+  .modal-overlay {
+    padding: 16px;
+  }
+
+  .modal-panel {
+    padding: 20px;
+  }
+
+  /* Le feuillet d'action d'une ligne devient un panneau ancré en bas de
+     l'écran. */
+  .row-popover {
+    position: fixed;
+    top: auto;
+    bottom: 12px;
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    width: min(420px, calc(100vw - 24px));
+    min-width: 0;
+    z-index: 90;
+  }
+
+  /* Android et iOS ouvrent la liste dans un sélecteur plein écran : les
+     lignes y ont déjà la hauteur nécessaire. Le champ lui-même, lui, doit
+     rester une cible de 48 px — un pouce ne vise pas une bande de 40 px. */
+  .field,
+  .field-lg {
+    height: 48px;
+  }
+
+  /* --- Tableaux : une carte par ligne ---------------------------------------
+     Un tableau à cinq colonnes n'a pas de rendu lisible sur un téléphone.
+     Chaque ligne devient une carte, chaque cellule porte son intitulé via
+     `data-label`. L'information est la même ; elle est empilée au lieu d'être
+     répartie sur une largeur impossible. */
+  .data-table,
+  .data-table tbody,
+  .data-table tr,
+  .data-table td {
+    display: block;
+    width: auto;
+  }
+
+  .data-table thead {
+    display: none;
+  }
+
+  .data-table tr {
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border-default);
+  }
+
+  .data-table tr:last-child {
+    border-bottom: none;
+  }
+
+  .data-table td {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 8px 16px;
+    border-bottom: none;
+    /* Le survol n'existe pas au doigt. Sans cette remise à zéro, la dernière
+       ligne touchée resterait grisée après le tap. */
+    background-color: transparent !important;
+  }
+
+  .data-table td::before {
+    content: attr(data-label);
+    flex-shrink: 0;
+    max-width: 40%;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-secondary);
+  }
+
+  /* La première cellule sert de titre à la carte : son intitulé de colonne
+     ferait doublon avec le contenu affiché en dessous. */
+  .data-table td:first-child {
+    font-weight: 700;
+    font-size: 15px;
+    padding-bottom: 10px;
+  }
+
+  .data-table td:first-child::before {
+    content: none;
+  }
+
+  /* Cellule d'état vide : elle n'a pas d'intitulé de colonne et doit rester
+     centrée sur toute la largeur. */
+  .data-table td.table-empty {
+    display: block;
+    text-align: center;
+    padding: 32px 16px;
+  }
+
+  /* Cellule sans intitulé — le chevron qui ouvre la ligne. Le pseudo-élément
+     y rendrait une chaîne vide, dont l'espacement décalerait la flèche pour
+     rien. */
+  .data-table td:not([data-label]) {
+    gap: 0;
+    padding-left: 0;
+  }
+
+  .data-table .cell-text {
+    max-width: none;
+  }
+
+  .data-table .cell-actions {
+    width: auto;
+    white-space: normal;
+    justify-content: flex-end;
+    padding-top: 12px;
+  }
+
+  /* --- Champs de saisie -----------------------------------------------------
+     iOS agrandit la page dès qu'un champ fait moins de 16 px, et ne revient
+     pas tout seul à la bonne échelle : il faut quitter et rouvrir la page pour
+     la relire. Les styles inline qui fixent une taille de police ne peuvent
+     être surchargés que par `!important`. */
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+
+  /* La recherche garde toute la largeur — c'est le seul champ qui serve à
+     retrouver une ligne précise — et les sélecteurs se partagent la ligne
+     en dessous. */
+  .filter-row > .field-wide {
+    flex: 1 1 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  h1 {
+    font-size: 22px;
+  }
+
+  .top-bar {
+    --top-bar-h: 56px;
+    padding: 0 12px;
+  }
+
+  .page-content {
+    padding: 12px;
+  }
+
+  .hero-banner {
+    padding: 18px 16px;
+  }
+
+  .hero-banner-title {
+    font-size: 20px;
+  }
+
+  /* Deux indicateurs par rangée plutôt qu'un : cinq cartes empilées
+     repoussent le tableau des dernières demandes hors de l'écran d'accueil. */
+  .dashboard-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .kpi-card {
+    padding: 14px;
+  }
+
+  .kpi-label {
+    font-size: 11px;
+  }
+
+  /* Un montant en francs est le texte le plus long d'une carte d'indicateur :
+     à cette taille de police il tient sur une ligne au lieu de déborder. */
+  .kpi-value {
+    font-size: 22px;
+    overflow-wrap: anywhere;
+  }
+
+  .kpi-header {
+    margin-bottom: 12px;
+  }
+
+  .kpi-icon-wrapper {
+    width: 36px;
+    height: 36px;
+  }
+
+  .data-table td {
+    padding: 8px 12px;
+    gap: 12px;
+  }
+
+  .data-table td::before {
+    max-width: 38%;
+  }
+
+  .modal-overlay {
+    padding: 12px;
+  }
+
+  .modal-panel {
+    padding: 18px;
+  }
+
+  .login-card {
+    padding: 24px;
+  }
+
+  /* Sur un téléphone étroit, un champ par ligne : trois champs côte à côte
+     feraient des cibles de 90 px de large, illisibles au doigt. */
+  .filter-row > .field,
+  .filter-row > .field-wide {
+    flex: 1 1 100%;
+  }
+}
+
+/* Les animations de l'interface — glissement du tiroir, survol des cartes —
+   sont décoratives. Respecter la préférence système évite le mouvement
+   involontaire au défilement des lignes de la navigation. */
+@media (prefers-reduced-motion: reduce) {
+  .sidebar,
+  .kpi-card,
+  .action-card,
+  .btn,
+  .nav-item {
+    transition: none;
+  }
+
+  .kpi-card:hover,
+  .action-card:hover,
+  .btn:active {
+    transform: none;
+  }
 }

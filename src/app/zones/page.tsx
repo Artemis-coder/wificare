@@ -104,7 +104,7 @@ export default async function ZonesPage({
   return (
     <div>
       <div className="page-header">
-        <div>
+        <div className="page-header-text">
           <h1>Wi-Fi Zones</h1>
           <p className="body-m" style={{ color: 'var(--text-secondary)' }}>
             {canManage
@@ -124,19 +124,7 @@ export default async function ZonesPage({
       </div>
 
       {canManage && pendingCount > 0 && (
-        <div
-          role="status"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px',
-            padding: '14px 18px',
-            marginBottom: '24px',
-            borderRadius: 'var(--radius-lg)',
-            backgroundColor: 'var(--warning-50, #FEF3C7)',
-            border: '1px solid var(--warning-600, #F59E0B)',
-          }}
-        >
+        <div role="status" className="alert alert-warning">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
           <span style={{ fontSize: '14px' }}>
             <strong>{pendingCount}</strong> zone(s) déclarée(s) attendent votre

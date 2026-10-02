@@ -74,7 +74,7 @@ export default function PushSettings({
   return (
     <>
       <div className="data-table-wrapper" style={{ marginBottom: '24px' }}>
-        <div style={{ padding: '24px' }}>
+        <div className="panel-body">
           <h3 style={{ margin: '0 0 8px' }}>Notifications sur ce poste</h3>
           <p style={{ color: 'var(--text-secondary)', fontSize: '14px', margin: 0 }}>
             Une demande qui attend une répartition, un changement de statut, un
@@ -104,7 +104,7 @@ export default function PushSettings({
             </p>
           )}
 
-          <div style={{ display: 'flex', gap: '12px', marginTop: '20px', flexWrap: 'wrap' }}>
+          <div className="filter-row" style={{ marginTop: '20px' }}>
             {state === 'subscribed' ? (
               <button
                 type="button"
@@ -157,13 +157,14 @@ export default function PushSettings({
 
       <div className="data-table-wrapper">
         <div className="data-table-header">
-          <div>
+          <div className="page-header-text">
             <h3 style={{ margin: 0 }}>Postes abonnés</h3>
             <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
               Chaque poste activé reçoit les notifications de votre compte.
             </span>
           </div>
         </div>
+        <div className="table-scroll">
         <table className="data-table">
           <thead>
             <tr>
@@ -174,8 +175,8 @@ export default function PushSettings({
           <tbody>
             {subscriptions.map((subscription) => (
               <tr key={subscription.id}>
-                <td>{subscription.label || 'Navigateur'}</td>
-                <td>
+                <td data-label="Poste">{subscription.label || 'Navigateur'}</td>
+                <td data-label="Activité">
                   {new Date(subscription.lastSeenAt).toLocaleString('fr-FR', {
                     day: '2-digit',
                     month: '2-digit',
@@ -188,13 +189,14 @@ export default function PushSettings({
 
             {subscriptions.length === 0 && (
               <tr>
-                <td colSpan={2} style={{ textAlign: 'center', padding: '32px', color: 'var(--text-secondary)' }}>
+                <td colSpan={2} className="table-empty" style={{ color: 'var(--text-secondary)' }}>
                   Aucun poste abonné pour ce compte.
                 </td>
               </tr>
             )}
           </tbody>
         </table>
+        </div>
       </div>
     </>
   );

@@ -163,9 +163,9 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
           Retour à la liste des tickets
         </Link>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '4px' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
+          <div className="page-header-text">
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '12px', marginBottom: '4px' }}>
               <h1>{ticket.reference}</h1>
               <span className="badge badge-brand">{ticket.status}</span>
             </div>
@@ -179,12 +179,12 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px' }}>
+      <div className="detail-grid">
         {/* Main Content Details */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        <div className="stack-lg">
           
           {/* Section 1: Nature de la Demande */}
-          <div style={{ backgroundColor: 'var(--bg-primary)', borderRadius: 'var(--radius-xl)', padding: '24px', border: '1px solid var(--border-default)', boxShadow: 'var(--elevation-1)' }}>
+          <div className="panel">
             <h3 style={{ marginBottom: '16px', fontSize: '16px' }}>Nature &amp; Description de l&apos;Incident</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div>
@@ -203,7 +203,7 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
           </div>
 
           {/* Section 2: Intervention & Diagnostic Technicien */}
-          <div style={{ backgroundColor: 'var(--bg-primary)', borderRadius: 'var(--radius-xl)', padding: '24px', border: '1px solid var(--border-default)', boxShadow: 'var(--elevation-1)' }}>
+          <div className="panel">
             <h3 style={{ marginBottom: '16px', fontSize: '16px' }}>Rapport du Technicien</h3>
             {ticket.intervention ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -231,7 +231,7 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
 
           {/* Section 3: Devis, decision et reglement */}
           {ticket.quoteInvoice && (
-            <div style={{ backgroundColor: 'var(--bg-primary)', borderRadius: 'var(--radius-xl)', padding: '24px', border: '1px solid var(--border-default)', boxShadow: 'var(--elevation-1)' }}>
+            <div className="panel">
               <QuotePanel
                 quote={{
                   status: ticket.quoteInvoice.status,
@@ -269,10 +269,10 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
         </div>
 
         {/* Sidebar Information */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <div className="stack">
           
           {/* Wi-Fi Zone & Client Info */}
-          <div style={{ backgroundColor: 'var(--bg-primary)', borderRadius: 'var(--radius-xl)', padding: '20px', border: '1px solid var(--border-default)', boxShadow: 'var(--elevation-1)' }}>
+          <div className="panel">
             <h3 style={{ marginBottom: '12px', fontSize: '15px' }}>Emplacement</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div>
@@ -352,7 +352,7 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
           </div>
 
           {/* Technicien affecté */}
-          <div style={{ backgroundColor: 'var(--bg-primary)', borderRadius: 'var(--radius-xl)', padding: '20px', border: '1px solid var(--border-default)', boxShadow: 'var(--elevation-1)' }}>
+          <div className="panel">
             <h3 style={{ marginBottom: '12px', fontSize: '15px' }}>Technicien Assigné</h3>
             {ticket.technician ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>

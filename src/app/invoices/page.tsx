@@ -94,8 +94,8 @@ export default async function InvoicesPage() {
   return (
     <div>
       <div className="page-header">
-        <div>
-          <h1>Factures & Encaissements</h1>
+        <div className="page-header-text">
+          <h1>Factures &amp; Encaissements</h1>
           <p className="body-m" style={{ color: 'var(--text-secondary)' }}>
             Suivez les paiements effectués, les déclarations des techniciens et les encaissements.
           </p>
@@ -142,6 +142,7 @@ export default async function InvoicesPage() {
           <h3>Toutes les Factures ({invoices.length})</h3>
         </div>
 
+        <div className="table-scroll">
         <table className="data-table">
           <thead>
             <tr>
@@ -156,20 +157,20 @@ export default async function InvoicesPage() {
           <tbody>
             {invoices.map((inv) => (
               <tr key={inv.id}>
-                <td>
+                <td data-label="Ticket">
                   <Link href={`/tickets/${inv.ticket.id}`} style={{ fontWeight: 700, color: 'var(--brand-600)', textDecoration: 'none' }}>
                     {inv.ticket.reference}
                   </Link>
                   <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{inv.ticket.type}</div>
                 </td>
-                <td>
+                <td data-label="Client &amp; Wi-Fi Zone">
                   <div style={{ fontWeight: 600 }}>{inv.ticket.wifiZone.name}</div>
                   <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{inv.ticket.client.name}</div>
                 </td>
-                <td style={{ fontWeight: 800, fontSize: '15px', color: 'var(--text-primary)' }}>
+                <td data-label="Montant Total" style={{ fontWeight: 800, fontSize: '15px', color: 'var(--text-primary)' }}>
                   {inv.totalAmount.toLocaleString('fr-FR')} FCFA
                 </td>
-                <td>
+                <td data-label="Moyen de règlement">
                   {inv.payment ? (
                     <span className="badge badge-brand">
                       {CHANNEL_LABEL[inv.payment.channel] ?? inv.payment.channel}
@@ -179,14 +180,14 @@ export default async function InvoicesPage() {
                     <span style={{ fontSize: '13px', color: 'var(--text-disabled)' }}>Non renseigné</span>
                   )}
                 </td>
-                <td>
+                <td data-label="Technicien">
                   {inv.ticket.technician ? (
                     <span style={{ fontWeight: 600 }}>{inv.ticket.technician.name}</span>
                   ) : (
                     <span style={{ color: 'var(--text-disabled)', fontSize: '13px' }}>-</span>
                   )}
                 </td>
-                <td>
+                <td data-label="Statut">
                   {/* Un refus n'est pas une attente : la pastille le disait
                       « en attente », comme un devis qui n'a pas encore été
                       lu par le client. */}
@@ -200,13 +201,14 @@ export default async function InvoicesPage() {
 
             {invoices.length === 0 && (
               <tr>
-                <td colSpan={6} style={{ textAlign: 'center', padding: '36px', color: 'var(--text-secondary)' }}>
+                <td colSpan={6} className="table-empty" style={{ color: 'var(--text-secondary)' }}>
                   Aucune facture enregistrée pour le moment.
                 </td>
               </tr>
             )}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );

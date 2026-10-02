@@ -49,7 +49,7 @@ export default async function NewTicketPage({
         </p>
       </div>
 
-      <div style={{ backgroundColor: 'var(--bg-primary)', padding: '36px', borderRadius: 'var(--radius-xl)', border: '1px solid var(--border-default)', boxShadow: 'var(--elevation-2)' }}>
+      <div className="panel panel-lg">
         <form action={createTicketAction} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -59,7 +59,7 @@ export default async function NewTicketPage({
               name="wifiZoneId"
               defaultValue={selectedZoneId}
               required
-              style={{ height: '48px', padding: '0 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-strong)', fontSize: '15px', backgroundColor: 'var(--bg-primary)', outline: 'none' }}
+              className="field field-lg"
             >
               <option value="">Sélectionnez la Wi-Fi Zone ou l&apos;emplacement...</option>
               {wifiZones.length === 0 && (
@@ -80,9 +80,9 @@ export default async function NewTicketPage({
             <label className="label" htmlFor="type">Nature de la demande *</label>
             <select 
               id="type"
-              name="type" 
+              name="type"
               required
-              style={{ height: '48px', padding: '0 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-strong)', fontSize: '15px', backgroundColor: 'var(--bg-primary)', outline: 'none' }}
+              className="field field-lg"
             >
               <optgroup label="📡 Installations & Équipements">
                 <option value="Installation Antenne">Installation d&apos;antenne (Point-à-point / Relais)</option>
@@ -102,9 +102,9 @@ export default async function NewTicketPage({
             <label className="label" htmlFor="priority">Priorité souhaitée *</label>
             <select 
               id="priority"
-              name="priority" 
+              name="priority"
               defaultValue="NORMAL"
-              style={{ height: '48px', padding: '0 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-strong)', fontSize: '15px', backgroundColor: 'var(--bg-primary)', outline: 'none' }}
+              className="field field-lg"
             >
               <option value="LOW">Planifiée / Normale (sous 48h)</option>
               <option value="NORMAL">Haute (sous 24h)</option>
@@ -120,11 +120,12 @@ export default async function NewTicketPage({
               name="description" 
               rows={4}
               placeholder="Ex: Besoin d'une nouvelle antenne de 5GHz pour couvrir le secteur Nord, ou préciser les symptômes de la panne..."
-              style={{ padding: '14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-strong)', fontSize: '15px', fontFamily: 'inherit', outline: 'none', resize: 'vertical' }}
+              className="field"
+              style={{ height: 'auto', padding: '14px', resize: 'vertical' }}
             />
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '8px' }}>
+          <div className="form-actions" style={{ marginTop: '8px' }}>
             <Link href="/tickets" className="btn btn-secondary btn-lg">
               Annuler
             </Link>
