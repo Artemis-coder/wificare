@@ -64,7 +64,21 @@ fi
 
 # Déplacement, pas copie : le dossier de sortie ne doit contenir qu'un APK, sans
 # quoi on risque d'installer le mauvais par erreur.
+#
+# `find ... -delete` ne suit pas les liens symboliques et ne descend pas dans les
+# sous-dossiers : le motif ne peut donc pas attraper un fichier ailleurs.
 mv "$BUILT_APK" "$FINAL_APK"
+
+# Les versions précédentes sont retirées. Elles ne sont pas produced par ce
+# script — `mv` ne touche qu'au fichier `app-release.apk`, et une 1.0.0 déjà
+# nommée reste donc sur place après une 1.1.0. Résultat : le dossier contenait
+# deux APK, et c'est précisément le cas que le commentaire ci-dessus prétend
+# éviter. « Le plus récent » se devine alors à la date, ce qui est faux dès que
+# deux fichiers ont été produits le même jour.
+#
+# Le motif est volontairement large (`${APP_NAME}-*.apk`) et exclut le fichier
+# vient d'être renommé, pour ne pas laisser un seul APK derrière.
+find "$OUTPUT_DIR" -maxdepth 1 -name "${APP_NAME}-*.apk" ! -name "${APP_NAME}-${VERSION}.apk" -delete
 
 echo
 echo "APK prêt : ${APP_DIR}/${FINAL_APK}"

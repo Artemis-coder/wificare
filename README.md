@@ -12,6 +12,7 @@ Le dépôt est un **monodépôt** :
 | `src/`, `prisma/` | application Next.js (App Router) : back-office web **et** API REST servie à l'application mobile |
 | `mobile/` | application Flutter Android (client **et** technicien) |
 | `design-system/` | palette, espacements et composants de référence, plus l'image de marque source |
+| `JOURNAL.md` | ce qui a changé dans le produit, version par version, et pourquoi |
 
 > **Une seule base, un seul serveur.** Le back-office web et l'application mobile
 > parlent la même base via la même API. Une règle métier écrite une fois dans
@@ -21,6 +22,9 @@ Le dépôt est un **monodépôt** :
 ---
 
 ## Sommaire
+
+Ce que le produit sait faire aujourd'hui est décrit ici. Ce qu'il faisait
+auparavant, et ce qui a changé, est dans [JOURNAL.md](JOURNAL.md).
 
 1. [Fonctionnalités](#1-fonctionnalités)
 2. [Rôles et périmètres](#2-rôles-et-périmètres)
@@ -825,6 +829,19 @@ jusqu'à la personne qui le reçoit, sur un téléphone comme dans une liste de
 téléchargements, et n'identifie pas l'application. Le renommage se fait dans le
 script parce qu'AGP 9 a retiré `outputFileName` de son API de variants : il
 n'existe plus de moyen supporté de le faire depuis `build.gradle.kts`.
+
+Le script supprime ensuite les versions précédentes du dossier de sortie. Le
+déplacement ne touchait que le fichier `app-release.apk` : une `1.0.0` déjà
+renommée restait donc sur place après une `1.1.0`, et le dossier contenait deux
+APK — exactement ce que le renommage cherche à éviter. « Le plus récent » se
+devinait alors à la date, ce qui devient faux dès que deux fichiers sont
+produits le même jour.
+
+Il faut donc **incrémenter la version** de `pubspec.yaml` à chaque
+distribution : c'est elle qui nomme le fichier, et c'est le `versionCode`
+qu'Android compare pour autoriser l'installation par-dessus une application déjà
+présente. Reconstruire sans changer la version produit un fichier que le
+téléphone refusera d'installer.
 
 ### 14.5 La marque est définie à trois endroits qui doivent rester alignés
 
