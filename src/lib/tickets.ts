@@ -1,7 +1,8 @@
 import { NotificationType, Priority, TicketStatus } from "@prisma/client";
 
 import { prisma } from "./prisma";
-import { adminIds, notify, soleTechnicianId } from "./notifications";
+import { adminIds, leastLoadedTechnicianId, notify } from "./notifications";
+import { isSuperAdmin, type AppRole } from "./roles";
 
 /**
  * Cycle de vie d'une demande d'intervention.
@@ -30,6 +31,9 @@ const TICKET_INCLUDE = {
   technician: true,
 } as const;
 
+/** Auteur d'une opération sur une demande, avec les droits qui en découlent. */
+export type TicketActor = { userId: string; role: AppRole };
+
 export type CreateTicketInput = {
   wifiZoneId: string;
   type: string;
@@ -42,10 +46,10 @@ export type CreateTicketInput = {
 /**
  * Crée une demande et la répartit.
  *
- * Tant qu'un seul technicien est en service, la demande lui revient
- * automatiquement : personne d'autre ne pourrait la traiter. Dès qu'un second
- * technicien existe, la demande attend une décision de régie et les
- * administrateurs en sont prévenus.
+ * L'affectation est automatique : la demande part vers le technicien le moins
+ * chargé dès qu'un technicien est en service, sans attendre de décision de régie.
+ * Une demande n'attend donc que lorsqu'aucun technicien n'est disponible, cas
+ * auquel les administrateurs en sont prévenus pour en nommer un ou en créer un.
  */
 export async function createTicket(
   input: CreateTicketInput
@@ -59,6 +63,13 @@ export async function createTicket(
     return fail("Wi-Fi Zone introuvable.", 404);
   }
 
+  if (zone.status !== "ACTIVE") {
+    return fail(
+      "Cette Wi-Fi Zone n'est pas encore validée par la plateforme.",
+      409
+    );
+  }
+
   const clientId = input.clientId ?? zone.clientId;
 
   const priority =
@@ -70,18 +81,18 @@ export async function createTicket(
   const count = await prisma.ticket.count();
   const reference = `#TK-${new Date().getFullYear()}-${String(count + 1).padStart(3, "0")}`;
 
-  const soleTechnician = await soleTechnicianId();
+  const technicianId = await leastLoadedTechnicianId();
 
   const ticket = await prisma.ticket.create({
     data: {
       reference,
       type: input.type,
       priority,
-      status: soleTechnician ? TicketStatus.ASSIGNED : TicketStatus.NEW,
+      status: technicianId ? TicketStatus.ASSIGNED : TicketStatus.NEW,
       description: input.description || null,
       clientId,
       wifiZoneId: zone.id,
-      technicianId: soleTechnician,
+      technicianId,
     },
     include: TICKET_INCLUDE,
   });
@@ -89,6 +100,61 @@ export async function createTicket(
   await announceNewTicket(ticket, zone.name, zone.client.userId);
 
   return { ok: true, data: ticket };
+}
+
+/**
+ * Charge une demande et vérifie que le compte a le droit d'y écrire.
+ *
+ * Une demande est l'intervention d'un technicien affecté : lui seul, et la
+ * super administration par-dessus, peut la faire avancer. Un client suit sa
+ * demande sans la faire avancer — sans ce contrôle, n'importe quel compte
+ * authentifié, y compris un autre client, pourrait clore la demande d'autrui.
+ *
+ * La règle vit ici et non dans les routes : le statut et le rapport
+ * d'intervention doivent accorder exactement les mêmes droits, sinon un
+ *ritable par un chemin et pas par l'autre sur la même demande.
+ */
+export async function loadWritableTicket(
+  auth: TicketActor,
+  ticketId: string
+): Promise<TicketResult<WritableTicket>> {
+  const ticket = await prisma.ticket.findUnique({
+    where: { id: ticketId },
+    select: {
+      id: true,
+      reference: true,
+      status: true,
+      technicianId: true,
+      client: { select: { userId: true } },
+    },
+  });
+
+  if (!ticket) {
+    return fail("Demande introuvable.", 404);
+  }
+
+  if (isSuperAdmin(auth.role)) {
+    return {
+      ok: true,
+      data: { ...ticket, clientUserId: ticket.client.userId },
+    };
+  }
+
+  if (auth.role === "CLIENT") {
+    return fail(
+      "Seul le technicien affecté peut faire avancer une demande.",
+      403
+    );
+  }
+
+  if (ticket.technicianId !== auth.userId) {
+    return fail("Cette demande ne vous est pas affectée.", 403);
+  }
+
+  return {
+    ok: true,
+    data: { ...ticket, clientUserId: ticket.client.userId },
+  };
 }
 
 type TicketWithRelations = {
@@ -102,11 +168,74 @@ type TicketWithRelations = {
   technician: { name: string | null } | null;
 };
 
+/** Demande chargée par `loadWritableTicket`, avec son propriétaire résolu. */
+export type WritableTicket = {
+  id: string;
+  reference: string;
+  status: TicketStatus;
+  technicianId: string | null;
+  clientUserId: string | null;
+};
+
+/**
+ * Charge une demande et vérifie que le compte a le droit de la **lire**.
+ *
+ * Une demande contient le contact du client, sa zone, le rapport du technicien,
+ * son devis et son règlement : la lire, c'est déjà savoir beaucoup de choses sur
+ * quelqu'un. Trois profils, trois périmètres : la super administration voit tout,
+ * le technicien ses seules affectations, le propriétaire les demandes de son
+ * propre dossier.
+ *
+ * `loadWritableTicket` est le cas particulier où le compte est en plus autorisé
+ * à écrire. Les deux partagent la même chargement, pour qu'une demande visible
+ * par un chemin le soit par tous.
+ */
+export async function loadReadableTicket(
+  auth: TicketActor,
+  ticketId: string
+): Promise<TicketResult<WritableTicket>> {
+  const ticket = await prisma.ticket.findUnique({
+    where: { id: ticketId },
+    select: {
+      id: true,
+      reference: true,
+      status: true,
+      technicianId: true,
+      client: { select: { userId: true } },
+    },
+  });
+
+  if (!ticket) {
+    return fail("Demande introuvable.", 404);
+  }
+
+  if (isSuperAdmin(auth.role)) {
+    return {
+      ok: true,
+      data: { ...ticket, clientUserId: ticket.client.userId },
+    };
+  }
+
+  if (auth.role === "TECHNICIAN") {
+    if (ticket.technicianId !== auth.userId) {
+      return fail("Cette demande ne vous est pas affectée.", 403);
+    }
+  } else if (ticket.client.userId !== auth.userId) {
+    return fail("Cette demande ne vous concerne pas.", 403);
+  }
+
+  return {
+    ok: true,
+    data: { ...ticket, clientUserId: ticket.client.userId },
+  };
+}
+
 /**
  * Prévient les bons destinataires d'une demande entrante.
  *
- * Avec un technicien unique, c'est lui qui est prévenu ainsi que le client.
- * Sinon la demande entre dans la file de répartition de la régie.
+ * L'affectation étant automatique, le technicien désigné est prévenu en même
+ * temps que le client. Le cas sans technicien reste la seule situation où la
+ * demande revient à la file de répartition.
  */
 async function announceNewTicket(
   ticket: TicketWithRelations,
@@ -147,9 +276,9 @@ async function announceNewTicket(
 /**
  * Affecte un technicien choisi par la régie.
  *
- * Réservée aux administrateurs et super administrateurs : affecter quelqu'un est
- * une décision d'encadrement, pas une action de terrain. Un technicien ne peut
- * donc pas s'attribuer une demande, ni affecter un collègue.
+ * Réservée au super administrateur : affecter quelqu'un qui n'a pas été choisi
+ * automatiquement est une décision d'encadrement, pas une action de terrain. Un
+ * technicien ne peut donc pas s'attribuer une demande, ni affecter un collègue.
  *
  * Réaffecter une demande déjà en cours est possible : le technicien précédent
  * est prévenu qu'elle lui est retirée, faute de quoi il se déplacerait pour une

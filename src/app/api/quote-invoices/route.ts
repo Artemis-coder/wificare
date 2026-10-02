@@ -4,6 +4,7 @@ import { NotificationType, TicketStatus } from "@prisma/client";
 import { getApiUser } from "@/lib/api-auth";
 import { notify } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
+import { PUBLIC_USER_SELECT } from "@/lib/user-public";
 
 /**
  * Liste des devis et factures.
@@ -106,7 +107,7 @@ export async function POST(request: NextRequest) {
 
     const ticket = await prisma.ticket.findUnique({
       where: { id: ticketId },
-      include: { client: true, wifiZone: true, technician: true, quoteInvoice: true },
+      include: { client: true, wifiZone: true, technician: { select: PUBLIC_USER_SELECT }, quoteInvoice: true },
     });
 
     if (!ticket) {

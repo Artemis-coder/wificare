@@ -148,8 +148,18 @@ class _TicketNewScreenState extends ConsumerState<TicketNewScreen> {
                     title: 'Aucune zone enregistrée',
                     message: 'Contactez le service commercial pour enregistrer votre zone.',
                   )
+                else if (!zones.any((zone) => zone.isActive))
+                  const EmptyState(
+                    icon: Icons.hourglass_top_rounded,
+                    title: 'Zone en attente de validation',
+                    message:
+                        "Vos zones sont déclarées mais pas encore validées par la plateforme. Vous pourrez signaler une panne dès qu'elles seront validées.",
+                  )
                 else
-                  for (final zone in zones)
+                  // Seules les zones validées sont proposées : le serveur
+                  // refuse toute demande sur une zone en attente, mieux vaut ne
+                  // pas laisser choisir puis échouer.
+                  for (final zone in zones.where((zone) => zone.isActive))
                     _SelectionRow(
                       selected: _zoneId == zone.id,
                       title: zone.name,

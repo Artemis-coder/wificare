@@ -87,7 +87,8 @@ technicien `2250102030405`.
 
 L'application ne propose que ces deux types de compte : un compte
 d'administration n'a pas d'espace mobile. Le back-office web connaît en plus le
-super administrateur `2250909090909` et l'administrateur `2250505050505`.
+super administrateur `2250909090909`, seul rôle d'administration de la
+plateforme — le rôle `ADMIN` a été fusionné dans `SUPER_ADMIN`.
 
 Deux pièges d'affichage à ne pas réintroduire :
 
@@ -105,7 +106,12 @@ pas au numéro saisi : le message est rattaché au sélecteur de type, jamais so
 le champ mot de passe.
 
 Un propriétaire peut ajouter d'autres zones depuis l'onglet « Équipements »
-(« Ajouter une zone » → `POST /api/wifi-zones`, dossier déduit du jeton).
+(« Ajouter une zone » → `POST /api/wifi-zones`, dossier déduit du jeton). La
+zone ainsi créée est **en attente de validation** : elle n'apparaît pas dans le
+sélecteur du formulaire de demande, et le serveur refuse une demande qui la
+concerne. Les équipements restent déclarables, et l'onglet « Équipements »
+l'annonce par un bandeau plutôt que de laisser le propriétaire découvrir la
+blocade en envoyant une panne qui aurait été refusée.
 
 ## Espaces par rôle
 
@@ -201,13 +207,17 @@ fermée.
 
 | Événement | Destinataires | Type |
 | --- | --- | --- |
-| Soumission d'une demande, aucun technicien `ACTIVE` unique | administrateurs | `TICKET_SUBMITTED` |
+| Soumission d'une demande, aucun technicien en service | super administrateurs | `TICKET_SUBMITTED` |
 | Attribution automatique ou manuelle | technicien **et** client | `TICKET_ASSIGNED` |
 | Changement de statut par le technicien | client | `TICKET_STATUS_CHANGED` |
+| Zone Wi-Fi déclarée | super administrateurs **et** propriétaire | `ZONE_SUBMITTED` |
+| Zone validée ou retirée du parc | propriétaire | `ZONE_VALIDATED` |
 
-L'attribution automatique n'a lieu que s'il existe **exactement un** technicien
-`ACTIVE` : sinon la demande reste en `NEW` et attend une répartition
-manuelle, et les administrateurs en sont informés.
+L'attribution automatique ne dépend plus du nombre de techniciens : dès qu'un
+technicien `ACTIVE` existe, la demande lui revient, et le serveur choisit celui
+qui porte le moins de demandes en cours (`leastLoadedTechnicianId`). Seul le cas
+sans aucun technicien en service laisse la demande en `NEW` et prévient les
+super administrateurs.
 
 Côté client (`lib/src/features/notifications/`), l'écran est une page enfant de
 l'accueil de chaque espace, comme le profil :

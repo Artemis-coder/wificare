@@ -40,21 +40,7 @@ async function main() {
     },
   });
 
-  // 3. Create an Admin
-  await prisma.user.upsert({
-    where: { phone: normalizePhone('+2250505050505') },
-    update: { passwordHash: hashPassword(DEMO_PASSWORD) },
-    create: {
-      name: 'Admin Wi-Fi Care',
-      phone: normalizePhone('+2250505050505'),
-      firstName: 'Admin',
-      lastName: 'Wi-Fi Care',
-      passwordHash: hashPassword(DEMO_PASSWORD),
-      role: Role.ADMIN,
-    },
-  });
-
-  // 4. Create a Client user
+  // 3. Create a Client user
   const clientUser = await prisma.user.upsert({
     where: { phone: normalizePhone('+2250707070707') },
     // Le compte démo peut avoir été créé par une connexion OTP : on lui remet
@@ -70,7 +56,7 @@ async function main() {
     },
   });
 
-  // 5. Create a Client entity linked to the user (idempotent : le compte démo
+  // 4. Create a Client entity linked to the user (idempotent : le compte démo
   //    peut avoir déjà été créé par une connexion).
   const client =
     (await prisma.client.findFirst({ where: { userId: clientUser.id } })) ??
@@ -85,6 +71,9 @@ async function main() {
             {
               name: 'WiFi Zone Angré 8e Tranche',
               location: 'Abidjan, Cocody Angré',
+              // Zone de démonstration : déjà validée, sinon aucun ticket ne
+              // pourrait être créé dessus et le jeu d'essai serait vide.
+              status: 'ACTIVE',
               equipments: {
                 create: [
                   { type: 'Routeur', brand: 'TP-Link', model: 'Archer C7' },
@@ -101,8 +90,17 @@ async function main() {
     where: { clientId: client.id }
   });
 
+  // La zone peut avoir été déclarée par une connexion antérieure au contrôle de
+  // validation : on la bascule pour que le jeu de démonstration soit jouable.
+  if (wifiZone && wifiZone.status !== 'ACTIVE') {
+    await prisma.wifiZone.update({
+      where: { id: wifiZone.id },
+      data: { status: 'ACTIVE' }
+    });
+  }
+
   if (wifiZone) {
-    // 6. Create a Ticket
+    // 5. Create a Ticket
     await prisma.ticket.upsert({
       where: { reference: '#TK-2026-001' },
       update: {},

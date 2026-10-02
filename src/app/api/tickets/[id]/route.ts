@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getApiUser } from "@/lib/api-auth";
+import { loadReadableTicket } from "@/lib/tickets";
+import { PUBLIC_USER_SELECT } from "@/lib/user-public";
 
 /**
  * Résumé de suivi affiché avec la demande.
@@ -31,12 +34,35 @@ export type TicketTrackingSummary = {
   destinationLongitude: number | null;
 };
 
+/**
+ * Détail d'une demande.
+ *
+ * La demande porte le contact du client, sa zone, le rapport du technicien, son
+ * devis et son règlement : la lecture est donc bornée par `loadReadableTicket`
+ * avant même la requête. Un identifiant deviné ne suffit pas à ouvrir la
+ * demande d'autrui.
+ */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auth = getApiUser(request);
+
+    if (!auth) {
+      return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+    }
+
     const { id } = await params;
+
+    const readable = await loadReadableTicket(auth, id);
+
+    if (!readable.ok) {
+      return NextResponse.json(
+        { error: readable.error },
+        { status: readable.status }
+      );
+    }
 
     const ticket = await prisma.ticket.findUnique({
       where: { id },
@@ -47,7 +73,7 @@ export async function GET(
             equipments: true,
           },
         },
-        technician: true,
+        technician: { select: PUBLIC_USER_SELECT },
         intervention: true,
         files: true,
         quoteInvoice: {

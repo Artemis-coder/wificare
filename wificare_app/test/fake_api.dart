@@ -106,6 +106,7 @@ abstract final class FakeApiData {
     'clientId': 'client-1',
     'name': 'WiFi Zone Angre 8e Tranche',
     'location': 'Abidjan, Cocody Angre',
+    'status': 'ACTIVE',
     'createdAt': '2026-01-30T10:00:00.000Z',
     'equipments': [
       {
@@ -118,6 +119,20 @@ abstract final class FakeApiData {
         'createdAt': '2026-01-30T10:00:00.000Z',
       },
     ],
+  };
+
+  /// Zone déclarée par son propriétaire et pas encore validée par la plateforme.
+  ///
+  /// Elle existe pour leur permettre de préparer leurs équipements, mais aucune
+  /// demande d'intervention ne peut la concerner tant qu'elle est en attente.
+  static const pendingZone = {
+    'id': 'zone-2',
+    'clientId': 'client-1',
+    'name': 'WiFi Zone Riviera 2',
+    'location': 'Abidjan, Riviera 2',
+    'status': 'PENDING',
+    'createdAt': '2026-02-02T10:00:00.000Z',
+    'equipments': <Map<String, dynamic>>[],
   };
 
   /// Compte technicien : pas de dossier client.
@@ -140,6 +155,12 @@ abstract final class FakeApiData {
     'userId': 'user-1',
     'createdAt': '2026-01-30T10:00:00.000Z',
     'wifiZones': [zone],
+  };
+
+  /// Dossier dont une zone reste en attente de validation de la plateforme.
+  static Map<String, dynamic> get clientWithPendingZone => {
+    ...client,
+    'wifiZones': [zone, pendingZone],
   };
 
   /// Suivi de position en cours, tel que le serveur le renvoie sur un ticket.

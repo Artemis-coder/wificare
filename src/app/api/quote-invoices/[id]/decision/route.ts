@@ -3,6 +3,7 @@ import { NotificationType, TicketStatus } from "@prisma/client";
 import { getApiUser } from "@/lib/api-auth";
 import { notify } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
+import { PUBLIC_USER_SELECT } from "@/lib/user-public";
 
 /**
  * Décision du client sur un devis.
@@ -40,7 +41,7 @@ export async function PATCH(
     const invoice = await prisma.quoteInvoice.findUnique({
       where: { id },
       include: {
-        ticket: { include: { client: true, technician: true } },
+        ticket: { include: { client: true, technician: { select: PUBLIC_USER_SELECT } } },
         payment: true,
       },
     });

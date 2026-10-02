@@ -5,19 +5,30 @@ import { authOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 
+import { isSuperAdmin } from '@/lib/roles';
 import DashboardTicketRow from './dashboard-ticket-row';
 
 export const dynamic = 'force-dynamic';
 
 export default async function Dashboard() {
   const session = await getServerSession(authOptions);
-  
+
   if (!session) {
     redirect('/login');
   }
 
-  // Total Wi-Fi Zones
-  const totalZones = await prisma.wifiZone.count();
+  const canManage = isSuperAdmin(session.user.role);
+
+  // Parc exploité et zones en attente de validation : une zone déclarée par un
+  // propriétaire n'existe pas encore pour la plateforme, et la confondre avec
+  // une zone validée rendrait le parc plus grand qu'il ne l'est.
+  const activeZonesCount = await prisma.wifiZone.count({
+    where: { status: 'ACTIVE' },
+  });
+
+  const pendingZonesCount = await prisma.wifiZone.count({
+    where: { status: 'PENDING' },
+  });
 
   // Open Maintenance Tickets (Panne / Lenteur)
   const openTicketsCount = await prisma.ticket.count({
@@ -49,6 +60,10 @@ export default async function Dashboard() {
   });
   const pendingAmount = pendingInvoices.reduce((sum, inv) => sum + inv.totalAmount, 0);
 
+  // Nombre de comptes enregistrés : l'indicateur que la régie suit pour juger
+  // s'il faut recruter un technicien.
+  const totalUsersCount = await prisma.user.count();
+
   // Recent tickets/requests
   const recentTickets = await prisma.ticket.findMany({
     take: 6,
@@ -66,13 +81,13 @@ export default async function Dashboard() {
       <div className="hero-banner">
         <div>
           <span style={{ fontSize: '13px', fontWeight: 600, color: '#a5b4fc', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Portail Administrateur WiFiCare
+            Portail Super Administration WiFiCare
           </span>
           <h1 style={{ color: '#ffffff', margin: '6px 0 8px 0', fontSize: '28px' }}>
             Bienvenue, {session.user?.name || 'Administrateur'} 👋
           </h1>
           <p style={{ color: '#c7d2fe', fontSize: '14px', maxWidth: '520px' }}>
-            Supervisez vos zones Wi-Fi, validez les demandes d&apos;installation d&apos;antennes et coordonnez les techniciens en temps réel.
+            Supervisez le parc Wi-Fi, validez les zones déclarées et suivez les interventions en temps réel.
           </p>
         </div>
         <div style={{ display: 'flex', gap: '12px' }}>
@@ -92,12 +107,40 @@ export default async function Dashboard() {
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
             </div>
           </div>
-          <div className="kpi-value">{totalZones}</div>
+          <div className="kpi-value">{activeZonesCount}</div>
           <div className="kpi-trend positive">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
-            100% de disponibilité du parc
+            {pendingZonesCount > 0 ? (
+              <Link
+                href="/zones?status=PENDING"
+                style={{ color: 'inherit', textDecoration: 'none' }}
+              >
+                {pendingZonesCount} zone(s) en attente de validation
+              </Link>
+            ) : (
+              '100% de disponibilité du parc'
+            )}
           </div>
         </div>
+
+        {canManage && (
+          <div className="kpi-card">
+            <div className="kpi-header">
+              <div className="kpi-label">Comptes sur la plateforme</div>
+              <div className="kpi-icon-wrapper purple">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              </div>
+            </div>
+            <div className="kpi-value">{totalUsersCount}</div>
+            <div className="kpi-trend neutral">
+              <Link
+                href="/admin/utilisateurs"
+                style={{ color: 'inherit', textDecoration: 'none' }}
+              >
+                Voir l&apos;annuaire des comptes
+              </Link>
+            </div>
+          </div>
+        )}
 
         <div className="kpi-card">
           <div className="kpi-header">
@@ -162,13 +205,17 @@ export default async function Dashboard() {
           </div>
         </Link>
 
-        <Link href="/zones" className="action-card">
+        <Link href={canManage ? '/admin/zones' : '/zones'} className="action-card">
           <div className="action-icon" style={{ backgroundColor: 'var(--brand-50)', color: 'var(--brand-600)' }}>
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
           </div>
           <div>
-            <div style={{ fontWeight: 700, fontSize: '15px' }}>Déclarer une Wi-Fi Zone</div>
-            <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Enregistrer un nouvel emplacement ou client</div>
+            <div style={{ fontWeight: 700, fontSize: '15px' }}>{canManage ? 'Ajouter une Wi-Fi Zone' : 'Déclarer une Wi-Fi Zone'}</div>
+            <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+              {canManage
+                ? 'Rattacher un nouvel emplacement à un propriétaire'
+                : 'Enregistrer un nouvel emplacement ou client'}
+            </div>
           </div>
         </Link>
       </div>

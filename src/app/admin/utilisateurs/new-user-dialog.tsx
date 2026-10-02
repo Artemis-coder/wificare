@@ -3,10 +3,8 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 
-import { ROLE_LABEL, PASSWORD_LENGTH, type AppRole } from '@/lib/roles';
+import { APP_ROLES, ROLE_LABEL, PASSWORD_LENGTH, type AppRole } from '@/lib/roles';
 import { createUserAction } from './actions';
-
-const ROLES: AppRole[] = ['SUPER_ADMIN', 'ADMIN', 'TECHNICIAN', 'CLIENT'];
 
 const fieldStyle = {
   height: '38px',
@@ -122,7 +120,7 @@ export function NewUserDialog() {
             <div>
               <label className="label" htmlFor="new-role" style={{ display: 'block', marginBottom: '6px' }}>Rôle</label>
               <select id="new-role" value={role} onChange={(event) => setRole(event.target.value as AppRole)} style={fieldStyle}>
-                {ROLES.map((item) => (
+                {APP_ROLES.map((item) => (
                   <option key={item} value={item}>
                     {ROLE_LABEL[item]}
                   </option>

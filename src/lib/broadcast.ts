@@ -2,6 +2,7 @@ import { BroadcastStatus, NotificationType, Role, UserStatus } from "@prisma/cli
 
 import { prisma } from "./prisma";
 import { notify } from "./notifications";
+import { STAFF_ROLES } from "./roles";
 import { devicesSubscribedFor } from "./push";
 
 /**
@@ -40,7 +41,7 @@ export const AUDIENCE_HINT: Record<BroadcastAudience, string> = {
   ALL: "Clients, techniciens et équipe d'administration.",
   CLIENTS: "Les propriétaires de zone, qui commandent et paient les interventions.",
   TECHNICIANS: "Les techniciens, qui interviennent sur le terrain.",
-  STAFF: "Vous et l'autre compte d'encadrement.",
+  STAFF: "Vous et les autres comptes de super administrateur.",
 };
 
 export function isBroadcastAudience(value: unknown): value is BroadcastAudience {
@@ -58,9 +59,9 @@ function rolesFor(audience: BroadcastAudience): Role[] {
     case BROADCAST_AUDIENCES.TECHNICIANS:
       return ["TECHNICIAN"];
     case BROADCAST_AUDIENCES.STAFF:
-      return ["SUPER_ADMIN", "ADMIN"];
+      return [...STAFF_ROLES];
     default:
-      return ["CLIENT", "TECHNICIAN", "SUPER_ADMIN", "ADMIN"];
+      return ["CLIENT", "TECHNICIAN", ...STAFF_ROLES];
   }
 }
 

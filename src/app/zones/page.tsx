@@ -1,27 +1,95 @@
-import { prisma } from '@/lib/prisma';
+import type { Metadata } from 'next';
+import Link from 'next/link';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
+
+import { authOptions } from '@/lib/auth';
+import { prisma } from '@/lib/prisma';
+import { isSuperAdmin } from '@/lib/roles';
+import { listZonesFor } from '@/lib/zones';
+import { ZoneList } from './zone-list';
 
 export const dynamic = 'force-dynamic';
 
-export default async function ZonesPage() {
+export const metadata: Metadata = {
+  title: 'Wi-Fi Zones - WiFiCare',
+};
+
+type ZoneRow = {
+  id: string;
+  name: string;
+  location: string;
+  status: 'PENDING' | 'ACTIVE';
+  createdAt: string;
+  ownerName: string;
+  ownerContact: string;
+  equipmentCount: number;
+  ticketCount: number;
+};
+
+/**
+ * Parc Wi-Fi de la plateforme.
+ *
+ * Le super administrateur y trouve toutes les zones, tous propriétaires
+ * confondus : il doit pouvoir retrouver une zone précise, la corriger, la
+ * supprimer, ou intervenir dessus. Un propriétaire n'y voit que ses propres
+ * zones, un technicien rien du tout — il travaille sur des demandes, pas sur un
+ * annuaire de zones.
+ */
+export default async function ZonesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ status?: string }>;
+}) {
   const session = await getServerSession(authOptions);
-  
+
   if (!session) {
     redirect('/login');
   }
 
-  const zones = await prisma.wifiZone.findMany({
-    orderBy: { createdAt: 'desc' },
-    include: {
-      client: true,
-      equipments: true,
-      _count: {
-        select: { tickets: true }
-      }
+  const canManage = isSuperAdmin(session.user.role);
+
+  const zones = await listZonesFor({
+    userId: session.user.id,
+    role: session.user.role,
+  });
+
+  // Les compteurs disent à quoi sert réellement une zone avant de décider de
+  // la supprimer : une zone qui porte des demandes ne peut pas l'être.
+  const usage = await prisma.wifiZone.findMany({
+    select: {
+      id: true,
+      _count: { select: { tickets: true, equipments: true } },
     },
   });
+
+  const usageByZone = new Map(
+    usage.map((zone) => [
+      zone.id,
+      { tickets: zone._count.tickets, equipments: zone._count.equipments },
+    ])
+  );
+
+  const rows: ZoneRow[] = zones.map((zone) => ({
+    id: zone.id,
+    name: zone.name,
+    location: zone.location,
+    status: zone.status,
+    createdAt: zone.createdAt.toISOString(),
+    ownerName: zone.client.name,
+    ownerContact: zone.client.contact,
+    equipmentCount: usageByZone.get(zone.id)?.equipments ?? 0,
+    ticketCount: usageByZone.get(zone.id)?.tickets ?? 0,
+  }));
+
+  const pendingCount = rows.filter((zone) => zone.status === 'PENDING').length;
+
+  // Le tableau de bord renvoie ici avec `?status=PENDING` quand il annonce des
+  // zones à valider : le filtre doit être déjà positionné à l'arrivée, sinon le
+  // renvoi ne mène qu'à la même liste et le compte annoncé n'est plus à l'écran.
+  const { status } = await searchParams;
+  const initialStatus: 'ALL' | ZoneRow['status'] =
+    status === 'PENDING' || status === 'ACTIVE' ? status : 'ALL';
 
   return (
     <div>
@@ -29,58 +97,46 @@ export default async function ZonesPage() {
         <div>
           <h1>Wi-Fi Zones</h1>
           <p className="body-m" style={{ color: 'var(--text-secondary)' }}>
-            Gérez votre parc de routeurs et d&apos;équipements Wi-Fi.
+            {canManage
+              ? 'Toutes les zones de la plateforme et leurs propriétaires.'
+              : 'Gérez vos zones et vos équipements Wi-Fi.'}
           </p>
         </div>
-        <button className="btn btn-primary btn-lg">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-          Ajouter une zone
-        </button>
-      </div>
-
-      <div className="dashboard-grid" style={{ marginTop: '24px' }}>
-        {zones.map((zone) => (
-          <div key={zone.id} className="kpi-card" style={{ cursor: 'pointer', transition: 'all 0.2s', border: '1px solid var(--border-default)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
-              <div>
-                <h3 style={{ margin: '0 0 4px 0', fontSize: '16px', fontWeight: 600 }}>{zone.name}</h3>
-                <div style={{ fontSize: '13px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-                  {zone.location}
-                </div>
-              </div>
-              <span className="badge badge-success">Actif</span>
-            </div>
-            
-            <div style={{ padding: '12px 0', borderTop: '1px solid var(--border-default)', borderBottom: '1px solid var(--border-default)', marginBottom: '12px' }}>
-              <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '4px' }}>Propriétaire</div>
-              <div style={{ fontWeight: 500, fontSize: '14px' }}>{zone.client.name}</div>
-              <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{zone.client.contact}</div>
-            </div>
-            
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)' }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-                {zone.equipments.length} équipement(s)
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)' }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-                {zone._count.tickets} ticket(s)
-              </div>
-            </div>
-          </div>
-        ))}
-
-        {zones.length === 0 && (
-          <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '48px', color: 'var(--text-secondary)', backgroundColor: 'var(--bg-primary)', borderRadius: 'var(--radius-lg)', border: '1px dashed var(--border-strong)' }}>
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ margin: '0 auto 16px', display: 'block', opacity: 0.5 }}>
-              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
-            </svg>
-            <h3 style={{ margin: '0 0 8px 0', color: 'var(--text-primary)' }}>Aucune Wi-Fi Zone</h3>
-            <p style={{ margin: 0 }}>Commencez par ajouter votre première zone pour pouvoir y associer des tickets.</p>
-          </div>
+        {canManage && (
+          <Link
+            href="/admin/zones"
+            className="btn btn-primary btn-lg"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Ajouter une zone
+          </Link>
         )}
       </div>
+
+      {canManage && pendingCount > 0 && (
+        <div
+          role="status"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            padding: '14px 18px',
+            marginBottom: '24px',
+            borderRadius: 'var(--radius-lg)',
+            backgroundColor: 'var(--warning-50, #FEF3C7)',
+            border: '1px solid var(--warning-600, #F59E0B)',
+          }}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          <span style={{ fontSize: '14px' }}>
+            <strong>{pendingCount}</strong> zone(s) déclarée(s) attendent votre
+            validation. Tant qu&apos;elles ne sont pas validées, aucune demande
+            d&apos;intervention ne peut les concerner.
+          </span>
+        </div>
+      )}
+
+      <ZoneList zones={rows} canManage={canManage} initialStatus={initialStatus} />
     </div>
   );
 }

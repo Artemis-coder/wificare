@@ -2,9 +2,15 @@
  * Rôles de la plateforme et règles d'accès associées.
  *
  * La source de vérité reste l'enum `Role` de `prisma/schema.prisma`. Ce module
- * Centralise ce que l'interface et l'API doivent savoir d'un rôle : son libellé
+ * centralise ce que l'interface et l'API doivent savoir d'un rôle : son libellé
  * utilisateur, les types de compte proposés à la connexion, les rights de la
  * navigation web et les prédicats utilisés par les routes API.
+ *
+ * La plateforme compte trois profils : le technicien qui intervient, le
+ * propriétaire de Wi-Fi Zone qui déclare ses pannes, et le super administrateur
+ * qui gère l'ensemble. Le rôle `ADMIN` a été fusionné dans `SUPER_ADMIN` : les
+ * deux profils désignaient la même régie, les séparer ne produisait qu'une
+ * frontière à maintenir sans différence de droits réelle.
  */
 
 import type { Role } from "@prisma/client";
@@ -19,7 +25,6 @@ export type AppRole = Role;
  */
 export const ACCOUNT_TYPES = [
   "SUPER_ADMIN",
-  "ADMIN",
   "TECHNICIAN",
   "WIFI_ZONE_OWNER",
 ] as const;
@@ -29,21 +34,18 @@ export type AccountType = (typeof ACCOUNT_TYPES)[number];
 /** Rôle attendu en base pour chaque type de compte. */
 export const ACCOUNT_TYPE_ROLE: Record<AccountType, AppRole> = {
   SUPER_ADMIN: "SUPER_ADMIN",
-  ADMIN: "ADMIN",
   TECHNICIAN: "TECHNICIAN",
   WIFI_ZONE_OWNER: "CLIENT",
 };
 
 export const ACCOUNT_TYPE_LABEL: Record<AccountType, string> = {
   SUPER_ADMIN: "Super administrateur",
-  ADMIN: "Administrateur",
   TECHNICIAN: "Technicien",
   WIFI_ZONE_OWNER: "Propriétaire de zone",
 };
 
 export const ACCOUNT_TYPE_HINT: Record<AccountType, string> = {
-  SUPER_ADMIN: "Gère les comptes et toute la plateforme",
-  ADMIN: "Répartit les demandes et suit l'exploitation",
+  SUPER_ADMIN: "Gère toute la plateforme : comptes, zones et interventions",
   TECHNICIAN: "Intervient sur les demandes assignées",
   WIFI_ZONE_OWNER: "Déclare et suit les pannes de ses zones",
 };
@@ -65,18 +67,24 @@ export const PASSWORD_LENGTH = 4;
 
 export const ROLE_LABEL: Record<AppRole, string> = {
   SUPER_ADMIN: "Super administrateur",
-  ADMIN: "Administrateur",
   TECHNICIAN: "Technicien",
   CLIENT: "Propriétaire de zone",
 };
+
+/**
+ * Tous les rôles, dans l'ordre d'affichage.
+ *
+ * Les écrans qui proposent un choix de rôle le parcourent plutôt que de
+ * redéclarer la liste : la fusion des profils d'administration a déjà rendu
+ * stale la moitié de ces listes, et il n'y a plus de place pour une troisième.
+ */
+export const APP_ROLES: readonly AppRole[] = ["SUPER_ADMIN", "TECHNICIAN", "CLIENT"];
 
 /** Message d'erreur affiché quand le type choisi ne correspond pas au compte. */
 export function accountTypeMismatchMessage(expected: AppRole): string {
   switch (expected) {
     case "SUPER_ADMIN":
       return "Ce compte n'est pas un compte super administrateur.";
-    case "ADMIN":
-      return "Ce compte n'est pas un compte administrateur.";
     case "TECHNICIAN":
       return "Ce compte n'est pas un compte technicien.";
     default:
@@ -88,16 +96,28 @@ export function accountTypeMismatchMessage(expected: AppRole): string {
 // Droits
 // ----------------------------------------
 
-/** Rôles qui administrent la plateforme (SUPER_ADMIN englobe ADMIN). */
-export const STAFF_ROLES: readonly AppRole[] = ["SUPER_ADMIN", "ADMIN"];
+/**
+ * Rôles qui administrent la plateforme.
+ *
+ * La régie n'a plus qu'un seul profil : tout ce qui relevait de `ADMIN` relève
+ * désormais de `SUPER_ADMIN`, y compris la gestion des comptes et des zones.
+ */
+export const STAFF_ROLES: readonly AppRole[] = ["SUPER_ADMIN"];
 
 /** Seuls les super administrateurs gèrent les comptes, les rôles et les statuts. */
 export const isSuperAdmin = (role: AppRole | null | undefined): boolean =>
   role === "SUPER_ADMIN";
 
-/** Vrai pour les rôles qui administrent la plateforme. */
+/**
+ * Vrai pour le rôle qui administre la plateforme.
+ *
+ * Alias d'`isSuperAdmin` : les deux noms disent la même chose depuis la fusion,
+ * mais « staff » reste le terme employé par les écrans de régie et « super
+ * admin » celui des écrans de gestion de comptes. Les garder évite de
+ * réécrire les gardes existants et de chercher lequel employer.
+ */
 export const isStaff = (role: AppRole | null | undefined): boolean =>
-  role != null && STAFF_ROLES.includes(role);
+  isSuperAdmin(role);
 
 // ----------------------------------------
 // Navigation web
@@ -124,15 +144,15 @@ export const NAV_ITEMS: readonly NavItem[] = [
     href: "/admin/avis",
     label: "Avis clients",
     icon: "reviews",
-    roles: ["SUPER_ADMIN", "ADMIN"],
+    roles: ["SUPER_ADMIN"],
   },
   {
     href: "/admin/notifications",
     label: "Notifications",
     icon: "bell",
-    roles: ["SUPER_ADMIN", "ADMIN"],
+    roles: ["SUPER_ADMIN"],
   },
-  { href: "/zones", label: "Wi-Fi Zones", icon: "zones" },
+  { href: "/zones", label: "Wi-Fi Zones", icon: "zones", roles: ["SUPER_ADMIN", "CLIENT"] },
   { href: "/invoices", label: "Factures & Paiements", icon: "invoices" },
   { href: "/profile", label: "Mon Profil", icon: "profile" },
 ];

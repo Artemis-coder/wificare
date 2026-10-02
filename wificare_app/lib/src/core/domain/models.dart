@@ -84,6 +84,7 @@ class WifiZone {
     required this.clientId,
     required this.name,
     required this.location,
+    required this.status,
     required this.equipments,
     required this.latitude,
     required this.longitude,
@@ -93,6 +94,12 @@ class WifiZone {
   final String clientId;
   final String name;
   final String location;
+
+  /// Une zone déclarée par son propriétaire attend la validation du super
+  /// administrateur. Tant qu'elle est en attente, aucune demande
+  /// d'intervention ne peut la concerner.
+  final ZoneStatus status;
+
   final List<Equipment> equipments;
 
   /// Destination de l'intervention, relevée par le client. Absente tant qu'il ne
@@ -103,11 +110,15 @@ class WifiZone {
   /// Les deux coordonnées doivent être présentes : une seule ne situe rien.
   bool get hasLocation => latitude != null && longitude != null;
 
+  /// Vrai si l'on peut ouvrir un formulaire de demande sur cette zone.
+  bool get isActive => status == ZoneStatus.active;
+
   factory WifiZone.fromJson(Map<String, dynamic> json) => WifiZone(
     id: JsonX.str(json['id']),
     clientId: JsonX.str(json['clientId']),
     name: JsonX.str(json['name']),
     location: JsonX.str(json['location']),
+    status: ZoneStatus.fromWire(JsonX.strOrNull(json['status'])),
     equipments: JsonX.list(json['equipments'])
         .map(Equipment.fromJson)
         .toList(),

@@ -48,7 +48,9 @@ export async function assignTicketAction(ticketId: string, technicianId: string)
   const session = await getServerSession(authOptions);
 
   if (!session || !isStaff(session.user.role)) {
-    throw new Error('Seul un administrateur peut affecter un technicien.');
+    throw new Error(
+      'Seul un super administrateur peut affecter un technicien.'
+    );
   }
 
   const result = await assignTicket(ticketId, technicianId);

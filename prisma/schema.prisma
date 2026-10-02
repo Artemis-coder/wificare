@@ -111,6 +111,12 @@ enum NotificationType {
   PAYMENT_RECEIVED
   /// Un client a déposé un avis sur l'intervention du technicien.
   EVALUATION_RECEIVED
+  /// Un propriétaire a déclaré une nouvelle Wi-Fi Zone.
+  ZONE_SUBMITTED
+  /// Le super administrateur a validé, ou retiré du parc, une Wi-Fi Zone.
+  ZONE_VALIDATED
+  /// Une Wi-Fi Zone a été supprimée de la plateforme.
+  ZONE_DELETED
   /// Message adressé par l'équipe d'administration à toute la plateforme.
   BROADCAST
 }
@@ -213,11 +219,13 @@ model User {
 }
 
 enum Role {
-  /// Super administrateur : seul rôle autorisé à gérer les comptes, les rôles
-  /// et les zones à l'échelle de la plateforme.
+  /// Super administrateur : seul rôle d'administration. Gère l'ensemble de la
+  /// plateforme : les comptes et leurs rôles, les Wi-Fi Zones de tous les
+  /// propriétaires, la validation des zones déclarées et la répartition des
+  /// interventions.
   SUPER_ADMIN
-  ADMIN
   TECHNICIAN
+  /// Propriétaire d'une ou plusieurs Wi-Fi Zones.
   CLIENT
 }
 
@@ -246,21 +254,34 @@ model Client {
 }
 
 model WifiZone {
-  id        String   @id @default(uuid())
+  id        String     @id @default(uuid())
   clientId  String
   name      String
   location  String
+  /// Statut de validation. Une zone déclarée par son propriétaire attend la
+  /// validation du super administrateur avant d'entrer dans le parc exploité :
+  /// une zone non validée n'apparaît pas dans les listes de Tickets et ne peut
+  /// pas recevoir de demande d'intervention.
+  status    ZoneStatus @default(PENDING)
   /// Latitude de la destination, relevée par le client. Null tant que le client
   /// n'a pas partagé sa position : l'ETA ne peut être calculée sans elle.
   latitude  Float?
   /// Longitude de la destination, relevée par le client. Doit être renseignée
   /// en même temps que `latitude` pour former une destination valide.
   longitude Float?
-  createdAt DateTime @default(now())
+  createdAt DateTime   @default(now())
 
   client     Client               @relation(fields: [clientId], references: [id])
   equipments Equipment[]
   tickets    Ticket[]
+}
+
+/// Cycle de vie d'une Wi-Fi Zone.
+enum ZoneStatus {
+  /// Déclarée par son propriétaire, en attente de validation.
+  PENDING
+  /// Validée par le super administrateur, exploitable.
+  ACTIVE
 }
 
 model Equipment {

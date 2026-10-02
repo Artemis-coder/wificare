@@ -74,7 +74,10 @@ class _EquipmentsScreenState extends ConsumerState<EquipmentsScreen> {
     if (created != true || !mounted) return;
     await ref.read(authControllerProvider.notifier).refreshProfile();
     if (!mounted) return;
-    showAppSnackBar(context, 'Zone ajoutée');
+    showAppSnackBar(
+      context,
+      'Zone déclarée. Elle sera utilisable une fois validée par la plateforme.',
+    );
   }
 
   @override
@@ -200,6 +203,11 @@ class _EquipmentsScreenState extends ConsumerState<EquipmentsScreen> {
                           ],
                         ),
                       ),
+                    if (zone != null && !zone.isActive)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                        child: _ZonePendingNotice(zone: zone),
+                      ),
                     if (equipments.isEmpty)
                       Padding(
                         padding: const EdgeInsets.only(top: AppSpacing.xl),
@@ -219,6 +227,53 @@ class _EquipmentsScreenState extends ConsumerState<EquipmentsScreen> {
                   ],
                 ),
         ),
+      ),
+    );
+  }
+}
+
+/// Bandeausignalant qu'une zone attend encore la validation de la plateforme.
+///
+/// Le propriétaire peut tout de suite déclarer ses équipements : seule la
+/// demande d'intervention est bloquée tant que la zone n'est pas validée.
+class _ZonePendingNotice extends StatelessWidget {
+  const _ZonePendingNotice({required this.zone});
+
+  final WifiZone zone;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+
+    return AppCard(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.hourglass_top_rounded,
+            size: 20,
+            color: zone.status.color,
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  zone.status.label,
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Vous pouvez déclarer vos équipements. Les demandes '
+                  "d'intervention seront possibles dès que la plateforme aura "
+                  'validé cette zone.',
+                  style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

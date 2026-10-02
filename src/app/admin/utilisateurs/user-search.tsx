@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 
-import { ROLE_LABEL, type AppRole } from '@/lib/roles';
+import { APP_ROLES, ROLE_LABEL, type AppRole } from '@/lib/roles';
 import { UserRowActions } from './user-row-actions';
 
 export type UserListItem = {
@@ -22,7 +22,6 @@ export type UserListItem = {
   zoneOwnerCount: number;
 };
 
-const ROLES: AppRole[] = ['SUPER_ADMIN', 'ADMIN', 'TECHNICIAN', 'CLIENT'];
 const STATUSES = ['ACTIVE', 'INACTIVE', 'SUSPENDED'] as const;
 
 const STATUS_BADGE: Record<UserListItem['status'], string> = {
@@ -132,7 +131,7 @@ export function UserSearch({
               style={inputStyle}
             >
               <option value="ALL">Tous les rôles</option>
-              {ROLES.map((item) => (
+              {APP_ROLES.map((item) => (
                 <option key={item} value={item}>
                   {ROLE_LABEL[item]}
                 </option>

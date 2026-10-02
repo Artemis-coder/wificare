@@ -4,6 +4,7 @@ import { getApiUser } from "@/lib/api-auth";
 import { Prisma, TicketStatus } from "@prisma/client";
 import { createTicket } from "@/lib/tickets";
 import type { TicketTrackingSummary } from "./[id]/route";
+import { PUBLIC_USER_SELECT } from "@/lib/user-public";
 
 export async function GET(request: NextRequest) {
   try {
@@ -25,7 +26,7 @@ export async function GET(request: NextRequest) {
         include: {
           client: true,
           wifiZone: true,
-          technician: true,
+          technician: { select: PUBLIC_USER_SELECT },
           intervention: true,
         },
         skip: (page - 1) * limit,

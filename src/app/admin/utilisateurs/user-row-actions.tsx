@@ -2,11 +2,9 @@
 
 import { useState, useTransition } from 'react';
 
-import { ROLE_LABEL, type AppRole } from '@/lib/roles';
+import { APP_ROLES, ROLE_LABEL, type AppRole } from '@/lib/roles';
 import { updateUserAction } from './actions';
 import type { UserListItem } from './user-search';
-
-const ROLES: AppRole[] = ['SUPER_ADMIN', 'ADMIN', 'TECHNICIAN', 'CLIENT'];
 
 const STATUS_LABEL: Record<UserListItem['status'], string> = {
   ACTIVE: 'Actif',
@@ -123,7 +121,7 @@ export function UserRowActions({
               style={{ ...selectStyle, width: '100%' }}
               aria-label={`Rôle de ${user.name ?? user.phone}`}
             >
-              {ROLES.map((role) => (
+              {APP_ROLES.map((role) => (
                 <option key={role} value={role}>
                   {ROLE_LABEL[role]}
                 </option>

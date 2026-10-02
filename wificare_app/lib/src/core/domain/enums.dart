@@ -5,9 +5,9 @@ import 'json_x.dart';
 /// Énumérations du domaine, partagées entre les features (tickets, factures,
 /// paiement). Les valeurs correspondent exactement aux enums Prisma.
 enum UserRole {
-  admin('ADMIN', 'Administrateur'),
+  superAdmin('SUPER_ADMIN', 'Super administrateur'),
   technician('TECHNICIAN', 'Technicien'),
-  client('CLIENT', 'Client');
+  client('CLIENT', 'Propriétaire de zone');
 
   const UserRole(this.wire, this.label);
   final String wire;
@@ -16,6 +16,27 @@ enum UserRole {
   static UserRole fromWire(String? value) => UserRole.values.firstWhere(
     (e) => e.wire == value,
     orElse: () => UserRole.client,
+  );
+}
+
+/// Statut de validation d'une Wi-Fi Zone.
+///
+/// Une zone déclarée par son propriétaire attend la validation du super
+/// administrateur avant d'entrer dans le parc exploité.
+enum ZoneStatus {
+  pending('PENDING', 'En attente de validation', '#F59E0B'),
+  active('ACTIVE', 'Validée', '#22C55E');
+
+  const ZoneStatus(this.wire, this.label, this.colorHex);
+  final String wire;
+  final String label;
+  final String colorHex;
+
+  Color get color => JsonX.hexColor(colorHex);
+
+  static ZoneStatus fromWire(String? value) => ZoneStatus.values.firstWhere(
+    (e) => e.wire == value,
+    orElse: () => ZoneStatus.active,
   );
 }
 
@@ -295,7 +316,9 @@ enum AppNotificationType {
   ticketCanceled('TICKET_CANCELED', Icons.cancel_outlined),
   quoteSent('QUOTE_SENT', Icons.request_quote_outlined),
   quoteAccepted('QUOTE_ACCEPTED', Icons.check_circle_outline_rounded),
-  quoteRejected('QUOTE_REJECTED', Icons.cancel_outlined);
+  quoteRejected('QUOTE_REJECTED', Icons.cancel_outlined),
+  zoneValidated('ZONE_VALIDATED', Icons.verified_outlined),
+  zoneDeleted('ZONE_DELETED', Icons.delete_outline_rounded);
 
   const AppNotificationType(this.wire, this.icon);
 

@@ -496,6 +496,70 @@ void main() {
     );
   }, timeout: const Timeout(Duration(seconds: 60)));
 
+  testWidgets('zone en attente : équipements oui, demande non', (tester) async {
+    FlutterSecureStorage.setMockInitialValues(_session);
+
+    // Le dossier client comporte une zone validée et une zone encore en attente.
+    adapter.routes['/auth/me'] = (_, _) => {
+      'data': {
+        'user': FakeApiData.user,
+        'client': FakeApiData.clientWithPendingZone,
+      },
+    };
+    adapter.routes['/wifi-zones'] = (path, body) {
+      if (body is Map && body['name'] != null) {
+        return {'data': FakeApiData.pendingZone};
+      }
+      return {
+        'data': [
+          FakeApiData.zone,
+          FakeApiData.pendingZone,
+        ],
+      };
+    };
+
+    await pumpApp(tester);
+
+    // Les équipements restent déclarables sur une zone non validée.
+    await tester.tap(find.text('Équipements'));
+    await settle(tester);
+
+    // Les zones sont dans un carrousel horizontal : la seconde est hors cadre.
+    final zoneCarousel = find
+        .ancestor(
+          of: find.text('WiFi Zone Angre 8e Tranche'),
+          matching: find.byType(Scrollable),
+        )
+        .first;
+    await tester.scrollUntilVisible(
+      find.text('WiFi Zone Riviera 2'),
+      120,
+      scrollable: zoneCarousel,
+    );
+    await settle(tester);
+    await tester.tap(find.text('WiFi Zone Riviera 2'));
+    await settle(tester);
+
+    expect(find.text('En attente de validation'), findsOneWidget);
+    expect(
+      find.textContaining('Vous pouvez déclarer vos équipements.'),
+      findsOneWidget,
+    );
+
+    // La zone validée reste sélectionnable sur le formulaire de demande.
+    await tester.tap(find.text('Pannes'));
+    await settle(tester);
+    await tester.tap(find.byIcon(Icons.add_circle_rounded));
+    await settle(tester);
+
+    expect(find.text('WiFi Zone Angre 8e Tranche'), findsOneWidget);
+    expect(
+      find.text('WiFi Zone Riviera 2'),
+      findsNothing,
+      reason: 'une zone non validée ne peut pas recevoir de demande',
+    );
+  }, timeout: const Timeout(Duration(seconds: 60)));
+
   testWidgets('profil : zones du client et déconnexion', (tester) async {
     FlutterSecureStorage.setMockInitialValues(_session);
     await pumpApp(tester);

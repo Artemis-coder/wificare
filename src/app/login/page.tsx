@@ -197,7 +197,7 @@ export default function LoginPage() {
         </form>
 
         <div style={{ textAlign: 'center', marginTop: '24px', fontSize: '12px', color: 'var(--text-secondary)' }}>
-          Mode démo : super administrateur <strong>2250909090909</strong>, administrateur <strong>2250505050505</strong>, technicien <strong>2250102030405</strong>, propriétaire <strong>2250707070707</strong> — mot de passe <strong>1234</strong>
+          Mode démo : super administrateur <strong>2250909090909</strong>, technicien <strong>2250102030405</strong>, propriétaire <strong>2250707070707</strong> — mot de passe <strong>1234</strong>
         </div>
       </div>
     </div>

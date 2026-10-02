@@ -7,19 +7,34 @@ import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
 
-export default async function NewTicketPage() {
+export default async function NewTicketPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ wifiZoneId?: string }>;
+}) {
   const session = await getServerSession(authOptions);
-  
+
   if (!session) {
     redirect('/login');
   }
 
+  // Une zone en attente de validation ne peut pas recevoir de demande : le
+  // serveur la refuserait, autant ne pas la proposer au choix.
   const wifiZones = await prisma.wifiZone.findMany({
+    where: { status: 'ACTIVE' },
     include: {
       client: true,
     },
     orderBy: { name: 'asc' },
   });
+
+  // Depuis la liste des zones, « Intervenir » ouvre ce formulaire sur la zone
+  // visée : la régie déclare une intervention sans repasser par le sélecteur.
+  const { wifiZoneId } = await searchParams;
+  const selectedZoneId =
+    wifiZoneId && wifiZones.some((zone) => zone.id === wifiZoneId)
+      ? wifiZoneId
+      : '';
 
   return (
     <div style={{ maxWidth: '680px', margin: '0 auto' }}>
@@ -39,13 +54,20 @@ export default async function NewTicketPage() {
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <label className="label" htmlFor="wifiZoneId">Wi-Fi Zone concernée *</label>
-            <select 
+            <select
               id="wifiZoneId"
-              name="wifiZoneId" 
+              name="wifiZoneId"
+              defaultValue={selectedZoneId}
               required
               style={{ height: '48px', padding: '0 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-strong)', fontSize: '15px', backgroundColor: 'var(--bg-primary)', outline: 'none' }}
             >
               <option value="">Sélectionnez la Wi-Fi Zone ou l&apos;emplacement...</option>
+              {wifiZones.length === 0 && (
+                <option value="" disabled>
+                  Aucune Wi-Fi Zone validée : demandez la validation de votre zone
+                  à la plateforme.
+                </option>
+              )}
               {wifiZones.map((zone) => (
                 <option key={zone.id} value={zone.id}>
                   {zone.name} — {zone.client.name} ({zone.location})

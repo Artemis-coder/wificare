@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
+
 import { prisma } from "@/lib/prisma";
 import { getApiUser } from "@/lib/api-auth";
+import { clientIdForUser, createZone } from "@/lib/zones";
 
-/** Résout le dossier client du propriétaire à partir du jeton d'accès. */
-async function getClientIdOf(userId: string): Promise<string | null> {
-  const client = await prisma.client.findFirst({
-    where: { userId },
-    select: { id: true },
-  });
-
-  return client?.id ?? null;
-}
+/**
+ * Zones Wi-Fi.
+ *
+ * Le propriétaire ne voit que ses zones, le super administrateur tout le parc.
+ * Une zone déclarée naît en attente de validation : c'est le super
+ * administrateur qui décide qu'elle entre dans le parc exploitable.
+ */
 
 export async function GET(request: NextRequest) {
   try {
@@ -22,10 +22,10 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const clientId = searchParams.get("clientId");
+    const status = searchParams.get("status");
 
     if (auth.role === "CLIENT") {
-      // Un propriétaire ne voit que ses propres zones.
-      const ownClientId = await getClientIdOf(auth.userId);
+      const ownClientId = await clientIdForUser(auth.userId);
 
       if (!ownClientId) {
         return NextResponse.json({ data: [] });
@@ -44,9 +44,17 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ data: zones });
     }
 
-    // Admin et technicien voient toutes les zones (filtre optionnel).
+    if (auth.role === "TECHNICIAN") {
+      return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
+    }
+
+    // Super administrateur : tout le parc, avec filtre optionnel sur le
+    // propriétaire et sur le statut de validation.
     const zones = await prisma.wifiZone.findMany({
-      where: clientId ? { clientId } : {},
+      where: {
+        ...(clientId ? { clientId } : {}),
+        ...(status === "PENDING" || status === "ACTIVE" ? { status } : {}),
+      },
       include: { client: true, equipments: true },
       orderBy: { createdAt: "desc" },
     });
@@ -62,8 +70,11 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * Ajout d'une zone Wi-Fi par son propriétaire. Le dossier client est déduit du
- * jeton : un propriétaire peut ainsi gérer plusieurs zones depuis l'application.
+ * Déclaration d'une zone par son propriétaire.
+ *
+ * Le dossier client est déduit du jeton : un propriétaire peut ainsi gérer
+ * plusieurs zones depuis l'application. La zone est créée en attente de
+ * validation, et le super administrateur en est prévenu.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -81,17 +92,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const name = typeof body?.name === "string" ? body.name.trim() : "";
-    const location = typeof body?.location === "string" ? body.location.trim() : "";
-
-    if (!name) {
-      return NextResponse.json(
-        { error: "Le nom de la zone est requis" },
-        { status: 400 }
-      );
-    }
-
-    const clientId = await getClientIdOf(auth.userId);
+    const clientId = await clientIdForUser(auth.userId);
 
     if (!clientId) {
       return NextResponse.json(
@@ -100,16 +101,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const wifiZone = await prisma.wifiZone.create({
-      data: {
-        clientId,
-        name,
-        location: location || name,
-      },
+    const result = await createZone(clientId, {
+      name: body?.name,
+      location: body?.location,
+    });
+
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: result.status });
+    }
+
+    const zone = await prisma.wifiZone.findUnique({
+      where: { id: result.data.id },
       include: { client: true, equipments: true },
     });
 
-    return NextResponse.json({ data: wifiZone }, { status: 201 });
+    return NextResponse.json({ data: zone }, { status: 201 });
   } catch (error) {
     console.error("Create wifi zone error:", error);
     return NextResponse.json(

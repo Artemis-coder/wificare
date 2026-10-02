@@ -3,15 +3,17 @@ import { NotificationType, TicketStatus } from "@prisma/client";
 import { getApiUser } from "@/lib/api-auth";
 import { notify } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
+import { loadWritableTicket } from "@/lib/tickets";
+import { PUBLIC_USER_SELECT } from "@/lib/user-public";
 
 const STATUSES = new Set<string>(Object.values(TicketStatus));
 
 /**
  * Fait avancer une demande.
  *
- * Seul le technicien affecté peut faire avancer sa propre intervention : sans
- * ce contrôle, n'importe quel compte authentifié — y compris un autre client —
- * pourrait clore la demande d'autrui.
+ * Le contrôle des droits est délégué à `loadWritableTicket`, le même que celui
+ * du rapport d'intervention : les deux décrivent la même intervention, et une
+ * règle qui les départagerait permettrait d'écrire ce que l'autre refuse.
  */
 export async function PATCH(
   request: NextRequest,
@@ -30,28 +32,19 @@ export async function PATCH(
       return NextResponse.json({ error: "Statut invalide" }, { status: 400 });
     }
 
+    const writable = await loadWritableTicket(auth, id);
+
+    if (!writable.ok) {
+      return NextResponse.json({ error: writable.error }, { status: writable.status });
+    }
+
     const existing = await prisma.ticket.findUnique({
       where: { id },
-      include: { client: true, technician: true, quoteInvoice: true },
+      include: { quoteInvoice: true },
     });
 
     if (!existing) {
       return NextResponse.json({ error: "Demande introuvable" }, { status: 404 });
-    }
-
-    // Le client suit sa demande, il ne la fait pas avancer lui-même.
-    if (auth.role === "TECHNICIAN" && existing.technicianId !== auth.userId) {
-      return NextResponse.json(
-        { error: "Cette demande ne vous est pas affectée" },
-        { status: 403 }
-      );
-    }
-
-    if (auth.role === "CLIENT") {
-      return NextResponse.json(
-        { error: "Seul le technicien peut faire avancer une demande" },
-        { status: 403 }
-      );
     }
 
     // Une réparation ne démarre pas sur un devis que le client n'a pas
@@ -80,14 +73,14 @@ export async function PATCH(
       include: {
         client: true,
         wifiZone: true,
-        technician: true,
+        technician: { select: PUBLIC_USER_SELECT },
       },
     });
 
     // Le client est la partie interestée : c'est lui qui suit le traitement.
     const label = STATUS_LABEL[status as TicketStatus] ?? status;
 
-    if (ticket.client.userId && existing.status !== status) {
+    if (ticket.client.userId && writable.data.status !== status) {
       await notify({
         userIds: [ticket.client.userId],
         type:

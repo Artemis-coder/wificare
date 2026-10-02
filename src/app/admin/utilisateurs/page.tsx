@@ -4,7 +4,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 
-import { isSuperAdmin, ROLE_LABEL, type AppRole } from '@/lib/roles';
+import { APP_ROLES, isSuperAdmin, ROLE_LABEL, type AppRole } from '@/lib/roles';
 import { UserSearch } from './user-search';
 import { NewUserDialog } from './new-user-dialog';
 
@@ -22,7 +22,6 @@ const STATUS_LABEL = {
 
 const ROLE_BADGE: Record<AppRole, string> = {
   SUPER_ADMIN: 'badge-brand',
-  ADMIN: 'badge-purple',
   TECHNICIAN: 'badge-warning',
   CLIENT: 'badge-neutral',
 };
@@ -94,7 +93,13 @@ export default async function AdminUsersPage() {
       </div>
 
       <div className="dashboard-grid" style={{ marginTop: '0', marginBottom: '24px' }}>
-        {(['SUPER_ADMIN', 'ADMIN', 'TECHNICIAN', 'CLIENT'] as const).map((role) => (
+        <div className="kpi-card">
+          <div className="label">Comptes sur la plateforme</div>
+          <div style={{ fontSize: '28px', fontWeight: 800, marginTop: '4px' }}>
+            {rows.length}
+          </div>
+        </div>
+        {APP_ROLES.map((role) => (
           <div key={role} className="kpi-card">
             <div className="label">{ROLE_LABEL[role]}</div>
             <div style={{ fontSize: '28px', fontWeight: 800, marginTop: '4px' }}>

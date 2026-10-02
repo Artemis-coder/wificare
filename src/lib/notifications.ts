@@ -1,5 +1,6 @@
-import { NotificationType } from "@prisma/client";
+import { NotificationType, TicketStatus } from "@prisma/client";
 import { prisma } from "./prisma";
+import { STAFF_ROLES } from "./roles";
 import { notifyPush } from "./push";
 import { notifyWebPush } from "./web-push";
 
@@ -70,11 +71,11 @@ export async function notify(input: NotificationInput): Promise<void> {
 
 /**
  * Identifiants des administrateurs : ce sont eux qui répartissent le travail.
- * Un super administrateur fait aussi partie de la régie, il est donc inclus.
+ * La régie n'a plus qu'un profil, le super administrateur.
  */
 export async function adminIds(): Promise<string[]> {
   const admins = await prisma.user.findMany({
-    where: { role: { in: ["SUPER_ADMIN", "ADMIN"] } },
+    where: { role: { in: [...STAFF_ROLES] } },
     select: { id: true },
   });
 
@@ -82,19 +83,59 @@ export async function adminIds(): Promise<string[]> {
 }
 
 /**
- * Renvoie l'unique technicien disponible, ou null.
+ * Statuts qui comptent comme une demande encore en cours de traitement.
  *
- * Tant que la plateforme ne compte qu'un technicien, toute demande entrante
- * lui revient automatiquement : il n'y a personne d'autre pour la traiter, et
- * une file d'attente n'aurait personne pour la vider. Dès qu'un second
- * technicien est en service, l'affectation redevient une décision de régie.
+ * Une intervention close, annulée ou terminée ne pèse plus dans la charge d'un
+ * technicien : le compter reviendrait à envoyer la prochaine demande au
+ * technicien qui a, il y a six mois, traité le plus d'interventions.
  */
-export async function soleTechnicianId(): Promise<string | null> {
+const OPEN_TICKET_STATUSES: TicketStatus[] = [
+  TicketStatus.NEW,
+  TicketStatus.TO_VERIFY,
+  TicketStatus.ASSIGNED,
+  TicketStatus.CONFIRMED,
+  TicketStatus.EN_ROUTE,
+  TicketStatus.DIAGNOSING,
+  TicketStatus.PENDING_QUOTE,
+  TicketStatus.REPAIRING,
+  TicketStatus.COMPLETED,
+  TicketStatus.PENDING_PAYMENT,
+];
+
+/**
+ * Renvoie le technicien auquel une nouvelle demande revient automatiquement.
+ *
+ * L'affectation n'est plus une décision de régie : dès qu'un technicien est en
+ * service, la demande lui est adressée sans intervention humaine. Le choix se
+ * fait sur la charge réelle — le nombre de demandes en cours — afin que deux
+ * techniciens ne s'accumulent pas sur le même backlog pendant que l'autre reste
+ * libre. À charge égale, le plus ancien compte est servi le premier : c'est ce
+ * qui fait tourner les demandes dans un ordre stable et prévisible plutôt qu'à
+ * l'arrivée de la première requête.
+ *
+ * Renvoie `null` si aucun technicien n'est en service : la demande attend alors
+ * dans la file de répartition du super administrateur.
+ */
+export async function leastLoadedTechnicianId(): Promise<string | null> {
   const technicians = await prisma.user.findMany({
     where: { role: "TECHNICIAN", status: "ACTIVE" },
-    select: { id: true },
-    take: 2,
+    select: {
+      id: true,
+      createdAt: true,
+      _count: {
+        select: {
+          tickets: { where: { status: { in: OPEN_TICKET_STATUSES } } },
+        },
+      },
+    },
+    orderBy: { createdAt: "asc" },
   });
 
-  return technicians.length === 1 ? technicians[0].id : null;
+  if (technicians.length === 0) {
+    return null;
+  }
+
+  return technicians.reduce((least, technician) =>
+    technician._count.tickets < least._count.tickets ? technician : least
+  ).id;
 }
