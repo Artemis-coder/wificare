@@ -12,6 +12,7 @@ import '../../../core/widgets/states.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../notifications/application/notification_providers.dart';
 import '../../tickets/application/ticket_queries.dart';
+import '../../tickets/application/ticket_sync.dart';
 
 /// Accueil client : compteurs, demandes récentes, actions rapides.
 class DashboardScreen extends ConsumerWidget {
@@ -25,6 +26,12 @@ class DashboardScreen extends ConsumerWidget {
     final asyncTickets = ref.watch(ticketListProvider(null));
     final stats = ref.watch(ticketStatsProvider);
     final unread = ref.watch(unreadCountProvider);
+
+    // Le tableau de bord est monté en permanence — la pile d'onglets le garde
+    // vivant même quand un autre onglet est affiché. C'est donc ici que la
+    // synchronisation des listes se branche : la notification de statut y est
+    // reçue, et la liste du client comme le détail ouvert suivent aussitôt.
+    ref.watch(ticketSyncProvider);
 
     return Scaffold(
       appBar: AppBar(

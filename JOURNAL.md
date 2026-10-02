@@ -4,6 +4,57 @@ Ce qui a changé dans le produit, et pourquoi. Les détails d'implémentation so
 dans l'historique git et le README ; ici, on retient ce qui est utile à savoir
 six mois plus tard.
 
+## 1.3.0 — 2 octobre 2026
+
+Trois manques de la même famille : ce que l'utilisateur a accordé, ce qu'il voit,
+et ce qu'il peut faire, n'était pas à jour.
+
+### Corrigé
+
+**La localisation n'était demandée qu'au premier plan.** Le manifeste déclarait
+`ACCESS_BACKGROUND_LOCATION` depuis le début, mais le code ne demandait jamais
+que le premier niveau : `ACCESS_FINE_LOCATION`. Le technicien partageait donc sa
+position écran allumé, et perdait le suivi dès que le téléphone se verrouillait —
+c'est-à-dire pendant tout le trajet, puisque le téléphone est en poche. Le client
+de son côté voyait l'ETA se figer sans explication, et le technicien ne pouvait
+rien y faire.
+
+Android traite ces deux niveaux comme deux demandes distinctes : les réclamer
+d'un bloc est ignoré. L'application demande donc le premier plan, puis revient
+demander l'arrière-plan une fois le premier accordé — c'est ce second appel qui
+ouvre la fenêtre « Autoriser tout le temps ». Un refus de ce second niveau n'est
+pas un échec : l'application garde le premier plan et **dit** que la position ne
+sera pas partagée écran éteint. Le silence, lui, aurait laissé le technicien
+croire partager sa position pendant tout le trajet.
+
+**Une demande assignée n'apparaissait qu'après un rechargement manuel.** Le
+technicien chargeait sa liste, la régie affectait une demande trente secondes
+plus tard, et rien ne l'informait de l'événement le plus important de sa journée.
+Il fallait actualiser à la main, sans savoir s'il l'avait déjà fait.
+
+La correction n'est pas un minuteur. Le serveur écrit déjà une notification à
+chaque changement d'état, et elle arrive par le flux temps réel : **c'est elle
+qui est l'événement**. La liste se relit donc quand le serveur dit qu'elle a
+changé, pour le ticket concerné et lui seul — recharger toute la liste à chaque
+notification ferait clignoter le contenu et perdre la position de défilement
+pour une demande qui n'a pas bougé. Aucun sondage, aucune fenêtre pendant
+laquelle l'écran ment.
+
+**Le bouton « Envoyer un devis » restait affiché sur un devis validé.** Un devis
+accepté ou payé est entré en vigueur ; en réécrire un ne ferait que le
+contredire, et la décision du client se porterait alors sur un document qui n'est
+plus celui qu'il lisait. Le bouton ne s'affiche plus que lorsqu'aucun devis
+n'existe, ou après un refus — seul cas où il en reste un à écrire. Après un refus
+il se nomme d'ailleurs « Proposer un nouveau devis », ce qu'il est.
+
+### Note
+
+La localisation en arrière-plan n'est demandée qu'au **technicien**. Côté client,
+l'application ne fait qu'un relevé ponctuel pour géolocaliser une zone : lui
+demander « tout le temps » lui promettrait une surveillance qu'aucune fonction
+n'exploite, et Google Play refuse la localisation en arrière-plan accessoire. La
+demande est donc paramétrée, et le relevé client la pose sans.
+
 ## 1.2.0 — 2 octobre 2026
 
 Ce que la régie et les techniciens ne pouvaient pas faire malgré toute la

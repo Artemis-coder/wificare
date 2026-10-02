@@ -15,6 +15,7 @@ import '../../../core/widgets/notification_bell.dart';
 import '../../../core/widgets/states.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../notifications/application/notification_providers.dart';
+import '../../tickets/application/ticket_sync.dart';
 import '../application/technician_providers.dart';
 
 /// Accueil technicien : ses compteurs, les demandes à traiter et les
@@ -29,6 +30,12 @@ class TechnicianDashboardScreen extends ConsumerWidget {
     final asyncTickets = ref.watch(technicianTicketsProvider(null));
     final stats = ref.watch(technicianStatsProvider);
     final unread = ref.watch(unreadCountProvider);
+
+    // Le tableau de bord est monté en permanence — la pile d'onglets le garde
+    // vivant même quand un autre onglet est affiché. C'est donc ici que la
+    // synchronisation des listes se branche : la notification de statut y est
+    // reçue, et la liste du client comme le détail ouvert suivent aussitôt.
+    ref.watch(ticketSyncProvider);
 
     // Priorité : ce qui n'est pas encore pris en charge, puis le reste.
     final tickets = [...?asyncTickets.value]

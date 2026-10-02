@@ -28,7 +28,15 @@ class ClientLocation {
       // position. Un client qui a refusé au premier lancement peut donc
       // réessayer ici : Android rouvre la boîte de dialogue tant qu'il n'a pas
       // refusé définitivement.
-      final grant = await PermissionsService.requestLocation();
+      // `requireBackground: false` : un relevé ponctuel n'a rien à faire d'un
+      // suivi permanent. Demander « tout le temps » au client lui prometrait une
+      // surveillance qu'aucune fonction n'exploite — Android ne l'accorderait
+      // qu'au prix d'une justification que Google Play refuse pour une
+      // localisation accessorye. Le premier plan suffit : la position est lue
+      // une fois, puis abandonnée jusqu'au relevé suivant.
+      final grant = await PermissionsService.requestLocation(
+        requireBackground: false,
+      );
 
       if (grant.servicesDisabled) {
         return const ClientLocationResult(

@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -113,6 +116,10 @@ void main() {
   // chiffres, et il faut pouvoir les déclencher sans réécrire le harnais.
   Object? walletPayload = FakeApiData.wallet();
 
+  // Une deuxième demande n'est affectée qu'au milieu du test qui le demande :
+  // la service par défaut reste celle d'un technicien qui n'a qu'une demande.
+  var assigned = true;
+
   // Un encaissement déclaré par le technicien, et sa réponse d'API. Ils sont
   // observés pour vérifier qu'un encaissement passe bien par le serveur, et
   // qu'un refus du serveur est remonté tel quel.
@@ -132,6 +139,7 @@ void main() {
     // devis au moment où il en a besoin.
     hasQuote = false;
     quoteStatus = 'SENT';
+    assigned = true;
 
     // Plateforme de suivi absente par défaut : c'est le cas de tout test qui ne
     // s'intéresse pas à la localisation, et cela évite qu'un appel de canal sans
@@ -238,6 +246,12 @@ void main() {
       '/tickets/t-tech-1/tracking/stop': (_, _) => {
         'data': {'stoppedAt': '2026-01-30T10:20:00.000Z'},
       },
+      // Le nombre de demandes renvoyé change dès que l'assignation est reçue :
+      // le test vérifie que c'est la notification, et non un chargement de page,
+      // qui fait apparaître la nouvelle demande.
+      // Le second ticket n'est servi qu'une fois `assigned` vrai : c'est ce qui
+      // permet de vérifier que la notification — et non un rechargement manuel —
+      // fait apparaître la demande.
       '/tickets': (path, body) => FakeApiData.ticketPage([
         FakeApiData.ticket(
           't-tech-1',
@@ -245,12 +259,13 @@ void main() {
           status,
           technicianId: 'tech-1',
         ),
-        FakeApiData.ticket(
-          't-tech-2',
-          '#TK-2026-002',
-          'COMPLETED',
-          technicianId: 'tech-1',
-        ),
+        if (assigned)
+          FakeApiData.ticket(
+            't-tech-2',
+            '#TK-2026-002',
+            'COMPLETED',
+            technicianId: 'tech-1',
+          ),
       ]),
       '/notifications': (_, _) => FakeApiData.notificationFeed(notifications),
       '/notifications/n-1': (_, _) {
@@ -405,6 +420,57 @@ void main() {
     await settle(tester);
     expect(find.text('#TK-2026-001'), findsOneWidget);
     expect(find.text('#TK-2026-002'), findsNothing);
+  });
+
+  testWidgets('technicien : une assignation reçue en direct s\'affiche', (
+    tester,
+  ) async {
+    FlutterSecureStorage.setMockInitialValues(Map.of(_session));
+
+    final controller = StreamController<Uint8List>();
+    adapter.streams['/notifications/stream'] = controller.stream;
+
+    // Le serveur ne connaît pas encore cette demande pour ce technicien.
+    assigned = false;
+
+    await pumpApp(tester);
+
+    // Avant l'assignation : la demande n'est pas encore dans la liste du
+    // technicien.
+    expect(find.text('#TK-2026-002'), findsNothing);
+
+    // Le serveur l'affecte, et sa notification part dans la foulée.
+    assigned = true;
+
+    // La régie affecte la demande. Le serveur écrit la notification, et le
+    // technicien ne doit pas avoir à actualiser pour la voir.
+    controller.add(
+      Uint8List.fromList(
+        utf8.encode(
+          'event: notification\n'
+          'data: ${jsonEncode({
+                'id': 'n-assign',
+                'type': 'TICKET_ASSIGNED',
+                'title': 'Nouvelle intervention assignée',
+                'body': '#TK-2026-002',
+                'ticketId': 't-tech-2',
+                'readAt': null,
+                'createdAt': '2026-01-30T12:30:00.000Z',
+              })}\n\n',
+        ),
+      ),
+    );
+
+    await settle(tester, steps: 20);
+
+    await tester.tap(find.text('Demandes'));
+    await settle(tester, steps: 20);
+
+    // La demande assignée est là, sans qu'aucun rechargement manuel n'ait été
+    // déclenché : c'est la notification qui a relics la liste.
+    expect(find.text('#TK-2026-002'), findsOneWidget);
+
+    await controller.close();
   });
 
   testWidgets('technicien : son portefeuille suit ses encaissements', (
@@ -636,8 +702,9 @@ void main() {
 
     // Corriger son devis après un refus doit rester possible : le client a
     // écarté un montant, pas l'intervention. Sans cela, le refus laisserait la
-    // demande sans aucune porte de sortie.
-    expect(find.text('Envoyer un devis au client'), findsOneWidget);
+    // demande sans aucune porte de sortie. Le libellé le dit : il ne s'agit
+    // plus du premier devis, mais d'une nouvelle proposition.
+    expect(find.text('Proposer un nouveau devis'), findsOneWidget);
 
     // Le bouton d'impossibilité est en bas de la carte d'action : il faut
     // descendre, sinon son absence ne prouverait rien.

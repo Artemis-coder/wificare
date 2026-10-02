@@ -571,11 +571,20 @@ data: (ticket) {
 
               // Le devis se rédige une fois le diagnostic posé : c'est à ce
               // moment que le technicien sait ce qu'il a à facturer.
-              if (_canQuote(ticket.status))
+              // Un devis existe déjà : le bouton n'a plus d'utilité. Le client
+              // l'a accepté ou l'a payé — il est entré en vigueur, et un second
+              // devis ne ferait que le contredire. Seul un devis **refusé** en
+              // laisse un nouveau à écrire : le client a écarté le montant, et
+              // la demande revient au technicien.
+              //
+              // Sans cette condition, un technicien pouvait réécrire un devis
+              // pendant que le client LISait le précédent : la décision se
+              // porterait alors sur un document qui n'est plus celui affiché.
+              if (_canQuote(ticket.status) && (!hasQuote || quoteRefused))
                 Padding(
                   padding: const EdgeInsets.only(top: AppSpacing.sm),
                   child: AppButton(
-                    label: 'Envoyer un devis au client',
+                    label: hasQuote ? 'Proposer un nouveau devis' : 'Envoyer un devis au client',
                     icon: Icons.request_quote_outlined,
                     variant: AppButtonVariant.secondary,
                     loading: _busy,
