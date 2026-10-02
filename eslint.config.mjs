@@ -12,6 +12,12 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // L'application Flutter. Ses artefacts de compilation embarquent du
+    // JavaScript tier — `mobile/build/unit_test_assets/` notamment — qu'Eslint
+    // parcourait et rapportait comme du code du projet. Les motifs ci-dessus
+    // sont relatifs à la racine du dépôt : `build/**` ne couvre pas
+    // `mobile/build/`.
+    "mobile/**",
   ]),
 ]);
 

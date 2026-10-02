@@ -14,6 +14,10 @@ node_modules
 # sur Vercel. Le code est utile au depot, pas a l'hebergement.
 /mobile
 
+# Documentation de reference : ni le build ni l'hebergement n'en ont besoin.
+/design-system
+/DEMARRAGE.md
+
 # Artefacts de compilation generes
 build
 dist

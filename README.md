@@ -11,6 +11,7 @@ Le dépôt est un **monodépôt** :
 | --- | --- |
 | `src/`, `prisma/` | application Next.js (App Router) : back-office web **et** API REST servie à l'application mobile |
 | `mobile/` | application Flutter Android (client **et** technicien) |
+| `design-system/` | palette, espacements et composants de référence, plus l'image de marque source |
 
 > **Une seule base, un seul serveur.** Le back-office web et l'application mobile
 > parlent la même base via la même API. Une règle métier écrite une fois dans
@@ -702,7 +703,11 @@ séparés, dispatchés par rôle à la connexion : `/home/...` pour le client,
 un compte connecté redirige vers le sien.
 
 Les détails de conception de l'application sont dans
-[`mobile/AGENTS.md`](mobile/AGENTS.md).
+[`mobile/AGENTS.md`](mobile/AGENTS.md). La palette, l'échelle d'espacement et
+les ombres de référence sont dans
+[`design-system/wifi-care-mobile/MASTER.md`](design-system/wifi-care-mobile/MASTER.md) —
+attention, sa section « Écarts constatés » signale les points où le web et le
+mobile ne suivent pas la même palette.
 
 ---
 
@@ -721,7 +726,46 @@ tester sur émulateur :
 API_BASE_URL=http://10.0.2.2:3000/api tool/build_release.sh
 ```
 
-### 14.1 Pourquoi le renommage est fait en script
+### 14.1 Prérequis
+
+La toolchain n'est pas détectée automatiquement : Flutter doit être dans le
+`PATH`, et un JDK 17 ou plus doit l'être aussi. Le JBR d'Android Studio convient
+et ne demande rien à installer :
+
+```bash
+export PATH="$HOME/development/flutter/bin:$PATH"
+export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
+export ANDROID_HOME="$HOME/Library/Android/sdk"
+```
+
+`flutter doctor` signale `cmdline-tools component is missing` et des licences
+non acceptées. Aucun des deux n'empêche `flutter build apk` tant que le SDK
+Android, les platform-tools et les build-tools sont déjà installés sur la
+machine. Ils bloqueraient en revanche `flutter doctor --android-licenses` et
+l'ajout d'un nouveau composant au SDK.
+
+### 14.2 Signature
+
+La release est signée avec la **clé de debug**. L'APK qui en sort est
+installable par `adb` ou par transfert direct, mais **le Play Store le
+refusera**. Publier suppose de générer une keystore, de la déclarer dans
+`mobile/android/key.properties` — fichier non versionné, comme la keystore — et
+de remplacer `signingConfig = signingConfigs.getByName("debug")` dans
+`mobile/android/app/build.gradle.kts`.
+
+### 14.3 Notifications push
+
+Hors configuration, l'application se compile et fonctionne : aucun téléphone
+ne sonne. Le plugin Firebase n'est applique que si le fichier est present
+(voir le commentaire en tete de `mobile/android/app/build.gradle.kts`) :
+
+```bash
+cp Firebase/google-services.json mobile/android/app/google-services.json
+```
+
+Ni `Firebase/` ni le fichier depose ne sont versionnes.
+
+### 14.4 Pourquoi le renommage est fait en script
 
 `flutter build apk` produit `app-release.apk`. Ce nom accompagne le fichier
 jusqu'à la personne qui le reçoit, sur un téléphone comme dans une liste de
@@ -729,7 +773,7 @@ téléchargements, et n'identifie pas l'application. Le renommage se fait dans l
 script parce qu'AGP 9 a retiré `outputFileName` de son API de variants : il
 n'existe plus de moyen supporté de le faire depuis `build.gradle.kts`.
 
-### 14.2 La marque est définie à trois endroits qui doivent rester alignés
+### 14.5 La marque est définie à trois endroits qui doivent rester alignés
 
 | Emplacement | Valeur |
 | --- | --- |
@@ -737,7 +781,7 @@ n'existe plus de moyen supporté de le faire depuis `build.gradle.kts`.
 | `android/app/src/main/AndroidManifest.xml` (`android:label`) | `WiFiCare` |
 | `src/app/layout.tsx` (libellé du back-office) | `WiFiCare` |
 
-### 14.3 La marque versionnée
+### 14.6 La marque versionnée
 
 | Emplacement | Usage |
 | --- | --- |
@@ -745,14 +789,20 @@ n'existe plus de moyen supporté de le faire depuis `build.gradle.kts`.
 | `src/app/icon.png` | favicon |
 | `mobile/assets/logo/logo_wificare.png` | connexion et splash |
 | `mobile/android/app/src/main/res/mipmap-*/ic_launcher.png` | icône du lanceur |
+| `design-system/brand/logo-source.jpg` | image source, 736 × 736 |
 
-Un changement de logo remplace `public/logo-wificare.png` et
-`mobile/assets/logo/logo_wificare.png`. L'icône Android doit être
-régénérée pour chaque densité (`mdpi` 48 px → `xxxhdpi` 192 px). Il n'y a pas
-de fichier source dans le dépôt : le PNG est la source, et sa version `.jpg`
-qui doublait le poids n'était référencée nulle part.
+Un changement de logo part de `design-system/brand/logo-source.jpg` et
+remplace `public/logo-wificare.png` et `mobile/assets/logo/logo_wificare.png`,
+tous deux en 512 × 512. L'icône Android doit être régénérée pour chaque
+densité (`mdpi` 48 px → `xxxhdpi` 192 px).
 
-### 14.4 Ce qui est versionné, et pourquoi
+> Le JPEG avait été retiré du dépôt au commit `4e4d7bc`, jugé référencé nulle
+> part. Il revient ici avec un rôle — la source dont dérivent les PNG — mais
+> **la correspondance visuelle n'a pas pu être vérifiée** : le JPEG fait
+> 736 × 736, les PNG 512 × 512, et personne n'a encore comparé les deux. À
+> confirmer avant d'en faire la référence.
+
+### 14.7 Ce qui est versionné, et pourquoi
 
 Le dépôt contient tout ce qui est nécessaire pour reconstruire l'APK à
 l'identique :
