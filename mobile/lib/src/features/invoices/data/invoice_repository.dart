@@ -45,6 +45,20 @@ class InvoiceRepository {
     return Payment.fromJson(response['data'] as Map<String, dynamic>);
   }
 
+  /// Déclare un encaissement en espèces par le technicien affecté.
+  ///
+  /// Aucun montant n'est transmis : le serveur reprend celui du devis accepté.
+  /// Le technicien constate ce qu'il a encaissé, il ne fixe pas un prix — et un
+  /// montant choisi à la main ouvrirait la voie à un encaissement partiel
+  /// présenté comme un règlement complet.
+  Future<Payment> declareCashCollection(String ticketId) async {
+    final response = await _api.post<Map<String, dynamic>>(
+      '/tickets/$ticketId/cash',
+    );
+
+    return Payment.fromJson(response['data'] as Map<String, dynamic>);
+  }
+
   Future<QuoteInvoice> byId(String id) async {
     final response = await _api.get<Map<String, dynamic>>('/quote-invoices/$id');
     return QuoteInvoice.fromJson(response['data'] as Map<String, dynamic>);

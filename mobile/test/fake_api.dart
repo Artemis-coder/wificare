@@ -321,6 +321,7 @@ static Map<String, dynamic> wallet() => {
     'currentMonthLabel': 'février 2026',
     'currentMonthAmount': 55000,
     'paidInterventions': 3,
+    'refundedAmount': 0,
     'byChannel': {'MOBILE_MONEY': 40000, 'CASH': 30000},
     'monthly': [
       {
@@ -349,6 +350,7 @@ static Map<String, dynamic> wallet() => {
         'ticketId': 't-tech-1',
         'ticketReference': '#TK-2026-001',
         'ticketStatus': 'COMPLETED',
+        'status': 'COMPLETED',
       },
       {
         'id': 'pay-2',
@@ -360,6 +362,60 @@ static Map<String, dynamic> wallet() => {
         'ticketId': 't-tech-1',
         'ticketReference': '#TK-2026-002',
         'ticketStatus': 'REPAIRING',
+        'status': 'COMPLETED',
+      },
+    ],
+  },
+};
+
+/// Portefeuille après un remboursement.
+///
+/// Le remboursement figure dans l'historique mais **pas** dans le cumulé : c'est
+/// exactement l'écart que l'écran doit laisser voir. Le total vaut 70 000 alors
+/// que la somme des lignes affichées vaut 95 000 — sans la ligne « dont
+/// remboursés », le technicien lirait son relevé comme faux.
+static Map<String, dynamic> walletWithRefund() => {
+  'data': {
+    'totalAmount': 70000,
+    'currentMonthKey': '2026-02',
+    'currentMonthLabel': 'février 2026',
+    'currentMonthAmount': 55000,
+    'paidInterventions': 3,
+    'refundedAmount': 25000,
+    'byChannel': {'MOBILE_MONEY': 40000, 'CASH': 30000},
+    'monthly': [
+      {
+        'key': '2026-02',
+        'label': 'février 2026',
+        'amount': 55000,
+        'count': 2,
+        'byChannel': {'MOBILE_MONEY': 40000, 'CASH': 15000},
+      },
+    ],
+    'payments': [
+      {
+        'id': 'pay-3',
+        'amount': 25000,
+        'channel': 'MOBILE_MONEY',
+        'operator': 'WAVE',
+        'transactionRef': 'WM-8891',
+        'paidAt': '2026-02-18T09:00:00.000Z',
+        'ticketId': 't-tech-1',
+        'ticketReference': '#TK-2026-001',
+        'ticketStatus': 'CANCELLED',
+        'status': 'REFUNDED',
+      },
+      {
+        'id': 'pay-2',
+        'amount': 30000,
+        'channel': 'CASH',
+        'operator': null,
+        'transactionRef': null,
+        'paidAt': '2026-02-10T09:00:00.000Z',
+        'ticketId': 't-tech-1',
+        'ticketReference': '#TK-2026-002',
+        'ticketStatus': 'REPAIRING',
+        'status': 'COMPLETED',
       },
     ],
   },
@@ -373,6 +429,7 @@ static Map<String, dynamic> emptyWallet() => {
     'currentMonthLabel': 'février 2026',
     'currentMonthAmount': 0,
     'paidInterventions': 0,
+    'refundedAmount': 0,
     'byChannel': <String, dynamic>{},
     'monthly': <dynamic>[],
     'payments': <dynamic>[],

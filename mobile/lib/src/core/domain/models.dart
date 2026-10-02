@@ -616,6 +616,7 @@ class TechnicianWallet {
     required this.currentMonthKey,
     required this.currentMonthLabel,
     required this.currentMonthAmount,
+    required this.refundedAmount,
     required this.paidInterventions,
     required this.byChannel,
     required this.monthly,
@@ -626,6 +627,13 @@ class TechnicianWallet {
   final String currentMonthKey;
   final String currentMonthLabel;
   final double currentMonthAmount;
+
+  /// Montant repris au technicien après coup, toutes périodes confondues.
+  ///
+  /// Volontairement hors de [totalAmount] : l'encaissement cumulé ne bouge pas,
+  /// mais il faut pouvoir dire d'où vient l'écart entre ce que la régie a
+  /// encaissé et ce que le technicien a gardé.
+  final double refundedAmount;
 
   /// Interventions payées, toutes périodes confondues.
   final int paidInterventions;
@@ -658,6 +666,7 @@ class TechnicianWallet {
       currentMonthKey: JsonX.str(json['currentMonthKey']),
       currentMonthLabel: JsonX.str(json['currentMonthLabel']),
       currentMonthAmount: JsonX.decimal(json['currentMonthAmount']),
+      refundedAmount: JsonX.decimal(json['refundedAmount']),
       paidInterventions: JsonX.integer(json['paidInterventions']),
       byChannel: byChannel,
       monthly: JsonX.list(json['monthly']).map(WalletMonth.fromJson).toList(),
@@ -718,10 +727,14 @@ class WalletPayment {
     required this.ticketId,
     required this.ticketReference,
     required this.ticketStatus,
+    required this.status,
   });
 
   final String id;
   final double amount;
+
+  /// Un règlement repris reste dans l'historique, mais n'est plus une recette.
+  final PaymentStatus status;
   final PaymentChannel channel;
   final MobileMoneyOperator? operator;
   final String? transactionRef;
@@ -740,5 +753,6 @@ class WalletPayment {
     ticketId: JsonX.str(json['ticketId']),
     ticketReference: JsonX.str(json['ticketReference']),
     ticketStatus: TicketStatus.fromWire(JsonX.strOrNull(json['ticketStatus'])),
+    status: PaymentStatus.fromWire(JsonX.strOrNull(json['status'])),
   );
 }

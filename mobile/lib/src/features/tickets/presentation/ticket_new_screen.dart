@@ -17,6 +17,7 @@ import '../../../core/widgets/photo_picker_grid.dart';
 import '../../../core/widgets/states.dart';
 import '../../auth/application/auth_controller.dart';
 import '../application/ticket_providers.dart';
+import '../application/ticket_queries.dart';
 
 /// Création d'une demande d'intervention par le client.
 class TicketNewScreen extends ConsumerStatefulWidget {
@@ -104,6 +105,17 @@ class _TicketNewScreenState extends ConsumerState<TicketNewScreen> {
           if (mounted) setState(() => _uploading = false);
         }
       }
+
+      // La liste est relue avant de revenir à l'écran précédent. Sans cela, le
+      // client restait devant une liste sans sa nouvelle panne, et ses compteurs
+      // du tableau de bord non plus : il aurait fallu tirer pour actualiser.
+      //
+      // L'invalidation porte sur toute la famille, pas sur l'instance du filtre
+      // affiché. Un `FutureProvider.autoDispose.family` garde une instance par
+      // filtre, et le client peut revenir sur l'un d'eux depuis un onglet resté
+      // monté : invalider le seul filtre courant laisserait les autres montrer
+      // une liste antérieure à la création.
+      ref.invalidate(ticketListProvider);
 
       if (!mounted) return;
       showAppSnackBar(context, 'Demande ${ticket.reference} créée');

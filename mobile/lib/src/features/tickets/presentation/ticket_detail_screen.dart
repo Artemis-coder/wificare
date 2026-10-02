@@ -16,6 +16,8 @@ import '../../../core/widgets/app_input.dart';
 import '../../../core/widgets/states.dart';
 import '../../../core/widgets/ticket_progress.dart';
 import '../../../core/network/api_exception.dart';
+import '../../invoices/application/invoice_providers.dart';
+import '../application/ticket_queries.dart';
 import '../application/ticket_providers.dart';
 import 'arrival_estimate_card.dart';
 
@@ -200,9 +202,12 @@ class TicketDetailScreen extends ConsumerWidget {
               _FilesCard(files: ticket.files, absoluteUrl: _absoluteUrl),
             ],
 
+            // Le devis apparaît avant le rapport d'intervention : c'est le
+            // document que le client attend à ce stade, et il est le seul qui
+            // lui demande quelque chose.
             if (ticket.quoteInvoice != null) ...[
               const SizedBox(height: AppSpacing.md),
-              _InvoiceCard(invoice: ticket.quoteInvoice!),
+              _QuoteCard(invoice: ticket.quoteInvoice!),
             ],
 
             const SizedBox(height: AppSpacing.md),
@@ -412,49 +417,218 @@ class _FilesCard extends StatelessWidget {
   }
 }
 
-class _InvoiceCard extends StatelessWidget {
-  const _InvoiceCard({required this.invoice});
+/// Devis du technicien, tel que le client le voit sur sa propre demande.
+///
+/// L'écran n'affichait qu'un type, une pastille et un montant : ni les lignes,
+/// ni les notes, et surtout aucun moyen de trancher. Le client devait retrouver
+/// la facture dans l'onglet pour accepter ou refuser un devis qui concernait
+/// pourtant la panne qu'il était en train de lire.
+///
+/// Le parcours de décision reste celui de l'onglet « Factures » — même
+/// repository, même confirmation avant un refus, mêmes invalidations. Dupliquer
+/// la règle aurait produit deux écrans capables de diverger sur ce qui décide
+/// si le technicien peut réparer.
+class _QuoteCard extends ConsumerWidget {
+  const _QuoteCard({required this.invoice});
 
   final QuoteInvoice invoice;
 
+  Future<void> _decide(BuildContext context, WidgetRef ref, bool accept) async {
+    if (!accept) {
+      final confirmed = await confirmDialog(
+        context,
+        title: 'Refuser le devis',
+        message:
+            'Le technicien sera prévenu et pourra corriger son devis. '
+            'Votre demande reste ouverte.',
+        confirmLabel: 'Refuser',
+        cancelLabel: 'Annuler',
+        destructive: true,
+      );
+
+      if (!confirmed || !context.mounted) return;
+    }
+
+    try {
+      await ref.read(invoiceRepositoryProvider).decide(invoice.id, accept: accept);
+
+      // La décision change le devis et la demande : c'est elle qui décide si le
+      // technicien peut réparer, et le fil d'étapes en dépend. La liste du
+      // client est relue aussi, pour que ses compteurs suivent.
+      ref.invalidate(ticketDetailProvider(invoice.ticketId ?? ''));
+
+      // La liste porte le statut de la demande et alimente les compteurs du
+      // tableau de bord. Sans cette invalidation, le client verrait « Devis en
+      // attente » dans son fil d'étapes et « En cours » dans sa liste.
+      ref.invalidate(ticketListProvider);
+
+      if (context.mounted) {
+        showAppSnackBar(
+          context,
+          accept
+              ? 'Devis accepté. Le technicien peut lancer la réparation.'
+              : 'Devis refusé. Le technicien peut le corriger.',
+        );
+      }
+    } on ApiException catch (error) {
+      if (context.mounted) showAppSnackBar(context, error.message, isError: true);
+    } catch (_) {
+      if (context.mounted) {
+        showAppSnackBar(context, 'Décision impossible. Réessayez.', isError: true);
+      }
+    }
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final colors = context.colors;
+    final awaiting = invoice.status == DocumentStatus.sent;
 
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SectionHeader(title: invoice.type.label),
           Row(
             children: [
-              StatusBadge.document(invoice.status),
-              const Spacer(),
-              Text(
-                Fmt.money(invoice.totalAmount),
-                style: TextStyle(
-                  color: colors.onSurface,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                ),
+              Expanded(
+                child: SectionHeader(title: 'Devis du technicien'),
               ),
+              StatusBadge.document(invoice.status),
             ],
           ),
-          if (invoice.payment != null) ...[
+
+          if (invoice.lines.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.sm),
+            for (final line in invoice.lines) _QuoteLineRow(line: line),
+            Divider(color: colors.outlineVariant),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Montant total',
+                    style: TextStyle(
+                      color: colors.onSurfaceVariant,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                Text(
+                  Fmt.money(invoice.totalAmount),
+                  style: TextStyle(
+                    color: colors.onSurface,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ],
+
+          if (invoice.notes != null && invoice.notes!.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              invoice.notes!,
+              style: TextStyle(
+                color: colors.onSurfaceVariant,
+                fontSize: 13,
+                height: 1.4,
+              ),
+            ),
+          ],
+
+          if (invoice.payment != null) ...[
+            const SizedBox(height: AppSpacing.md),
             Row(
               children: [
                 Icon(Icons.payments_rounded, size: 18, color: colors.success),
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: Text(
-                    '${invoice.payment!.channel.label} · ${Fmt.money(invoice.payment!.amount)}',
-                    style: TextStyle(color: colors.onSurfaceVariant, fontSize: 13),
+                    'Réglé : ${invoice.payment!.channel.label}'
+                    '${invoice.payment!.operator == null ? '' : ' ${invoice.payment!.operator!.label}'}'
+                    ' · ${Fmt.money(invoice.payment!.amount)}',
+                    style: TextStyle(
+                      color: colors.onSurfaceVariant,
+                      fontSize: 13,
+                    ),
                   ),
                 ),
               ],
             ),
           ],
+
+          // Accepter et refuser n'est proposé qu'à un devis envoyé : un devis
+          // déjà tranché ne se re-discute pas, et un devis payé est un contrat
+          // exécuté. Régler reste dans l'onglet « Factures » — c'est un autre
+          // acte, et le confondre avec accepter reviendrait à faire payer pour
+          // autoriser une intervention.
+          if (awaiting) ...[
+            const SizedBox(height: AppSpacing.lg),
+            AppButton(
+              label: 'Accepter le devis',
+              icon: Icons.check_circle_outline_rounded,
+              onPressed: () => _decide(context, ref, true),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            AppButton(
+              label: 'Refuser le devis',
+              variant: AppButtonVariant.secondary,
+              size: AppButtonSize.sm,
+              onPressed: () => _decide(context, ref, false),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              'Refuser garde votre argent : le technicien sera prévenu et pourra '
+              'proposer un autre devis. Régler se fait dans l\'onglet « Factures ».',
+              style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12, height: 1.4),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Une ligne du devis : désignation, quantité et prix, comme sur une facture.
+class _QuoteLineRow extends StatelessWidget {
+  const _QuoteLineRow({required this.line});
+
+  final InvoiceLine line;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  line.description,
+                  style: TextStyle(color: colors.onSurface, fontSize: 14),
+                ),
+                Text(
+                  '${line.quantity} × ${Fmt.money(line.unitPrice)}',
+                  style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Text(
+            Fmt.money(line.totalPrice),
+            style: TextStyle(
+              color: colors.onSurface,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ],
       ),
     );

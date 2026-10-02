@@ -195,6 +195,31 @@ class _Totals extends StatelessWidget {
             ),
           ],
         ),
+        // Le remboursement ne réduit pas le total : il explique pourquoi le
+        // total peut être inférieur à la somme des montants affichés plus bas.
+        // Sans cette ligne, l'écart se lirait comme une erreur de calcul.
+        if (wallet.refundedAmount > 0) ...[
+          const SizedBox(height: AppSpacing.sm),
+          AppCard(
+            child: Row(
+              children: [
+                Icon(Icons.undo_rounded, size: 18, color: colors.error),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(
+                    'Dont ${Fmt.money(wallet.refundedAmount)} remboursés après '
+                    'encaissement',
+                    style: TextStyle(
+                      color: colors.onSurfaceVariant,
+                      fontSize: 13,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -264,6 +289,7 @@ class _PaymentRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final refunded = payment.status == PaymentStatus.refunded;
 
     return AppCard(
       onTap: () => context.push(
@@ -293,10 +319,17 @@ class _PaymentRow extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '${_paymentMethod(payment)} · ${Fmt.since(payment.paidAt)}',
+                  // Le remboursement se lit ici, dans le texte, et non dans une
+                  // seconde pastille : deux pastilles sur une ligne de règlement
+                  // débordent dès que la référence est courte, et la pastille
+                  // elle-même se comprime. Le mot « remboursé » tient dans la
+                  // sous-ligne, qui peut passer à la ligne.
+                  '${_paymentMethod(payment)} · ${Fmt.since(payment.paidAt)}'
+                  '${refunded ? ' · remboursé' : ''}',
                   style: TextStyle(
-                    color: colors.onSurfaceVariant,
+                    color: refunded ? colors.error : colors.onSurfaceVariant,
                     fontSize: 12,
+                    fontWeight: refunded ? FontWeight.w600 : null,
                   ),
                 ),
               ],
@@ -304,11 +337,16 @@ class _PaymentRow extends StatelessWidget {
           ),
           const SizedBox(width: AppSpacing.sm),
           Text(
-            Fmt.money(payment.amount),
+            // Le signe est dans le montant : une reprise retire de l'argent, elle
+            // ne l'ajoute pas.
+            refunded
+                ? '-${Fmt.money(payment.amount)}'
+                : Fmt.money(payment.amount),
             style: TextStyle(
-              color: colors.success,
+              color: refunded ? colors.error : colors.success,
               fontSize: 15,
               fontWeight: FontWeight.w700,
+              decoration: refunded ? TextDecoration.lineThrough : null,
             ),
           ),
         ],

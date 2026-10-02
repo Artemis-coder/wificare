@@ -108,9 +108,30 @@ void main() {
   // la débloque, `REJECTED` rend la demande au technicien.
   var quoteStatus = 'SENT';
 
+  // Le portefeuille est paramétrable pour la même raison : un relevé sans
+  // encaissement et un relevé après un remboursement n'affichent pas les mêmes
+  // chiffres, et il faut pouvoir les déclencher sans réécrire le harnais.
+  Object? walletPayload = FakeApiData.wallet();
+
+  // Un encaissement déclaré par le technicien, et sa réponse d'API. Ils sont
+  // observés pour vérifier qu'un encaissement passe bien par le serveur, et
+  // qu'un refus du serveur est remonté tel quel.
+  final cashCalls = <String>[];
+  String? cashError;
+
   setUp(() {
     status = 'ASSIGNED';
     notifications = _seedNotifications();
+    walletPayload = FakeApiData.wallet();
+    cashCalls.clear();
+    cashError = null;
+
+    // `hasQuote` et `quoteStatus` pilotent les actions du détail. Laissés par
+    // le test précédent, ils feraient échouer le suivant qui suppose une
+    // demande sans devis : chaque test part d'une demande neutre, et pose son
+    // devis au moment où il en a besoin.
+    hasQuote = false;
+    quoteStatus = 'SENT';
 
     // Plateforme de suivi absente par défaut : c'est le cas de tout test qui ne
     // s'intéresse pas à la localisation, et cela évite qu'un appel de canal sans
@@ -187,7 +208,33 @@ void main() {
           },
         };
       },
-      '/wallet': (_, _) => FakeApiData.wallet(),
+      '/wallet': (_, _) => walletPayload,
+      'POST /tickets/t-tech-1/cash': (path, _) {
+        cashCalls.add(path);
+
+        // Un refus du serveur est un vrai statut HTTP, pas un corps 200 : le
+        // message ne remonterait pas autrement, et le test passerait à côté de
+        // ce qu'il est censé vérifier.
+        if (cashError != null) {
+          adapter.statuses['POST /tickets/t-tech-1/cash'] = 403;
+          return {'error': cashError};
+        }
+
+        return {
+          'data': {
+            'id': 'pay-cash',
+            'quoteInvoiceId': 'inv-q1',
+            'amount': 25000,
+            'channel': 'CASH',
+            'operator': null,
+            'transactionRef': null,
+            'reference': null,
+            'proofUrl': null,
+            'status': 'COMPLETED',
+            'createdAt': '2026-01-30T11:00:00.000Z',
+          },
+        };
+      },
       '/tickets/t-tech-1/tracking/stop': (_, _) => {
         'data': {'stoppedAt': '2026-01-30T10:20:00.000Z'},
       },
@@ -404,6 +451,91 @@ void main() {
     expect(find.textContaining('Mobile Money Wave'), findsOneWidget);
     // Et chaque règlement renvoie vers l'intervention qu'il solde.
     expect(find.text('#TK-2026-001'), findsOneWidget);
+  });
+
+  testWidgets('technicien : un remboursement reste visible sans fausser le total', (
+    tester,
+  ) async {
+    walletPayload = FakeApiData.walletWithRefund();
+    FlutterSecureStorage.setMockInitialValues(Map.of(_session));
+    await pumpApp(tester);
+
+    await tester.tap(find.text('Portefeuille'));
+    await settle(tester, steps: 20);
+
+    // Le remboursement n'est pas une recette : le cumul�� ne bouge pas, et une
+    // ligne dédiée dit où est parti l'écart entre le total et les montants
+    // affichés ligne à ligne.
+    expect(find.textContaining('Dont'), findsOneWidget);
+    expect(find.textContaining('remboursés'), findsOneWidget);
+
+    // Le règlement repris reste dans l'historique, marqué comme tel. Le
+    // retirer masquerait pourquoi le total ne correspond pas aux lignes.
+    await tester.fling(find.text('Derniers règlements'), const Offset(0, -600), 1200);
+    await settle(tester, steps: 20);
+    expect(find.text('#TK-2026-001'), findsOneWidget);
+    expect(find.textContaining('remboursé'), findsWidgets);
+    // Le montant repris sort en négatif etet barré : aligné à droite, un
+    // montant positif se lirait comme une recette de plus.
+    expect(find.textContaining('-'), findsWidgets);
+  });
+
+  testWidgets('technicien : il déclare l\'encaissement en espèces', (
+    tester,
+  ) async {
+    // Un devis accepté n'est pas encore encaissé : c'est précisément le cas
+    // qui demandait ce bouton.
+    hasQuote = true;
+    quoteStatus = 'ACCEPTED';
+    status = 'PENDING_QUOTE';
+    FlutterSecureStorage.setMockInitialValues(Map.of(_session));
+    await pumpApp(tester);
+
+    await tester.tap(find.text('Demandes'));
+    await settle(tester);
+    await tester.tap(find.text('#TK-2026-001'));
+    await settle(tester, steps: 20);
+
+    expect(find.textContaining('Encaisser'), findsOneWidget);
+
+    await tester.tap(find.textContaining('Encaisser'));
+    await settle(tester, steps: 20);
+
+    // Sans confirmation, rien n'est déclaré : un encaissement est un fait, il
+    // ne se produit pas sur un simple tap.
+    expect(cashCalls, isEmpty);
+    expect(find.text('Déclarer un encaissement'), findsOneWidget);
+
+    await tester.tap(find.text("J'ai encaissé"));
+    await settle(tester, steps: 20);
+
+    expect(cashCalls, hasLength(1));
+    expect(find.textContaining('Encaissement enregistré'), findsOneWidget);
+  });
+
+  testWidgets('technicien : un refus du serveur remonte tel quel', (
+    tester,
+  ) async {
+    hasQuote = true;
+    quoteStatus = 'ACCEPTED';
+    status = 'PENDING_QUOTE';
+    cashError = 'Ce devis ne vous est pas affecté';
+    FlutterSecureStorage.setMockInitialValues(Map.of(_session));
+    await pumpApp(tester);
+
+    await tester.tap(find.text('Demandes'));
+    await settle(tester);
+    await tester.tap(find.text('#TK-2026-001'));
+    await settle(tester, steps: 20);
+
+    await tester.tap(find.textContaining('Encaisser'));
+    await settle(tester, steps: 20);
+    await tester.tap(find.text("J'ai encaissé"));
+    await settle(tester, steps: 20);
+
+    // Le technicien voit pourquoi, et non un échec générique : il sait s'il
+    // doit corriger sa demande ou réessayer.
+    expect(find.textContaining('Ce devis ne vous est pas affecté'), findsOneWidget);
   });
 
   testWidgets('technicien : le devis commande les actions possibles', (

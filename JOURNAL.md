@@ -4,6 +4,72 @@ Ce qui a changé dans le produit, et pourquoi. Les détails d'implémentation so
 dans l'historique git et le README ; ici, on retient ce qui est utile à savoir
 six mois plus tard.
 
+## 1.2.0 — 2 octobre 2026
+
+Ce que la régie et les techniciens ne pouvaient pas faire malgré toute la
+logique déjà en place : décider d'un devis depuis la panne, encaisser en
+espèces, et voir où se trouve un technicien.
+
+### Corrigé
+
+**Le client ne pouvait trancher son devis que depuis l'onglet « Factures ».**
+Le devis arrivait bien dans le détail de la panne — l'API le renvoyait, le
+modèle le portait — mais l'écran n'affichait qu'un type, une pastille et un
+montant. Ni les lignes, ni les notes, et surtout aucun moyen de répondre : le
+client devait retrouver la facture dans un autre onglet pour autoriser un devis
+qui concernait la panne qu'il était en train de lire. Le détail porte désormais
+le devis complet et les deux décisions, avec le même dépôt, la même confirmation
+avant un refus et les mêmes invalidations que l'onglet « Factures ».
+
+**Un encaissement en espèces n'existait nulle part.** Seul le client pouvait
+appeler l'API de paiement. Or un règlement en espèces n'a pas d'auteur déclaré :
+le technicien tient les billets, et le client peut être absent. Ce paiement
+n'entrait donc ni dans le relevé du technicien, ni dans la facturation de la
+régie — le montant encaissé n'était traçable par personne. Le technicien
+déclare désormais ce qu'il a encaissé, sur la demande qui lui est affectée.
+Le montant n'est pas transmis : c'est celui du devis accepté, parce qu'un
+montant saisi à la main permettrait de présenter un encaissement partiel comme un
+règlement complet. Il ne déclare que du cash — lui laisser déclarer un Mobile
+Money reviendrait à lui permettre d'afficher un règlement que le client nie
+avoir fait.
+
+**Un remboursement disparaissait du relevé.** Le total se recalculait sur les
+seuls règlements effectifs, et l'historique sur les mêmes lignes : une somme
+encaissée puis reprise s'évaporait, et le technicien lisait son relevé comme
+faux. Les remboursements figurent maintenant dans l'historique, marqués comme
+tels, et une ligne « dont X remboursés » explique l'écart entre le cumul et la
+somme des montants affichés — sans entrer dans le cumul lui-même, qui est un
+encaissement et non une recette.
+
+**Le portefeuille ne se rafraîchissait jamais.** Le total était mis en cache
+pour toute la session : le technicien encaissait, ouvrait son portefeuille, et
+voyait les chiffres d'avant. Le relevé se relit à l'ouverture. Aucun minuteur
+ne tourne en fond, et surtout pas pendant qu'il consulte — un relevé qui bouge
+sous les yeux est illisible.
+
+**La liste des pannes ignorait la panne qui venait d'être créée.** Le retour
+de l'onglet conservait la liste déjà chargée : le client se retrouvait devant
+une liste sans sa demande, et ses compteurs du tableau de bord non plus,
+jusqu'à ce qu'il tire l'écran pour actualiser. L'invalidation porte sur toute
+la famille de filtres, pas sur le seul filtre affiché — l'écran actif reste
+vivant, et un onglet monté conservait sinon sa liste d'avant.
+
+**La régie ne voyait pas où se trouve le technicien.** Le suivi était lu, mais
+seuls le nom, l'ETA et la distance étaient affichés — trois chiffres qui ne se
+situent pas. La page de la demande porte maintenant la position sur une carte,
+avec le technicien et la zone du client, plus les coordonnées, la précision et
+la vitesse. Les tuiles viennent d'OpenStreetMap, comme dans l'application
+mobile : pas de clé API. La carte reste un instantané à l'ouverture de la page ;
+un rafraîchissement automatique la ferait sauter sous le curseur de la régie en
+pleine lecture.
+
+### Note
+
+Le paiement du technicien et celui du client passent par deux routes
+distinctes. Les confondre sous un même point d'entrée obligerait chaque
+appelant à vérifier s'il a le droit d'écrire ce qu'il envoie, et la règle
+serait dupliquée côté client.
+
 ## 1.1.0 — 2 octobre 2026
 
 Première version qui regroupe les correctifs signalés à l'usage. Le parcours

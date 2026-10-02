@@ -92,6 +92,16 @@ class TechnicianStats {
 /// portefeuille est relu au retour sur l'écran, pas en permanence. Un relevé
 /// qui se met à jour tout seul afficherait un total qui bouge sous les yeux, et
 /// le technicien ne saurait plus à quoi correspondre le chiffre qu'il a noté.
-final technicianWalletProvider = FutureProvider<TechnicianWallet>((ref) {
+/// Portefeuille du technicien.
+///
+/// `autoDispose` est délibéré : le relevé est personnel et il change dès qu'il
+/// encaisse. Conservé en cache, l'écran rouvrirait le portefeuille avec les
+/// chiffres d'avant le dernier encaissement — le technicien verrait son
+/// travail sans être payé, ou le reviendrait après un remboursement.
+///
+/// Seule la durée de vie décide du rechargement : l'écran est ouvert, donc le
+/// portefeuille se relit. Aucun minuteur ne tourne en fond, et surtout pas
+/// pendant qu'il consulte — un relevé qui bouge sous les yeux est illisible.
+final technicianWalletProvider = FutureProvider.autoDispose<TechnicianWallet>((ref) {
   return ref.read(technicianRepositoryProvider).wallet();
 });

@@ -18,6 +18,7 @@ import '../../../core/widgets/states.dart';
 import '../application/technician_providers.dart';
 import '../application/tracking_controller.dart';
 import '../data/technician_repository.dart';
+import '../../invoices/application/invoice_providers.dart';
 import 'quote_composer.dart';
 
 final technicianTicketDetailProvider = FutureProvider.autoDispose
@@ -104,6 +105,61 @@ class _TechnicianTicketScreenState
   ///
   /// La fenêtre ne renvoie que des lignes valides : elle est le seul endroit
   /// où le technicien saisit, et le serveur revérifie de son côté.
+  Future<void> _collect(Ticket ticket) async {
+    final invoice = ticket.quoteInvoice!;
+
+    // Un encaissement est un fait constaté, pas une intention : il est confirmé
+    // avant d'être écrit, parce qu'un montant announced ne sera jamais repris.
+    final confirmed = await confirmDialog(
+      context,
+      title: 'Déclarer un encaissement',
+      message:
+          'Vous confirmez avoir reçu ${Fmt.money(invoice.totalAmount)} en '
+          'espèces pour cette intervention ?',
+      confirmLabel: 'J\'ai encaissé',
+      cancelLabel: 'Annuler',
+    );
+
+    if (!confirmed || !mounted) return;
+
+    setState(() => _busy = true);
+    try {
+      // Le montant n'est pas transmis : le serveur reprend celui du devis. Un
+      // montant saisi à la main ouvrirait la voie à un encaissement partiel
+      // présenté comme un règlement complet.
+      await ref
+          .read(invoiceRepositoryProvider)
+          .declareCashCollection(ticket.id);
+
+      // La demande et le portefeuille changent d'un seul coup : sans les deux
+      // relectures, le technicien reverrait son encaissement seulement après
+      // avoir quitté l'écran.
+      ref.invalidate(technicianTicketDetailProvider(ticket.id));
+      ref.invalidate(technicianWalletProvider);
+
+      if (mounted) {
+        showAppSnackBar(
+          context,
+          'Encaissement enregistré dans votre portefeuille.',
+        );
+      }
+    } on ApiException catch (error) {
+      // Le motif du serveur est remonté tel quel : le technicien sait s'il doit
+      // corriger ou réessayer, ce qu'un échec générique ne lui dirait pas.
+      if (mounted) showAppSnackBar(context, error.message, isError: true);
+    } catch (_) {
+      if (mounted) {
+        showAppSnackBar(
+          context,
+          'Encaissement impossible. Réessayez.',
+          isError: true,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _sendQuote(Ticket ticket) async {
     final draft = await showQuoteComposer(
       context,
@@ -216,6 +272,13 @@ data: (ticket) {
           // technicien, qui peut corriger son devis ou signaler une impossibilité.
           final quoteRefused =
               ticket.quoteInvoice?.status == DocumentStatus.rejected;
+
+          // Un devis payé ne se ré-enregistre pas : le bouton disparaît, et le
+          // risque n'est pas qu'il soit présent, mais qu'un double appel crée
+          // deux règlements pour un devis unique.
+          final hasQuotePaid =
+              ticket.quoteInvoice?.status == DocumentStatus.paid ||
+              ticket.quoteInvoice?.payment != null;
 
           // Le devis ne retire pas au technicien la main sur sa demande : il
           // retire seulement la réparation tant que le client n'a pas accepté.
@@ -526,6 +589,25 @@ data: (ticket) {
               // intervention qui n'a plus de raison d'être. Un devis refusé, en
               // revanche, ne lies plus personne : le client l'a écarté et la
               // demande lui revient.
+              // Un devis accepté n'est pas un devis encaissé. Le règlement par
+              // mobile money se déclare côté client, mais un encaissement en
+              // espèces n'a pas d'auteur déclaré : c'est le technicien qui tient
+              // les billets, et le client peut même être absent. Sans ce bouton,
+              // ce paiement n'entrait dans aucun registre — ni relevé du
+              // technicien, ni facturation de la régie.
+              if (quoteAuthorizes &&
+                  !hasQuotePaid &&
+                  ticket.quoteInvoice!.payment == null)
+                Padding(
+                  padding: const EdgeInsets.only(top: AppSpacing.sm),
+                  child: AppButton(
+                    label: 'Encaisser ${Fmt.money(ticket.quoteInvoice!.totalAmount)}',
+                    icon: Icons.payments_rounded,
+                    loading: _busy,
+                    onPressed: _busy ? null : () => _collect(ticket),
+                  ),
+                ),
+
               if ((!hasQuote || quoteRefused) &&
                   ticket.status.isOpen &&
                   next.contains(TicketStatus.canceled))

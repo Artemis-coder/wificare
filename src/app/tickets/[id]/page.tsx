@@ -9,6 +9,7 @@ import { loadReadableTicket } from '@/lib/tickets';
 import { listTechnicians } from '@/lib/technicians';
 import AssignTechnicianForm from './assign-technician-form';
 import QuotePanel from './quote-panel';
+import TechnicianMap from './technician-map';
 
 export const dynamic = 'force-dynamic';
 
@@ -117,6 +118,13 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
     where: { ticketId: ticket.id },
     select: {
       technician: { select: { name: true } },
+      // Les coordonnées sont lues ici, et non recalculées : la position est
+      // celle que le technicien a partagée, avec la précision qu'il a obtenue
+      // sur le terrain.
+      latitude: true,
+      longitude: true,
+      accuracy: true,
+      speed: true,
       distanceMeters: true,
       etaMinutes: true,
       recordedAt: true,
@@ -129,6 +137,20 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
         active: trackingRow.stoppedAt === null,
         etaMinutes: trackingRow.etaMinutes,
         distanceMeters: trackingRow.distanceMeters,
+        latitude: trackingRow.latitude,
+        longitude: trackingRow.longitude,
+        accuracy: trackingRow.accuracy,
+        speed: trackingRow.speed,
+        // La destination n'est connue que si la zone a été géolocalisée. Une
+        // zone sans coordonnées ne se déduit pas : la carte montre alors le
+        // technicien seul, plutôt qu'un point de destination inventé.
+        destination:
+          ticket.wifiZone?.latitude != null && ticket.wifiZone?.longitude != null
+            ? {
+                latitude: ticket.wifiZone.latitude,
+                longitude: ticket.wifiZone.longitude,
+              }
+            : null,
         recordedAt: trackingRow.recordedAt,
         technicianName: trackingRow.technician.name ?? ticket.technician?.name ?? null,
       }
@@ -266,6 +288,29 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
                   {tracking.technicianName && (
                     <div style={{ fontWeight: 700, marginBottom: '4px' }}>{tracking.technicianName}</div>
                   )}
+
+                  {/* La carte vient avant les chiffres : elle répond d'abord à la
+                      question que se pose la régie — « où il est ? » — et les
+                      mesures ci-dessous la précisent ensuite. */}
+                  <TechnicianMap
+                    technician={{ latitude: tracking.latitude, longitude: tracking.longitude }}
+                    destination={tracking.destination}
+                    technicianName={tracking.technicianName}
+                  />
+
+                  {/* Les coordonnées seules manquaient. La régie voit où se trouve
+                      le technicien, mais ne peut ni le situer sur un plan, ni
+                      distinguer une position fiable d'un point figé loin de la
+                      panne. La carte et la précision ci-dessous couvrent les deux. */}
+                  <div style={{ marginTop: '8px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                    {tracking.latitude.toFixed(5)}, {tracking.longitude.toFixed(5)}
+                    {tracking.accuracy !== null && (
+                      <> · précision ±{Math.round(tracking.accuracy)} m</>
+                    )}
+                    {tracking.speed !== null && tracking.speed > 0 && (
+                      <> · {Math.round(tracking.speed * 3.6)} km/h</>
+                    )}
+                  </div>
 
                   {tracking.active ? (
                     tracking.etaMinutes !== null ? (

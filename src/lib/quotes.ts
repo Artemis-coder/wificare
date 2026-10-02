@@ -186,7 +186,57 @@ export async function payQuote(
   ticketId: string,
   input: PayQuoteInput
 ): Promise<TicketResult<Payment>> {
+  return recordPayment(actor, ticketId, input, payQuoteDoc);
+}
+
+/**
+ * Déclaration d'un encaissement par le technicien.
+ *
+ * Un règlement en espèces n'a pas d'auteur déclaré : le client n'a pas besoin
+ * d'ouvrir l'application, et il peut même être absent — le technicien encaisse
+ * sur place. Sans ce chemin, ce paiement n'existait nulle part : il n'entrait
+ * ni dans le relevé du technicien, ni dans la facturation de la régie, et le
+ * montant payé n'était traçable par personne.
+ *
+ * Le technicien ne déclare que du **cash**. Lui laisser déclarer un Mobile
+ * Money reviendrait à lui permettre d'afficher un règlement que le client nie
+ * avoir fait : le prix est un fait qu'il constate, pas une intention qu'il
+ * déclare. Le Mobile Money reste déclaré par le client, qui en détient la
+ * référence.
+ */
+export async function declareCashCollection(
+  actor: TicketActor,
+  ticketId: string,
+  input: PayQuoteInput
+): Promise<TicketResult<Payment>> {
+  return recordPayment(actor, ticketId, input, cashCollectionDoc);
+}
+
+/** Règles de fond communes : qui peut, et à quelles conditions. */
+interface PaymentRecorderRules {
+  /// Le client est le seul à pouvoir régler son devis.
+  readonly clientOnly: boolean;
+  /// Le cash est receivable par le client sur sa propre facture.
+  readonly allowCash: boolean;
+}
+
+const payQuoteDoc: PaymentRecorderRules = { clientOnly: true, allowCash: true };
+const cashCollectionDoc: PaymentRecorderRules = { clientOnly: false, allowCash: false };
+
+async function recordPayment(
+  actor: TicketActor,
+  ticketId: string,
+  input: PayQuoteInput,
+  doc: PaymentRecorderRules
+): Promise<TicketResult<Payment>> {
   const { channel, operator, transactionRef } = input;
+
+  // Le cash déclaré par le technicien n'a pas d'opérateur, et aucun autre moyen
+  // ne lui est ouvert : voir `declareCashCollection`.
+  if (!doc.allowCash && channel !== PaymentChannel.CASH) {
+    return fail("Le technicien ne déclare qu'un encaissement en espèces", 403);
+  }
+
 
   if (!channel || !CHANNELS.has(channel)) {
     return fail("Moyen de paiement inconnu", 400);
@@ -214,8 +264,15 @@ export async function payQuote(
     return fail("Cette demande n'a pas de devis à régler", 404);
   }
 
-  if (ticket.client.userId !== actor.userId) {
-    return fail("Ce devis ne vous est pas adressé", 403);
+  // Le client règle son propre devis. Le technicien, lui, déclare seulement ce
+  // qu'il a encaissé sur la demande qui lui est affectée — jamais celle d'un
+  // collègue, jamais une demande sans devis.
+  if (doc.clientOnly) {
+    if (ticket.client.userId !== actor.userId) {
+      return fail("Ce devis ne vous est pas adressé", 403);
+    }
+  } else if (actor.role !== "TECHNICIAN" || ticket.technicianId !== actor.userId) {
+    return fail("Seul le technicien affecté à cette demande déclare l'encaissement", 403);
   }
 
   const invoice = ticket.quoteInvoice;
