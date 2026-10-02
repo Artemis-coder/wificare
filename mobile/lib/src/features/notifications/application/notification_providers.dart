@@ -114,6 +114,17 @@ Future<void> markNotificationRead(WidgetRef ref, String id) async {
   refreshNotifications(ref);
 }
 
+/// Supprime une notification, puis recharge le flux.
+///
+/// Le rechargement suit la suppression au lieu de retirer la ligne à la main :
+/// le compteur de non-lus est recalculé par le serveur, et c'est lui qui fait
+/// foi. Une ligne retirée localement ferait diverger le compteur de la cloche
+/// jusqu'au rechargement suivant.
+Future<void> deleteNotification(WidgetRef ref, String id) async {
+  await ref.read(notificationRepositoryProvider).delete(id);
+  refreshNotifications(ref);
+}
+
 /// Marque toutes les notifications comme lues.
 Future<void> markAllNotificationsRead(WidgetRef ref) async {
   await ref.read(notificationRepositoryProvider).markAllRead();

@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/domain/enums.dart';
 import '../../../core/domain/models.dart';
+import '../../../core/network/api_exception.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
@@ -92,14 +93,95 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                   padding: const EdgeInsets.all(AppSpacing.md),
                   itemCount: data.items.length,
                   separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
-                  itemBuilder: (context, index) => _NotificationTile(
-                    notification: data.items[index],
-                  ),
+                  itemBuilder: (context, index) {
+                    final item = data.items[index];
+
+                    // Le balayage n'est proposé que sur une notification lue.
+                    // Une notification encore non lue porte un fait que
+                    // l'utilisateur n'a pas vu : la retirer sans confirmation
+                    // lui ferait perdre une information sans qu'il l'ait
+                    // pourtant lue, et le compteur de non-lus n'aurait plus rien
+                    // à signaler.
+                    if (!item.isRead) return _NotificationTile(notification: item);
+
+                    return Dismissible(
+                      key: ValueKey(item.id),
+                      direction: DismissDirection.endToStart,
+                      background: const _DeleteBackground(),
+                      confirmDismiss: (_) => _confirmDelete(context, item),
+                      onDismissed: (_) async {
+                        try {
+                          await deleteNotification(ref, item.id);
+                        } on ApiException catch (error) {
+                          if (context.mounted) {
+                            showAppSnackBar(
+                              context,
+                              error.message,
+                              isError: true,
+                            );
+                          }
+                        }
+                      },
+                      child: _NotificationTile(notification: item),
+                    );
+                  },
                 ),
         ),
       ),
     );
   }
+}
+
+/// Ce que révèle le balayage : ce qui va se passer, pas un simple effacement.
+class _DeleteBackground extends StatelessWidget {
+  const _DeleteBackground();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+
+    return Container(
+      alignment: Alignment.centerRight,
+      padding: const EdgeInsets.only(right: AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: colors.error,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          Icon(Icons.delete_outline_rounded, color: colors.onSurface),
+          const SizedBox(width: AppSpacing.sm),
+          Text(
+            'Supprimer',
+            style: TextStyle(
+              color: colors.onSurface,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Confirmation avant une suppression : elle est définitive, et une notification
+/// supprimée ne revient pas au balayage suivant.
+Future<bool> _confirmDelete(
+  BuildContext context,
+  AppNotification notification,
+) async {
+  return await confirmDialog(
+        context,
+        title: 'Supprimer la notification',
+        message:
+            '« ${notification.title} » sera retirée de votre liste. Cette action '
+            'est définitive.',
+        confirmLabel: 'Supprimer',
+        cancelLabel: 'Annuler',
+        destructive: true,
+      );
 }
 
 class _NotificationTile extends ConsumerWidget {

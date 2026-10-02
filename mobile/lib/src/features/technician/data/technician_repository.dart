@@ -146,6 +146,31 @@ class TechnicianRepository {
     return Intervention.fromJson(response['data'] as Map<String, dynamic>);
   }
 
+  /// Corrige un rapport déjà déposé.
+  ///
+  /// Séparé de [report] parce que le serveur refuse d'en créer un second : une
+  /// demande qui porte déjà un rapport doit être mise à jour, sinon le
+  /// technicien qui revient corriger son compte rendu se heurterait à un `409`
+  /// sans issue.
+  Future<Intervention> updateReport({
+    required String ticketId,
+    String? diagnostic,
+    String? solution,
+    int? durationMin,
+  }) async {
+    final response = await _api.patch<Map<String, dynamic>>(
+      '/tickets/$ticketId/intervention',
+      data: {
+        if (diagnostic case final value? when value.isNotEmpty)
+          'diagnostic': value,
+        if (solution case final value? when value.isNotEmpty) 'solution': value,
+        'durationMin': ?durationMin,
+      },
+    );
+
+    return Intervention.fromJson(response['data'] as Map<String, dynamic>);
+  }
+
   /// Portefeuille : ce que les clients ont réglé sur ses devis.
   Future<TechnicianWallet> wallet({int months = 12}) async {
     final response = await _api.get<Map<String, dynamic>>(

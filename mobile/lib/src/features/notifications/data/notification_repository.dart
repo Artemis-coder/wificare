@@ -32,4 +32,13 @@ class NotificationRepository {
   Future<void> markAllRead() async {
     await _api.patch<Map<String, dynamic>>('/notifications');
   }
+
+  /// Supprime une notification lue.
+  ///
+  /// Le serveur refuse une notification encore non lue : l'écran ne propose
+  /// donc le geste que sur les lignes déjà lues, et ce refus n'est pas une
+  /// erreur à afficher — il ne peut pas survenir.
+  Future<void> delete(String id) async {
+    await _api.delete<Map<String, dynamic>>('/notifications/$id');
+  }
 }

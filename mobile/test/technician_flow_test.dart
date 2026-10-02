@@ -184,6 +184,27 @@ void main() {
               : null,
         ),
       },
+      // Le rapport deposition du compte rendu. Le serveur le refuse en double,
+      // et la premiere ecriture suffit ici.
+      'POST /tickets/t-tech-1/intervention': (_, body) {
+        final data = (body as Map).cast<String, dynamic>();
+
+        if (data['diagnostic'] == null || data['solution'] == null) {
+          return {'error': 'Le rapport est incomplet'};
+        }
+
+        return {
+          'data': {
+            'id': 'int-1',
+            'ticketId': 't-tech-1',
+            'checklist': {},
+            'diagnostic': data['diagnostic'],
+            'solution': data['solution'],
+            'durationMin': null,
+            'createdAt': '2026-01-30T12:00:00.000Z',
+          },
+        };
+      },
       '/tickets/t-tech-1/status': (path, body) {
         status = (body as Map)['status'] as String;
         return {
@@ -602,6 +623,53 @@ void main() {
     // Le technicien voit pourquoi, et non un échec générique : il sait s'il
     // doit corriger sa demande ou réessayer.
     expect(find.textContaining('Ce devis ne vous est pas affecté'), findsOneWidget);
+  });
+
+  testWidgets('technicien : terminer exige un rapport d\'intervention', (
+    tester,
+  ) async {
+    status = 'REPAIRING';
+    FlutterSecureStorage.setMockInitialValues(Map.of(_session));
+    await pumpApp(tester);
+
+    await tester.tap(find.text('Demandes'));
+    await settle(tester);
+    await tester.tap(find.text('#TK-2026-001'));
+    await settle(tester, steps: 20);
+
+    // La transition ne part pas d'un bouton : elle demande d'abord le compte
+    // rendu, sans quoi une demande close ne laisserait aucune trace de ce qui a
+    // ete fait chez le client.
+    await tester.tap(find.text('Marquer comme terminée'));
+    await settle(tester, steps: 20);
+
+    expect(find.text('Rapport d\'intervention'), findsOneWidget);
+    expect(adapter.calls.contains('PATCH /tickets/t-tech-1/status'), isFalse);
+
+    // Un rapport vide n'est pas un rapport.
+    await tester.tap(find.text('Enregistrer et terminer'));
+    await settle(tester, steps: 20);
+    expect(find.text('Ce qui a été constaté est obligatoire.'), findsOneWidget);
+
+    await tester.enterText(
+      find.byType(TextField).at(0),
+      'Boitier hors tension, fusible saute',
+    );
+    await tester.enterText(
+      find.byType(TextField).at(1),
+      'Fusible remplace et alimentation retablie',
+    );
+    await settle(tester, steps: 20);
+
+    await tester.tap(find.text('Enregistrer et terminer'));
+    await settle(tester, steps: 20);
+
+    // Le rapport est parti, puis la transition.
+    expect(
+      adapter.calls.contains('POST /tickets/t-tech-1/intervention'),
+      isTrue,
+    );
+    expect(adapter.calls.contains('PATCH /tickets/t-tech-1/status'), isTrue);
   });
 
   testWidgets('technicien : le devis commande les actions possibles', (

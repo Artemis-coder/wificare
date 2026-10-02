@@ -31,17 +31,18 @@ auparavant, et ce qui a changé, est dans [JOURNAL.md](JOURNAL.md).
 3. [Wi-Fi Zones : déclaration, validation, suppression](#3-wi-fi-zones--déclaration-validation-suppression)
 4. [Cycle de vie d'une demande](#4-cycle-de-vie-dune-demande)
 5. [Notifications](#5-notifications)
-6. [Démarrage rapide](#6-démarrage-rapide)
-7. [Comptes de démonstration](#7-comptes-de-démonstration)
-8. [Modèle de données](#8-modèle-de-données)
-9. [API REST](#9-api-rest)
-10. [Sécurité](#10-sécurité)
-11. [Migrations de schéma](#11-migrations-de-schéma)
-12. [Tests et qualité](#12-tests-et-qualité)
-13. [Architecture du code](#13-architecture-du-code)
-14. [Construire et distribuer l'APK](#14-construire-et-distribuer-lapk)
-15. [Déploiement](#15-déploiement)
-16. [Décisions et choix de conception](#16-décisions-et-choix-de-conception)
+6. [Photos de demande : la règle de compression](#6-photos-de-demande--la-règle-de-compression)
+7. [Démarrage rapide](#7-démarrage-rapide)
+8. [Comptes de démonstration](#8-comptes-de-démonstration)
+9. [Modèle de données](#9-modèle-de-données)
+10. [API REST](#10-api-rest)
+11. [Sécurité](#11-sécurité)
+12. [Migrations de schéma](#12-migrations-de-schéma)
+13. [Tests et qualité](#13-tests-et-qualité)
+14. [Architecture du code](#14-architecture-du-code)
+15. [Construire et distribuer l'APK](#15-construire-et-distribuer-lapk)
+16. [Déploiement](#16-déploiement)
+17. [Décisions et choix de conception](#17-décisions-et-choix-de-conception)
 
 ---
 
@@ -309,7 +310,23 @@ client. Les erreurs sont loguées, pas propagées.
 | Depôt ou complétion d'un rapport d'intervention | client |
 | Campagne de messages | audience visée |
 
-### 5.3 Le push est facultatif
+### 5.3 Une notification se supprime, mais seulement une fois lue
+
+Le balayage d'une notification **lue** la supprime définitivement, après
+confirmation. Une notification encore non lue ne se supprime pas : elle porte un
+fait que l'utilisateur n'a pas encore pris en compte, et le retirer lui ferait
+perdre une information sans qu'il l'ait jamais vue. Le compteur de non-lus
+n'aurait plus rien à signaler.
+
+Le serveur applique la même règle (`409`) que l'écran. Les deux contrôles ne sont
+pas redondants : celui de l'écran rend le geste impossible, celui du serveur
+empêche qu'un client qui ne l'est pas passe outre.
+
+Supprimer ne touche pas à l'autorisation Android de notification : ce sont deux
+choses sans rapport. Une notification effacée de la liste n'a rien à faire de
+`POST_NOTIFICATIONS`.
+
+### 5.4 Le push est facultatif
 
 Sans configuration Firebase, `src/lib/push.ts` se laisse tomber dans le silence
 et tout continue de fonctionner en notification in-app. L'écran
@@ -319,7 +336,58 @@ visible avant l'envoi**, pas après.
 
 ---
 
-## 6. Démarrage rapide
+## 6. Photos de demande : la règle de compression
+
+Les photos d'une panne viennent d'un téléphone : plusieurs mégaoctets chacune,
+pour une scène qui n'occupe qu'un écran. Le disque comme la base accumulent des
+octets que personne ne verra jamais.
+
+`src/lib/images.ts` porte **la règle**, et elle n'existe qu'à un endroit :
+
+| | côté client | côté serveur |
+| --- | --- | --- |
+| côté le plus long | 1 600 px | 1 600 px |
+| qualité | 80 | 80 |
+| format | inchangé | JPEG |
+
+Deux passages, pour deux raisons :
+
+- le client (`core/media/photo_policy.dart`) évite d'envoyer cinq mégaoctets sur
+  un réseau lent ;
+- le serveur recommpresse parce qu'un client n'est pas obligé de passer par
+  l'application — un import, un script, un autre poste. **Un contrôle qui
+  n'existe que d'un côté n'est pas un contrôle.**
+
+Mesuré sur une image de 4 000 × 3 000 : **34 Mo ramenés à 643 Ko, soit 98 % de
+réduction**, redimensionnée en 1 600 × 1 200.
+
+Trois décisions qui ne vont pas de soi :
+
+- **JPEG en sortie.** C'est ce que sait décoder partout, et une photo de panne
+  perd moins en JPEG qu'en PNG. L'original n'est conservé que si la compression
+  produisait un fichier **plus gros** — le cas d'une capture d'écran faite
+  d'aplats, où le JPEG dégrade pour rien.
+- **L'orientation EXIF est appliquée.** Sans elle, une photo prise en paysage
+  s'affiche tournée, et le technicien voit le boîtier du routeur à l'envers.
+  Le réencodage retire au passage les métadonnées EXIF, dont les coordonnées du
+  domicile du client.
+- **Une image illisible n'est pas rejetée.** `sharp` échoue, le fichier est
+  stocké tel quel. Une photo qui n'aboutit pas à l'écran ne doit pas empêcher le
+  client de signaler sa panne.
+
+Deux bornes protègent le serveur, sur l'**entrée** et non sur la sortie : 10 Mo
+par fichier et 8 fichiers par envoi. Elles limitent ce qu'un client malveillant
+peut lui faire garder en mémoire ; la compression vient ensuite.
+
+Une mesure est journalisée à chaque envoi (`[uploads] n fichier(s) — x reçus, y
+conservés`) : une règle dont on ne mesure pas l'effet cesse d'être vraie sans
+qu'on s'en aperçoive.
+
+`public/uploads/` n'est pas versionné et ne doit pas l'être.
+
+---
+
+## 7. Démarrage rapide
 
 ### 6.1 Prérequis
 
@@ -382,7 +450,7 @@ le backend.
 
 ---
 
-## 7. Comptes de démonstration
+## 8. Comptes de démonstration
 
 Mot de passe `1234` pour tous (4 chiffres, haché en scrypt avec un sel, jamais en
 clair).
@@ -435,7 +503,7 @@ npm run wipe:demo && npx prisma db seed
 
 ---
 
-## 8. Modèle de données
+## 9. Modèle de données
 
 ### 8.1 Entités
 
@@ -481,7 +549,7 @@ client doit correspondre à la position qu'il voit.
 
 ---
 
-## 9. API REST
+## 10. API REST
 
 ### 9.1 Conventions
 
@@ -590,7 +658,7 @@ valeur.
 
 ---
 
-## 10. Sécurité
+## 11. Sécurité
 
 ### 10.1 Deux systèmes d'authentification, un seul backend
 
@@ -666,7 +734,7 @@ dossier client — le font désormais par sélection explicite.
 
 ---
 
-## 11. Migrations de schéma
+## 12. Migrations de schéma
 
 Le projet utilise `prisma db push` : le schéma est la référence, il n'y a pas de
 dossier `prisma/migrations`.
@@ -699,7 +767,7 @@ npx tsx prisma/zone-status-defaults.ts
 
 ---
 
-## 12. Tests et qualité
+## 13. Tests et qualité
 
 ```bash
 # API et back-office
@@ -725,7 +793,7 @@ données créées par ces vérifications sont supprimées derrière elles.
 
 ---
 
-## 13. Architecture du code
+## 14. Architecture du code
 
 ### 13.1 Back-office et API
 
@@ -768,7 +836,7 @@ mobile ne suivent pas la même palette.
 
 ---
 
-## 14. Construire et distribuer l'APK
+## 15. Construire et distribuer l'APK
 
 ```bash
 cd mobile
@@ -783,7 +851,7 @@ tester sur émulateur :
 API_BASE_URL=http://10.0.2.2:3000/api tool/build_release.sh
 ```
 
-### 14.1 Prérequis
+### 15.1 Prérequis
 
 La toolchain n'est pas détectée automatiquement : Flutter doit être dans le
 `PATH`, et un JDK 17 ou plus doit l'être aussi. Le JBR d'Android Studio convient
@@ -801,7 +869,7 @@ Android, les platform-tools et les build-tools sont déjà installés sur la
 machine. Ils bloqueraient en revanche `flutter doctor --android-licenses` et
 l'ajout d'un nouveau composant au SDK.
 
-### 14.2 Signature
+### 15.2 Signature
 
 La release est signée avec la **clé de debug**. L'APK qui en sort est
 installable par `adb` ou par transfert direct, mais **le Play Store le
@@ -810,7 +878,7 @@ refusera**. Publier suppose de générer une keystore, de la déclarer dans
 de remplacer `signingConfig = signingConfigs.getByName("debug")` dans
 `mobile/android/app/build.gradle.kts`.
 
-### 14.3 Notifications push
+### 15.3 Notifications push
 
 Hors configuration, l'application se compile et fonctionne : aucun téléphone
 ne sonne. Le plugin Firebase n'est applique que si le fichier est present
@@ -820,9 +888,9 @@ ne sonne. Le plugin Firebase n'est applique que si le fichier est present
 cp Firebase/google-services.json mobile/android/app/google-services.json
 ```
 
-Ni `Firebase/` ni le fichier depose ne sont versionnes.
+Ni `Firebase/` ni le fichier déposé ne sont versionnés.
 
-### 14.4 Pourquoi le renommage est fait en script
+### 15.4 Pourquoi le renommage est fait en script
 
 `flutter build apk` produit `app-release.apk`. Ce nom accompagne le fichier
 jusqu'à la personne qui le reçoit, sur un téléphone comme dans une liste de
@@ -843,7 +911,7 @@ qu'Android compare pour autoriser l'installation par-dessus une application déj
 présente. Reconstruire sans changer la version produit un fichier que le
 téléphone refusera d'installer.
 
-### 14.5 La marque est définie à trois endroits qui doivent rester alignés
+### 15.5 La marque est définie à trois endroits qui doivent rester alignés
 
 | Emplacement | Valeur |
 | --- | --- |
@@ -851,7 +919,7 @@ téléphone refusera d'installer.
 | `android/app/src/main/AndroidManifest.xml` (`android:label`) | `WiFiCare` |
 | `src/app/layout.tsx` (libellé du back-office) | `WiFiCare` |
 
-### 14.6 La marque versionnée
+### 16.6 La marque versionnée
 
 | Emplacement | Usage |
 | --- | --- |
@@ -872,7 +940,7 @@ densité (`mdpi` 48 px → `xxxhdpi` 192 px).
 > 736 × 736, les PNG 512 × 512, et personne n'a encore comparé les deux. À
 > confirmer avant d'en faire la référence.
 
-### 14.7 Ce qui est versionné, et pourquoi
+### 16.7 Ce qui est versionné, et pourquoi
 
 Le dépôt contient tout ce qui est nécessaire pour reconstruire l'APK à
 l'identique :
@@ -894,7 +962,7 @@ n'est pas versionné : les releases GitHub fournissent le fichier prêt à insta
 
 ---
 
-## 15. Déploiement
+## 16. Déploiement
 
 Le back-office et l'API sont déployés ensemble (Vercel, `wificare-web`) ;
 l'application est distribuée en APK.
@@ -920,7 +988,7 @@ silence ne passe pas pour un succès.
 
 ---
 
-## 16. Décisions et choix de conception
+## 17. Décisions et choix de conception
 
 | Décision | Raison |
 | --- | --- |

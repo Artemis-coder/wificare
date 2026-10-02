@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/domain/enums.dart';
+import '../../../core/media/photo_policy.dart';
 import '../../../core/domain/models.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/providers/infra_providers.dart';
@@ -46,12 +47,20 @@ class _TicketNewScreenState extends ConsumerState<TicketNewScreen> {
   }
 
   Future<void> _addPhoto(ImageSource source) async {
-    try {
-      final picked = await ImagePicker().pickImage(
-        source: source,
-        imageQuality: 80,
-        maxWidth: 1600,
+    // La limite est vérifiée avant d'ouvrir la caméra : une demande de plus de
+    // six photos n'est plus une demande, et le technicien n'a pas le temps d'en
+    // regarder davantage. Le dire ici vaut mieux que de laisser l'utilisateur
+    // les choisir pour découvrir la limite à l'envoi.
+    if (_photos.length >= PhotoPolicy.maxPhotos) {
+      setState(
+        () => _error =
+            'Au maximum ${PhotoPolicy.maxPhotos} photos par demande.',
       );
+      return;
+    }
+
+    try {
+      final picked = await PhotoPolicy.pick(source);
       if (picked != null) setState(() => _photos.add(picked));
     } catch (_) {
       if (mounted) {

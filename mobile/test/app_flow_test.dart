@@ -199,6 +199,18 @@ void main() {
         }
         return {'data': {'markedAsRead': notifications.length}};
       },
+      'DELETE /notifications/n-1': (_, _) {
+        // Le serveur refuse une notification encore non lue : le test le
+        // vérifie en amont du balayage, pas seulement l'absence d'erreur.
+        final target = notifications.firstWhere((n) => n['id'] == 'n-1');
+        if (target['readAt'] == null) {
+          adapter.statuses['DELETE /notifications/n-1'] = 409;
+          return {'error': 'Marquez la notification comme lue avant de la supprimer'};
+        }
+
+        notifications.removeWhere((n) => n['id'] == 'n-1');
+        return {'data': {'id': 'n-1'}};
+      },
       '/notifications/n-1': (_, _) {
         _markRead(notifications, 'n-1');
         return {'data': _notificationById(notifications, 'n-1')};
@@ -1078,6 +1090,46 @@ void main() {
       ),
       findsNothing,
     );
+  });
+
+  testWidgets('notifications : une notification lue se supprime au balayage', (
+    tester,
+  ) async {
+    FlutterSecureStorage.setMockInitialValues(_session);
+    await pumpApp(tester);
+
+    await tester.tap(find.byType(NotificationBell));
+    await settle(tester, steps: 20);
+
+    expect(find.text('#TK-2026-002 : Clôturée'), findsOneWidget);
+
+    // La notification lue est supprimable. Balayer une notification **non** lue
+    // ne doit rien déclencher : elle porte une information pas encore vue.
+    await tester.drag(
+      find.text('#TK-2026-002 : Clôturée'),
+      const Offset(-500, 0),
+    );
+    await settle(tester, steps: 20);
+
+    // La confirmation est demandée : une suppression est définitive.
+    expect(find.text('Supprimer la notification'), findsOneWidget);
+    await tester.tap(find.text('Annuler'));
+    await settle(tester, steps: 20);
+    expect(find.text('#TK-2026-002 : Clôturée'), findsOneWidget);
+
+    // Cette fois, on confirme.
+    await tester.drag(
+      find.text('#TK-2026-002 : Clôturée'),
+      const Offset(-500, 0),
+    );
+    await settle(tester, steps: 20);
+    await tester.tap(find.widgetWithText(FilledButton, 'Supprimer'));
+    await settle(tester, steps: 20);
+
+    expect(find.text('#TK-2026-002 : Clôturée'), findsNothing);
+
+    // La ligne non lue reste : elle n'a pas encore été consommée.
+    expect(find.text('Demande transmise au technicien'), findsOneWidget);
   });
 
   testWidgets('notifications : le flux temps réel met à jour le badge', (

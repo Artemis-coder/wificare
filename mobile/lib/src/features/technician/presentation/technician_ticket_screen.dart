@@ -19,6 +19,7 @@ import '../application/technician_providers.dart';
 import '../application/tracking_controller.dart';
 import '../data/technician_repository.dart';
 import '../../invoices/application/invoice_providers.dart';
+import 'closure_report_sheet.dart';
 import 'quote_composer.dart';
 
 final technicianTicketDetailProvider = FutureProvider.autoDispose
@@ -44,7 +45,9 @@ class _TechnicianTicketScreenState
     extends ConsumerState<TechnicianTicketScreen> {
   bool _busy = false;
 
-  String _absoluteUrl(String url) =>
+  /// Les pièces jointes sont stockées en URL relative : c'est le serveur qui
+  /// décide de l'hôte, pas l'application.
+  static String absoluteUrl(String url) =>
       url.startsWith('http') ? url : '${AppConfig.apiBaseUrl}$url';
 
   /// Fait avancer la demande, et suit le déplacement qui va avec.
@@ -55,6 +58,67 @@ class _TechnicianTicketScreenState
   /// statut, jamais avant : l'API refuse un suivi sur une demande qui n'est pas
   /// en route, et un suivi qui échoue ne doit pas faire perdre la transition.
   Future<void> _advance(Ticket ticket, TicketStatus next) async {
+    // Terminer, ou clôturer, une demande sans rapport écrit la laisserait sans
+    // trace aucune de ce qui a été fait. Le rapport est donc demandé **avant**
+    // la transition : une fois la demande close, le technicien n'a plus à quel
+    // écran revenir, et rien ne le lui rappellerait.
+    if (_requiresReport(next) && !_hasReport(ticket)) {
+      final report = await ClosureReportSheet.show(
+        context,
+        reference: ticket.reference,
+      );
+
+      // Un rapport annulé ne bloque pas la demande : le technicien peut avoir
+      // un motif légitime de ne pas l'écrire. Le serveur l'exigera de son côté
+      // s'il decide que la clôture en dépend — c'est lui qui a le dernier mot,
+      // pas l'écran.
+      if (report == null || !mounted) return;
+
+      setState(() => _busy = true);
+      try {
+        await ref.read(technicianRepositoryProvider).report(
+              ticketId: ticket.id,
+              checklist: const <String, bool>{},
+              diagnostic: report.diagnostic,
+              solution: report.solution,
+            );
+
+        ref.invalidate(technicianTicketDetailProvider(ticket.id));
+      } on ApiException catch (error) {
+        if (mounted) showAppSnackBar(context, error.message, isError: true);
+        return;
+      } finally {
+        if (mounted) setState(() => _busy = false);
+      }
+    } else if (_requiresReport(next)) {
+      // Un rapport existe déjà : il est proposé à correction au lieu d'être
+      // remplacé. Le serveur refuserait un second rapport de toute façon.
+      final report = await ClosureReportSheet.show(
+        context,
+        reference: ticket.reference,
+        diagnostic: ticket.intervention?.diagnostic,
+        solution: ticket.intervention?.solution,
+      );
+
+      if (report == null || !mounted) return;
+
+      setState(() => _busy = true);
+      try {
+        await ref.read(technicianRepositoryProvider).updateReport(
+              ticketId: ticket.id,
+              diagnostic: report.diagnostic,
+              solution: report.solution,
+            );
+
+        ref.invalidate(technicianTicketDetailProvider(ticket.id));
+      } on ApiException catch (error) {
+        if (mounted) showAppSnackBar(context, error.message, isError: true);
+        return;
+      } finally {
+        if (mounted) setState(() => _busy = false);
+      }
+    }
+
     final wasEnRoute = ticket.status == TicketStatus.enRoute;
 
     setState(() => _busy = true);
@@ -105,6 +169,29 @@ class _TechnicianTicketScreenState
   ///
   /// La fenêtre ne renvoie que des lignes valides : elle est le seul endroit
   /// où le technicien saisit, et le serveur revérifie de son côté.
+  /// Cette transition met fin au travail : elle doit porter un rapport.
+  /// Ouvre une photo en grand : une vignette de 88 pixels ne permet pas de
+  /// juger d'un câble mal branché.
+  static void _openPhoto(BuildContext context, String url) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => _PhotoViewer(url: absoluteUrl(url)),
+      ),
+    );
+  }
+
+  static bool _requiresReport(TicketStatus next) =>
+      next == TicketStatus.completed || next == TicketStatus.closed;
+
+  /// Un rapport existe déjà et il est complet.
+  static bool _hasReport(Ticket ticket) {
+    final intervention = ticket.intervention;
+    if (intervention == null) return false;
+
+    return (intervention.diagnostic?.trim().isNotEmpty ?? false) &&
+        (intervention.solution?.trim().isNotEmpty ?? false);
+  }
+
   Future<void> _collect(Ticket ticket) async {
     final invoice = ticket.quoteInvoice!;
 
@@ -253,6 +340,15 @@ data: (ticket) {
           // Un devis est livalent sur la demande : dès qu'il existe, le client
           // en a connaissance et tranche. Voir pourquoi plus bas.
           final hasQuote = ticket.quoteInvoice != null;
+
+          // Les photos sont ce que le client sait de sa panne : elles
+          // expliquent au technicien ce qu'il va trouver avant d'y être.
+          final images = ticket.files
+              .where((file) => file.fileType == FileType.image)
+              .toList();
+          final others = ticket.files
+              .where((file) => file.fileType != FileType.image)
+              .toList();
 
           // La réparation se décide sur un devis que le client a autorisé, pas
           // sur un devis rédigé : c'est lui qui autorise qu'on touche à son
@@ -420,29 +516,77 @@ data: (ticket) {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const SectionHeader(title: 'Photos du client'),
+                      SectionHeader(
+                        title: 'Photos du client (${images.length})',
+                        subtitle: 'Ce que le client a envoyé avec sa demande.',
+                      ),
                       const SizedBox(height: AppSpacing.sm),
                       Wrap(
                         spacing: AppSpacing.sm,
                         runSpacing: AppSpacing.sm,
                         children: [
-                          for (final file in ticket.files)
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(AppRadius.md),
-                              child: CachedNetworkImage(
-                                imageUrl: _absoluteUrl(file.url),
-                                width: 88,
-                                height: 88,
-                                fit: BoxFit.cover,
-                                errorWidget: (_, _, _) => Container(
+                          // Seules les images passent par la visionneuse. Une
+                          // vidéo ou un document passé dans `CachedNetworkImage`
+                          // n'afficherait qu'une icône cassée, sans dire à quel
+                          // type de pièce il a affaire.
+                          for (final file in images)
+                            GestureDetector(
+                              // Ouvrir la photo est le seul geste utile sur
+                              // une vignette : 88 pixels ne suffisent pas à
+                              // juger d'un boîtier mal branché, et c'est
+                              // précisément ce doute que le technicien vient
+                              // lever en allant sur place.
+                              onTap: () => _openPhoto(context, file.url),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(AppRadius.md),
+                                child: CachedNetworkImage(
+                                  imageUrl: absoluteUrl(file.url),
                                   width: 88,
                                   height: 88,
-                                  color: colors.surfaceVariant,
-                                  child: Icon(
-                                    Icons.broken_image_outlined,
-                                    color: colors.onSurfaceVariant,
+                                  fit: BoxFit.cover,
+                                  placeholder: (_, _) => Container(
+                                    width: 88,
+                                    height: 88,
+                                    color: colors.surfaceVariant,
+                                  ),
+                                  errorWidget: (_, _, _) => Container(
+                                    width: 88,
+                                    height: 88,
+                                    color: colors.surfaceVariant,
+                                    child: Icon(
+                                      Icons.broken_image_outlined,
+                                      color: colors.onSurfaceVariant,
+                                    ),
                                   ),
                                 ),
+                              ),
+                            ),
+                          for (final file in others)
+                            Container(
+                              width: 88,
+                              height: 88,
+                              decoration: BoxDecoration(
+                                color: colors.surfaceVariant,
+                                borderRadius: BorderRadius.circular(AppRadius.md),
+                              ),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    file.fileType == FileType.video
+                                        ? Icons.videocam_outlined
+                                        : Icons.description_outlined,
+                                    color: colors.onSurfaceVariant,
+                                  ),
+                                  const SizedBox(height: AppSpacing.xs),
+                                  Text(
+                                    file.fileType.label,
+                                    style: TextStyle(
+                                      color: colors.onSurfaceVariant,
+                                      fontSize: 10,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                         ],
@@ -761,5 +905,42 @@ class _TrackingCard extends StatelessWidget {
     if (eta != null) parts.add('environ $eta min');
 
     return parts.isEmpty ? '—' : parts.join(' · ');
+  }
+}
+
+
+/// Photo en plein écran, avec zoom.
+///
+/// Le technicien arrive sur place et ouvre la photo pour vérifier un détail.
+/// La fermer doit être possible par le geste habituel, sans viser un bouton.
+class _PhotoViewer extends StatelessWidget {
+  const _PhotoViewer({required this.url});
+
+  final String url;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+      ),
+      body: Center(
+        child: InteractiveViewer(
+          maxScale: 4,
+          child: CachedNetworkImage(
+            imageUrl: url,
+            fit: BoxFit.contain,
+            placeholder: (_, _) => const CircularProgressIndicator(),
+            errorWidget: (_, _, _) => const Icon(
+              Icons.broken_image_outlined,
+              color: Colors.white54,
+              size: 48,
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

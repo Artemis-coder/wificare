@@ -4,6 +4,71 @@ Ce qui a changé dans le produit, et pourquoi. Les détails d'implémentation so
 dans l'historique git et le README ; ici, on retient ce qui est utile à savoir
 six mois plus tard.
 
+## 1.4.0 — 2 octobre 2026
+
+Une carte invisible, des photos illisibles en grand, une base qui grossit, des
+notifications qu'on ne peut pas effacer, et une clôture qui ne dit rien de ce qui
+a été fait.
+
+### Corrigé
+
+**La carte ne s'affichait plus chez la régie.** Deux défauts distincts. Leaflet
+était importé dynamiquement — il manipule `window`, il ne peut pas l'être au
+rendu serveur — et React rejoue les effets en développement : la carte était
+donc construite deux fois sur le même conteneur, ce que Leaflet refuse
+explicitement. Par ailleurs, ses marqueurs par défaut chargent leurs images depuis
+une URL calculée sur sa feuille de style ; sous un empaqueteur elle pointait sur
+l'URL de la page, et chaque marqueur demandait `/tickets/marker-icon.png`. Les
+marqueurs sont désormais dessinés en HTML, sans fichier à charger.
+
+Côté application mobile en revanche, la carte n'était pas cassée : elle n'a rien
+à afficher. Elle est liée au déplacement, et les demandes de la base sont closes
+ou annulées, tous les suivis arrêtés. Une carte figée après coup ferait croire
+que le technicien est encore en chemin.
+
+**Les photos du client s'affichaient, mais sans que rien ne puisse en être fait.**
+Le technicien les voyait en vignettes de 88 pixels, sans pouvoir les ouvrir —
+alors que c'est précisément à cette taille qu'on ne peut pas juger d'un boîtier
+mal branché. Elles s'ouvrent maintenant en grand, avec zoom. Les pièces non
+images ne sont plus passées dans la visionneuse d'images, où elles ne donnaient
+qu'une icône cassée : une vidéo ou un document est nommé comme tel.
+
+**Les photos Occupaient la base sans raison.** Elles arrivaient telles quelles :
+une image de téléphone de 4 000 × 3 000 pesait plusieurs mégaoctets pour une
+scène qui n'occupe qu'un écran. `lib/images` porte désormais la règle, et elle
+n'existe qu'à un endroit : 1 600 px et qualité 80, appliqués **des deux côtés**.
+Le client évite d'envoyer cinq mégaoctets sur un réseau lent ; le serveur
+recommpresse parce qu'un client n'est pas obligé de passer par l'application. Un
+contrôle qui n'existe que d'un côté n'est pas un contrôle. Mesuré : **34 Mo
+ramenés à 643 Ko, 98 % de réduction**.
+
+Trois décisions méritent d'être dites. La sortie est en JPEG, format que sait
+décoder partout ; l'original n'est gardé que si la compression le ferait
+grossir, ce qui arrive sur une capture d'écran faite d'aplats. L'orientation
+EXIF est appliquée, sans quoi une photo prise en paysage s'affiche tournée — et
+le réencodage retire au passage les coordonnées du domicile du client. Enfin une
+image illisible n'est pas rejetée : une photo qui n'aboutit pas à l'écran ne
+doit pas empêcher de signaler sa panne.
+
+**`public/uploads/` n'était pas ignoré.** Des photos de clients seraient parties
+dans le premier `git add .`, puis jamais effacées. Le dossier est maintenant
+versionné vide, et son contenu ignoré.
+
+**Une notification lue ne pouvait pas s'effacer.** Elle prenait la place, sans
+que l'utilisateur puisse faire le ménage. Le balayage la supprime, après
+confirmation. Une notification **non** lue ne se supprime pas : elle porte un fait
+que l'utilisateur n'a pas encore vu, et le compteur de non-lus n'aurait plus
+rien à signaler. Le serveur refuse aussi, par `409` — l'écran rend le geste
+impossible, le serveur empêche qu'on passe outre.
+
+**Clôturer ne demandait aucun rapport.** Le champ existait, le serveur l'écrivait,
+l'écran l'affichait — et rien ne le remplissait jamais. Une demande close ne
+laissait aucune trace écrite de ce qui avait été fait dans l'installation du
+client. Le rapport est désormais demandé **avant** la transition : une fois la
+demande close, le technicien n'a plus à quel écran revenir, et rien ne le lui
+rappellerait. Diagnostic et interventions réalisés sont tous deux exigés : le
+premier dit ce qui a été constaté, le second ce qui a été fait.
+
 ## 1.3.0 — 2 octobre 2026
 
 Trois manques de la même famille : ce que l'utilisateur a accordé, ce qu'il voit,
