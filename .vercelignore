@@ -12,7 +12,7 @@ node_modules
 
 # Application mobile Flutter : elle se construit avec `flutter build apk`, pas
 # sur Vercel. Le code est utile au depot, pas a l'hebergement.
-/wificare_app
+/mobile
 
 # Artefacts de compilation generes
 build

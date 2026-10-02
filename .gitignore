@@ -42,22 +42,22 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# Flutter (application mobile wificare_app/)
+# Flutter (application mobile, dossier mobile/)
 # Les caches et artefacts sont regeneres par `flutter build` ; ce qui est
 # versionne, c'est `pubspec.lock` et le wrapper Gradle, qui garantissent une
 # reconstruction identique.
-/wificare_app/.dart_tool/
-/wificare_app/build/
-/wificare_app/android/.gradle/
-/wificare_app/android/build/
-/wificare_app/android/app/build/
-/wificare_app/android/local.properties
-/wificare_app/.flutter-plugins-dependencies
-/wificare_app/.idea/
-/wificare_app/*.iml
+/mobile/.dart_tool/
+/mobile/build/
+/mobile/android/.gradle/
+/mobile/android/build/
+/mobile/android/app/build/
+/mobile/android/local.properties
+/mobile/.flutter-plugins-dependencies
+/mobile/.idea/
+/mobile/*.iml
 
 # Configuration Firebase : elle identifie le projet Google et la cle API de
 # l'application. Elle n'est pas versionnee — chaque developpeur depose la
-# sienne dans `wificare_app/android/app/` (voir README, section « Notifications
+# sienne dans `mobile/android/app/` (voir README, section « Notifications
 # push »). Sans elle, le build reste possible mais le push est desactive.
 /Firebase/

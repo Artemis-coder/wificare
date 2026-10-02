@@ -10,7 +10,7 @@ Le dépôt est un **monodépôt** :
 | Dossier | Rôle |
 | --- | --- |
 | `src/`, `prisma/` | application Next.js (App Router) : back-office web **et** API REST servie à l'application mobile |
-| `wificare_app/` | application Flutter Android (client **et** technicien) |
+| `mobile/` | application Flutter Android (client **et** technicien) |
 
 > **Une seule base, un seul serveur.** Le back-office web et l'application mobile
 > parlent la même base via la même API. Une règle métier écrite une fois dans
@@ -331,7 +331,7 @@ node -e "console.log(JSON.stringify(require('web-push').generateVAPIDKeys()))"
 ### 6.4 Application mobile
 
 ```bash
-cd wificare_app
+cd mobile
 flutter pub get
 flutter run --dart-define=API_BASE_URL=http://10.0.2.2:3000/api
 ```
@@ -650,7 +650,7 @@ npm run lint                 # eslint
 npm run build
 
 # Application mobile
-cd wificare_app
+cd mobile
 flutter analyze              # doit rester à 0 problème
 flutter test
 ```
@@ -687,7 +687,7 @@ src/
     admin/utilisateurs/, admin/zones/, admin/avis/, admin/notifications/
     zones/actions.ts, tickets/actions.ts, ...          server actions
     api/                 API REST servie au mobile
-wificare_app/lib/src/
+mobile/lib/src/
   core/          thème, routeur, réseau (Dio), stockage chiffré, widgets
   features/<x>/
     data/          repositories — seule couche qui parle à l'API
@@ -702,16 +702,16 @@ séparés, dispatchés par rôle à la connexion : `/home/...` pour le client,
 un compte connecté redirige vers le sien.
 
 Les détails de conception de l'application sont dans
-[`wificare_app/AGENTS.md`](wificare_app/AGENTS.md).
+[`mobile/AGENTS.md`](mobile/AGENTS.md).
 
 ---
 
 ## 14. Construire et distribuer l'APK
 
 ```bash
-cd wificare_app
+cd mobile
 tool/build_release.sh
-# -> wificare_app/build/app/outputs/flutter-apk/WiFiCare-1.0.0.apk
+# -> mobile/build/app/outputs/flutter-apk/WiFiCare-1.0.0.apk
 ```
 
 Le script compile en release, vise la production et renomme la sortie. Pour
@@ -743,11 +743,11 @@ n'existe plus de moyen supporté de le faire depuis `build.gradle.kts`.
 | --- | --- |
 | `public/logo-wificare.png` | barre latérale, écran de connexion |
 | `src/app/icon.png` | favicon |
-| `wificare_app/assets/logo/logo_wificare.png` | connexion et splash |
-| `wificare_app/android/app/src/main/res/mipmap-*/ic_launcher.png` | icône du lanceur |
+| `mobile/assets/logo/logo_wificare.png` | connexion et splash |
+| `mobile/android/app/src/main/res/mipmap-*/ic_launcher.png` | icône du lanceur |
 
 Un changement de logo remplace `public/logo-wificare.png` et
-`wificare_app/assets/logo/logo_wificare.png`. L'icône Android doit être
+`mobile/assets/logo/logo_wificare.png`. L'icône Android doit être
 régénérée pour chaque densité (`mdpi` 48 px → `xxxhdpi` 192 px). Il n'y a pas
 de fichier source dans le dépôt : le PNG est la source, et sa version `.jpg`
 qui doublait le poids n'était référencée nulle part.
@@ -757,8 +757,8 @@ qui doublait le poids n'était référencée nulle part.
 Le dépôt contient tout ce qui est nécessaire pour reconstruire l'APK à
 l'identique :
 
-- `wificare_app/pubspec.lock` — versions exactes des paquets Dart ;
-- `wificare_app/android/gradle/wrapper/` — Gradle figé, **contre le modèle
+- `mobile/pubspec.lock` — versions exactes des paquets Dart ;
+- `mobile/android/gradle/wrapper/` — Gradle figé, **contre le modèle
   Flutter par défaut** : sans eux, un clone ne peut pas compiler tant que Gradle
   n'a pas été téléchargé à la main ;
 - `package-lock.json` — versions exactes des dépendances Node.
