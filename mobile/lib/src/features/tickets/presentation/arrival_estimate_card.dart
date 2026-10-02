@@ -12,6 +12,7 @@ import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/trip_map_card.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/states.dart';
+import '../../../core/permissions/permissions_service.dart';
 import '../../zones/application/location_share.dart';
 import '../application/ticket_providers.dart';
 
@@ -178,12 +179,27 @@ class _ArrivalEstimateCardState extends ConsumerState<ArrivalEstimateCard> {
             ],
             if (!widget.hasDestination) ...[
               const SizedBox(height: AppSpacing.md),
-              AppButton(
-                label: 'Partager ma position',
-                icon: Icons.my_location_rounded,
-                loading: share.busy,
-                onPressed: _shareLocation,
-              ),
+              // Après un refus simple, Android rouvre la boîte de dialogue et
+              // « Partager ma position » est le bon geste. Après un refus
+              // définitif, ou localisation éteinte au niveau système, cette
+              // même boîte ne reviendra plus : le bouton d'ici ne servirait à
+              // rien. Les réglages du téléphone sont alors la seule issue, et
+              // c'est au moment où le client en a besoin qu'il faut la proposer —
+              // le technicien dispose déjà de ce même bouton, le client non.
+              if (share.needsSettings) ...[
+                AppButton(
+                  label: 'Ouvrir les réglages du téléphone',
+                  icon: Icons.settings_outlined,
+                  onPressed: PermissionsService.openSettings,
+                ),
+                const SizedBox(height: AppSpacing.xs),
+              ] else
+                AppButton(
+                  label: 'Partager ma position',
+                  icon: Icons.my_location_rounded,
+                  loading: share.busy,
+                  onPressed: _shareLocation,
+                ),
             ],
           ],
         ),

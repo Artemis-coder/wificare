@@ -8,12 +8,12 @@ import '../push/push_service.dart';
 /// prévenu même application fermée, et la **géolocalisation**, pour partager sa
 /// position et suivre celle du technicien.
 ///
-/// Android ne se laisse pas demander deux fois : après un refus, l'appel suivant
-/// ne déclenche plus aucune boîte de dialogue et rend la main immédiatement. Le
-/// seul moyen de la retrouver est d'envoyer l'utilisateur dans les réglages du
-/// téléphone. C'est tout l'intérêt de [LocationGrant] : il distingue « on peut
-/// encore demander » de « il faut passer par les réglages », pour ne pas offrir
-/// un bouton qui ne mènera nulle part.
+/// Android ne ferme la boîte de dialogue définitivement qu'au **second** refus :
+/// un premier refus laisse `denied`, et l'appel suivant rouvre la fenêtre. Ce
+/// qui ne revient plus est `deniedForever` — le seul recours est alors les
+/// réglages du téléphone. D'où [LocationGrant] : il distingue « on peut encore
+/// demander » de « il faut passer par les réglages », pour ne pas offrir un
+/// bouton qui ne mènera nulle part.
 class PermissionsService {
   const PermissionsService._();
 

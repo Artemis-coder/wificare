@@ -197,7 +197,13 @@ class _InvoiceCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
-              StatusBadge.document(invoice.status),
+              // Le statut du paiement prime sur celui du devis : après une
+              // annulation, le devis reste `PAID` et la somme a été rendue.
+              // Une pastille « Payé » sur un montant que le client n'a plus
+              // serait un chiffre faux.
+              invoice.payment?.status == PaymentStatus.refunded
+                  ? const StatusBadge.payment(PaymentStatus.refunded)
+                  : StatusBadge.document(invoice.status),
             ],
           ),
           const SizedBox(height: AppSpacing.md),

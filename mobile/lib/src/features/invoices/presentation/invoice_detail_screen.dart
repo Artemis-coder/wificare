@@ -166,13 +166,22 @@ class _Content extends ConsumerWidget {
     final payment = invoice.payment;
     final isPaid = invoice.status == DocumentStatus.paid;
 
+    // Une demande annulée après paiement restitue la somme : le devis reste
+    // `PAID` en base — le client a bien payé, un jour — mais l'écran qui
+    // afficherait « Payé » seul donnerait un chiffre que le client n'a plus.
+    // Le statut affiché suit le paiement, qui porte la vérité d'aujourd'hui.
+    final isRefunded = payment?.status == PaymentStatus.refunded;
+
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.md),
       children: [
         AppCard(
           child: Column(
             children: [
-              InfoRow(label: 'Statut', value: invoice.status.label),
+              InfoRow(
+                label: 'Statut',
+                value: isRefunded ? payment!.status.label : invoice.status.label,
+              ),
               const Divider(),
               InfoRow(label: 'Type', value: invoice.type.label),
               const Divider(),
@@ -293,6 +302,18 @@ class _Content extends ConsumerWidget {
                 if (payment.reference != null)
                   InfoRow(label: 'Référence', value: payment.reference!),
                 InfoRow(label: 'Date', value: Fmt.date(payment.createdAt)),
+                if (isRefunded) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  Text(
+                    'La demande a été annulée après votre règlement : le montant '
+                    'vous a été restitué.',
+                    style: TextStyle(
+                      color: colors.onSurfaceVariant,
+                      fontSize: 12,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
                 if (payment.proofUrl != null) ...[
                   const SizedBox(height: AppSpacing.sm),
                   Text(

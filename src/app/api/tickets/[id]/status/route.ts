@@ -3,7 +3,7 @@ import { NotificationType, TicketStatus } from "@prisma/client";
 import { getApiUser } from "@/lib/api-auth";
 import { notify } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
-import { quoteAuthorizesRepair } from "@/lib/quotes";
+import { formatAmount, quoteAuthorizesRepair } from "@/lib/quotes";
 import { loadWritableTicket } from "@/lib/tickets";
 import { PUBLIC_USER_SELECT } from "@/lib/user-public";
 
@@ -41,7 +41,7 @@ export async function PATCH(
 
     const existing = await prisma.ticket.findUnique({
       where: { id },
-      include: { quoteInvoice: true },
+      include: { quoteInvoice: { include: { payment: true } } },
     });
 
     if (!existing) {
@@ -75,14 +75,41 @@ export async function PATCH(
       );
     }
 
-    const ticket = await prisma.ticket.update({
-      where: { id },
-      data: { status },
-      include: {
-        client: true,
-        wifiZone: true,
-        technician: { select: PUBLIC_USER_SELECT },
-      },
+    // Annuler une demande que le client a déjà payée laisserait son argent
+    // dans le dossier sans contrepartie : le devis reste `PAID`, le paiement
+    // `COMPLETED`, et rien ne dit plus jamais que la somme a été rendue. Le
+    // statut `REFUNDED` existait dans le modèle depuis le début et ne recevait
+    // jamais cette valeur.
+    //
+    // Le geste reste celui du technicien : il annule, et la restitution suit
+    // l'annulation. Lui demander une confirmation séparée l'obligerait à
+    // prodiguer un remboursement qui n'est pas le sien, et à hésiter devant une
+    // annulation légitime parce qu'un client a déjà payé.
+    //
+    // Le test porte sur le statut du paiement et non sur son existence : sans
+    // lui, une seconde annulation de la même demande enregistrerait un
+    // deuxième remboursement pour une somme déjà rendue.
+    const refundable =
+      status === TicketStatus.CANCELED &&
+      existing.quoteInvoice?.payment?.status === "COMPLETED";
+
+    const ticket = await prisma.$transaction(async (tx) => {
+      if (refundable) {
+        await tx.payment.update({
+          where: { id: existing.quoteInvoice!.payment!.id },
+          data: { status: "REFUNDED" },
+        });
+      }
+
+      return tx.ticket.update({
+        where: { id },
+        data: { status },
+        include: {
+          client: true,
+          wifiZone: true,
+          technician: { select: PUBLIC_USER_SELECT },
+        },
+      });
     });
 
     // Le client est la partie interestée : c'est lui qui suit le traitement.
@@ -101,7 +128,9 @@ export async function PATCH(
             : `${ticket.reference} : ${label}`,
         body:
           status === TicketStatus.CANCELED
-            ? `Votre demande ${ticket.reference} a été annulée.`
+            ? refundable
+              ? `Votre demande ${ticket.reference} a été annulée. Le devis de ${formatAmount(existing.quoteInvoice!.totalAmount)} que vous aviez réglé vous est restitué.`
+              : `Votre demande ${ticket.reference} a été annulée.`
             : `Votre demande est maintenant « ${label} ».`,
         ticketId: ticket.id,
       });

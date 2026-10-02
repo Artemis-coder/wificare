@@ -10,15 +10,29 @@ import 'zone_providers.dart';
 /// permettrait au bouton de redevenir actif pendant que l'erreur de la tentative
 /// précédente est encore affichée.
 class LocationShareState {
-  const LocationShareState({this.busy = false, this.error});
+  const LocationShareState({this.busy = false, this.error, this.needsSettings = false});
 
   final bool busy;
   final String? error;
 
-  LocationShareState copyWith({bool? busy, String? error, bool clearError = false}) {
+  /// Le seul moyen de retour est d'ouvrir les réglages du téléphone.
+  ///
+  /// Android rouvre la boîte de dialogue après un refus simple, mais la ferme
+  /// définitivement au second. Offering alors « Réessayer » laisserait le
+  /// client appuyer sur un bouton qui ne peut plus rien déclencher : l'écran
+  /// doit proposer le geste qui, lui, aboutit.
+  final bool needsSettings;
+
+  LocationShareState copyWith({
+    bool? busy,
+    String? error,
+    bool? needsSettings,
+    bool clearError = false,
+  }) {
     return LocationShareState(
       busy: busy ?? this.busy,
       error: clearError ? null : (error ?? this.error),
+      needsSettings: needsSettings ?? this.needsSettings,
     );
   }
 }
@@ -44,7 +58,11 @@ class LocationShareController extends Notifier<LocationShareState> {
       final result = await ClientLocation.current();
 
       if (!result.isGranted) {
-        state = state.copyWith(busy: false, error: result.message);
+        state = state.copyWith(
+          busy: false,
+          error: result.message,
+          needsSettings: result.needsSettings,
+        );
         return false;
       }
 

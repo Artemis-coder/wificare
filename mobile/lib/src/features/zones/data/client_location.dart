@@ -1,11 +1,19 @@
 import 'package:geolocator/geolocator.dart';
 
+import '../../../core/permissions/permissions_service.dart';
+
 /// Relevé ponctuel de la position du client.
 ///
 /// Une seule position, demandée par l'utilisateur, jamais suivie en continu :
 /// le client n'a rien à faire d'autre que se trouver chez lui pendant que le
 /// technicien arrive. Un suivi permanent de sa position n'aurait aucun usage et
 /// se lirait comme une surveillance — d'où une demande explicite, une fois.
+///
+/// L'autorisation passe par `PermissionsService`, comme celle du technicien.
+/// Les deux rôles n'empruntent pas le même chemin de demande, et les faire
+/// diverger produirait deux réponses différentes à la même question selon
+/// l'écran : ici un refus présenté comme définitif, là un refus qui propose de
+/// réessayer. Il n'y a qu'une règle Android, donc qu'une implémentation.
 class ClientLocation {
   const ClientLocation._();
 
@@ -15,28 +23,31 @@ class ClientLocation {
   /// droit, et l'écran doit pouvoir expliquer la suite plutôt qu'échouer.
   static Future<ClientLocationResult> current() async {
     try {
-      if (!await Geolocator.isLocationServiceEnabled()) {
+      // Une seule demande d'autorisation, partagée avec le technicien, qui
+      // repose d'ailleurs la question à chaque fois qu'il a besoin de sa
+      // position. Un client qui a refusé au premier lancement peut donc
+      // réessayer ici : Android rouvre la boîte de dialogue tant qu'il n'a pas
+      // refusé définitivement.
+      final grant = await PermissionsService.requestLocation();
+
+      if (grant.servicesDisabled) {
         return const ClientLocationResult(
           ClientLocationFailure.servicesDisabled,
         );
       }
 
-      var permission = await Geolocator.checkPermission();
-
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
+      if (grant.deniedForever) {
+        return const ClientLocationResult(
+          ClientLocationFailure.deniedForever,
+        );
       }
 
-      if (permission == LocationPermission.denied) {
+      if (!grant.granted) {
         return const ClientLocationResult(ClientLocationFailure.denied);
       }
 
-      if (permission == LocationPermission.deniedForever) {
-        return const ClientLocationResult(ClientLocationFailure.deniedForever);
-      }
-
       // Une position très ancienne ferait une ETA fausse : on borne la demande
-      // à une positioning récente, quitte à ne pas avoir de point du tout.
+      // à un positionnement récent, quitte à ne pas avoir de point du tout.
       final position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.high,
@@ -66,17 +77,29 @@ class ClientLocationResult {
 
   bool get isGranted => failure == null && latitude != null && longitude != null;
 
+  /// Le seul recours est-il d'ouvrir les réglages du téléphone ?
+  ///
+  /// Vrai quand Android a fermé la boîte de dialogue pour de bon, ou quand la
+  /// localisation est éteinte au niveau système. Dans les deux cas, aucun bouton
+  /// « Réessayer » ne peut aboutir : n'en proposer qu'un laisserait le client
+  /// appuyer indéfiniment sur un écran qui ne changera pas. C'est ce qui décide
+  /// entre « Autoriser » et « Ouvrir les réglages ».
+  bool get needsSettings =>
+      failure == ClientLocationFailure.deniedForever ||
+      failure == ClientLocationFailure.servicesDisabled;
+
   /// Message prêt à afficher, expliquant pourquoi et ce qu'il reste possible.
   String get message => switch (failure) {
         ClientLocationFailure.denied =>
-          'Position non autorisée. Activez-la dans les réglages du téléphone pour '
-              'recevoir l\'heure d\'arrivée du technicien.',
+          'Position non autorisée. Autorisez-la pour recevoir l\'heure '
+              'd\'arrivée du technicien.',
         ClientLocationFailure.deniedForever =>
-          'Position refusée définitivement. Autorisez-la dans les réglages du '
-              'téléphone pour recevoir l\'heure d\'arrivée du technicien.',
+          'Position refusée définitivement. Ouvrez les réglages de WiFiCare '
+              'pour l\'autoriser, sinon vous ne verrez pas l\'heure d\'arrivée '
+              'du technicien.',
         ClientLocationFailure.servicesDisabled =>
-          'La localisation est désactivée sur ce téléphone. Activez-la pour '
-              'recevoir l\'heure d\'arrivée du technicien.',
+          'La localisation est désactivée sur ce téléphone. Activez-la dans les '
+              'réglages pour recevoir l\'heure d\'arrivée du technicien.',
         _ => 'Position introuvable. Réessayez une fois le signal GPS obtenu.',
       };
 }

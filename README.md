@@ -546,6 +546,22 @@ Un refus est motivé : le message dit **pourquoi**, pas seulement qu'il y a refu
 | `GET` | `/api/evaluations` | client (ses avis) ou technicien (les avis reçus) |
 | `GET` | `/api/wallet` | technicien — ses seuls encaissements |
 
+### 9.5.1 Annulation d'une demande payée
+
+Le technicien annule une demande avec `PATCH /api/tickets/:id/status` et le
+statut `CANCELED`. Si le client avait réglé, le paiement passe à `REFUNDED`
+dans la même transaction, et la notification d'annulation dit au client que la
+somme lui est restituée.
+
+Le test porte sur `payment.status === 'COMPLETED'` et non sur l'existence du
+paiement : une seconde annulation de la même demande enregistrerait sinon un
+deuxième remboursement pour une somme déjà rendue.
+
+Le devis reste `PAID` en base — le client a bien payé, un jour — mais l'écran
+qui affiche son statut suit le paiement et dit « Remboursé ». Le `PaymentStatus`
+`REFUNDED` existait dans le modèle depuis le début et ne recevait jamais cette
+valeur.
+
 ### 9.6 Administration
 
 | Méthode | Route | Accès |
