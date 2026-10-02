@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { redirect, notFound } from 'next/navigation';
 import Link from 'next/link';
 
-import { isStaff } from '@/lib/roles';
+import { canUseBackoffice, isStaff } from '@/lib/roles';
 import { loadReadableTicket } from '@/lib/tickets';
 import { listTechnicians } from '@/lib/technicians';
 import AssignTechnicianForm from './assign-technician-form';
@@ -51,6 +51,16 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
   const session = await getServerSession(authOptions);
   
   if (!session) {
+        redirect('/login');
+  }
+
+  // Le back-office est réservé à la régie : un compte technicien ou
+  // propriétaire n'y a pas d'espace et son compte n'y est pas connecté
+  // (`lib/auth.ts` refuse sa connexion). Cette garde couvre le cas d'une
+  // session antérieure à cette règle, ou d'un rôle changé depuis la
+  // connexion — sans elle, la page resterait le seul endroit qui ne borne pas
+  // ce qu'elle affiche.
+  if (!canUseBackoffice(session.user.role)) {
     redirect('/login');
   }
 
@@ -60,9 +70,9 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
   // La page chargeait la demande par son identifiant, sans vérifier à qui elle
   // appartient : n'importe quel compte connecté pouvait en lire une autre en
   // changeant l'URL, et voir le nom du client, sa zone et le montant de son
-  // devis. `loadReadableTicket` applique la même portée que l'API — un client
-  // ne lit que ses demandes, un technicien celles qui lui sont affectées, la
-  // régie toutes.
+  // devis. `lib/auth.ts` ferme désormais la porte aux rôles sans espace web, et
+  // `loadReadableTicket` reste la seconde couche, celle qui décrit ce que la
+  // page lit.
   const readable = await loadReadableTicket(
     { userId: session.user.id, role: session.user.role },
     ticketId
@@ -202,8 +212,6 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
             <div style={{ backgroundColor: 'var(--bg-primary)', borderRadius: 'var(--radius-xl)', padding: '24px', border: '1px solid var(--border-default)', boxShadow: 'var(--elevation-1)' }}>
               <QuotePanel
                 quote={{
-                  id: ticket.quoteInvoice.id,
-                  ticketId: ticket.id,
                   status: ticket.quoteInvoice.status,
                   totalAmount: ticket.quoteInvoice.totalAmount,
                   notes: ticket.quoteInvoice.notes,
@@ -229,12 +237,10 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
                         transactionRef:
                           ticket.quoteInvoice.payment.transactionRef ??
                           ticket.quoteInvoice.payment.reference,
-                        reference: ticket.quoteInvoice.payment.reference,
                         createdAt: ticket.quoteInvoice.payment.createdAt.toISOString(),
                       }
                     : null,
                 }}
-                isClient={session.user.id === ticket.client.userId}
               />
             </div>
           )}

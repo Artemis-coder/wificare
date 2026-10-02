@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { ROLE_LABEL } from '@/lib/roles';
 import { SignOutButton } from './sign-out-button';
+import { canUseBackoffice } from '@/lib/roles';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,6 +19,16 @@ export default async function ProfilePage() {
   const session = await getServerSession(authOptions);
 
   if (!session) {
+        redirect('/login');
+  }
+
+  // Le back-office est réservé à la régie : un compte technicien ou
+  // propriétaire n'y a pas d'espace et son compte n'y est pas connecté
+  // (`lib/auth.ts` refuse sa connexion). Cette garde couvre le cas d'une
+  // session antérieure à cette règle, ou d'un rôle changé depuis la
+  // connexion — sans elle, la page resterait le seul endroit qui ne borne pas
+  // ce qu'elle affiche.
+  if (!canUseBackoffice(session.user.role)) {
     redirect('/login');
   }
 

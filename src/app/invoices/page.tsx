@@ -4,6 +4,7 @@ import type { Prisma } from '@prisma/client';
 import { authOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
+import { canUseBackoffice } from '@/lib/roles';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,14 +38,24 @@ export default async function InvoicesPage() {
   const session = await getServerSession(authOptions);
 
   if (!session) {
+        redirect('/login');
+  }
+
+  // Le back-office est réservé à la régie : un compte technicien ou
+  // propriétaire n'y a pas d'espace et son compte n'y est pas connecté
+  // (`lib/auth.ts` refuse sa connexion). Cette garde couvre le cas d'une
+  // session antérieure à cette règle, ou d'un rôle changé depuis la
+  // connexion — sans elle, la page resterait le seul endroit qui ne borne pas
+  // ce qu'elle affiche.
+  if (!canUseBackoffice(session.user.role)) {
     redirect('/login');
   }
 
   // La page listait tous les devis de la plateforme, sans distinction : un
-  // client connecté y lisait les montants et le nom des zones de tous les
-  // autres. L'API borne déjà sa liste (`GET /api/quote-invoices`) ; l'écran
-  // appliquait la même portée et ne l'avait pas. La régie voit tout, un
-  // client ses propres devis, un technicien ceux de ses interventions.
+  // compte client y lisait les montants et le nom des zones de tous les autres.
+  // `lib/auth.ts` ferme désormais la porte à ce compte, et `GET
+  // /api/quote-invoices` borne déjà sa liste. Cette portée est la seconde
+  // couche, celle qui décrit ce que la page affiche.
   const scope: Prisma.QuoteInvoiceWhereInput =
     session.user.role === 'CLIENT'
       ? { ticket: { client: { userId: session.user.id } } }

@@ -6,6 +6,7 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 
 import TicketRow from './ticket-row';
+import { canUseBackoffice } from '@/lib/roles';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,13 +14,23 @@ export default async function TicketsPage() {
   const session = await getServerSession(authOptions);
   
   if (!session) {
+        redirect('/login');
+  }
+
+  // Le back-office est réservé à la régie : un compte technicien ou
+  // propriétaire n'y a pas d'espace et son compte n'y est pas connecté
+  // (`lib/auth.ts` refuse sa connexion). Cette garde couvre le cas d'une
+  // session antérieure à cette règle, ou d'un rôle changé depuis la
+  // connexion — sans elle, la page resterait le seul endroit qui ne borne pas
+  // ce qu'elle affiche.
+  if (!canUseBackoffice(session.user.role)) {
     redirect('/login');
   }
 
-  // La liste n'était pas bornée : un client connecté y voyait toutes les
-  // demandes de la plateforme, avec le nom et la zone de chaque client. Le
-  // détail est protégé depuis toujours par `loadReadableTicket` côté API ; la
-  // liste applique la même portée.
+  // Le back-office est réservé à la régie, et `lib/auth.ts` refuse la
+  // connexion des autres rôles. Cette portée est la seconde couche : elle décrit
+  // ce que la page est autorisée à afficher, pas seulement qui peut l'atteindre,
+  // et survit à un assouplissement de la porte d'entrée sans avoir à être réécrite.
   const scope: Prisma.TicketWhereInput =
     session.user.role === 'CLIENT'
       ? { client: { userId: session.user.id } }

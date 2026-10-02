@@ -96,35 +96,69 @@ client n'est pas « un technicien sans droits ».
 | `TECHNICIAN`<br>*Technicien* | traiter les demandes qui lui sont affectées, envoyer sa position, déposer son rapport, rédiger un devis | voir les zones, les demandes d'autrui, le portefeuille d'un collègue, écrire un avis |
 | `CLIENT`<br>*Propriétaire de zone* | déclarer ses zones et ses équipements, signaler et suivre les pannes de ses zones, accepter un devis, régler, laisser un avis | faire avancer le statut d'une demande, écrire le rapport d'intervention, agir sur la demande d'un autre propriétaire |
 
-### 2.1 Les règles vivent dans `src/lib/`, pas dans les écrans
+### 2.1 Le back-office est un outil de régie
+
+Les trois rôles existent en base, mais ils ne se partagent pas les mêmes
+écrans. Le back-office est réservé à la régie ; le technicien et le
+propriétaire de zone ont chacun leur espace dans l'application mobile.
+
+| Espace | Rôles | Ce qu'on y fait |
+| --- | --- | --- |
+| Back-office web | `SUPER_ADMIN` | comptes et rôles, parc Wi-Fi, validation des zones, répartition des interventions, devis et règlements en lecture |
+| Application mobile, espace technicien | `TECHNICIAN` | traiter ses demandes, envoyer sa position, déposer son rapport, rédiger un devis |
+| Application mobile, espace propriétaire | `CLIENT` | déclarer ses zones, signaler une panne, **accepter ou refuser un devis, le régler**, laisser un avis |
+
+Deux conséquences, et elles sont voulues :
+
+- **`lib/auth.ts` refuse la connexion web d'un compte `TECHNICIAN` ou
+  `CLIENT`.** L'écran annonce l'application mobile plutôt que d'afficher un
+  « identifiants incorrects » alors que le numéro et le mot de passe sont
+  bons. `WEB_ROLES` (`lib/roles.ts`) porte la frontière.
+- **Le devis se tranche dans l'application, pas dans le back-office.** La
+  régie lit le devis et son règlement ; elle ne les change pas. Un bouton
+  « accepter » côté régie serait de toute façon refusé par `decideQuote`, qui
+  n'accepte qu'une décision du client concerné — l'interface ne protège pas la
+  donnée, seule cette règle le fait.
+
+Une page `/admin/*` conservait sa garde qui renvoie vers `/` : la racine
+redirige désormais elle aussi vers `/login`, donc ces gardes ne font plus
+reboucler personne.
+
+### 2.2 Les règles vivent dans `src/lib/`, pas dans les écrans
 
 | Fichier | Décide de |
 | --- | --- |
-| `src/lib/roles.ts` | libellés, types de compte à la connexion, navigation web, prédicats `isSuperAdmin` / `isStaff` |
+| `src/lib/roles.ts` | libellés, rôles autorisés sur le web (`WEB_ROLES`), navigation, prédicats `isSuperAdmin` / `isStaff` / `canUseBackoffice` |
 | `src/lib/user-admin.ts` | création et modification d'un compte, protections du dernier super administrateur |
 | `src/lib/zones.ts` | cycle de vie des Wi-Fi Zones : déclaration, édition, validation, suppression |
 | `src/lib/tickets.ts` | création, affectation automatique, réaffectation manuelle, droits de lecture et d'écriture sur une demande |
+| `src/lib/quotes.ts` | décision du client sur un devis, règlement, et ce qui autorise une réparation |
 | `src/lib/interventions.ts` | dépôt et complétion du rapport d'intervention |
 
 Une page ou une route API **appelle** ces fonctions ; elle ne décide rien. C'est
 ce qui garantit qu'une décision prise dans le back-office et la même décision
 prise dans l'application mobile ne peuvent pas diverger.
 
-### 2.2 `isStaff` est un alias d'`isSuperAdmin`
+### 2.3 `isStaff` est un alias d'`isSuperAdmin`
 
 Les deux noms disent la même chose depuis la fusion des profils. `isStaff` reste
 le terme employé par les écrans de régie, `isSuperAdmin` celui des écrans de
 gestion de comptes ; les garder évite de réécrire les gardes existants et de
 chercher lequel employer.
 
-### 2.3 Le type de compte à la connexion
+### 2.4 Le type de compte à la connexion
 
-L'écran de connexion demande le **type de compte** en plus du téléphone et du
-mot de passe. Ce n'est pas un rôle, c'est ce que l'utilisateur *prétend* être :
-le serveur refuse (`403`) un compte qui ne correspond pas au type choisi. Sans
-cela, un propriétaire pourrait se connecter sur l'écran du technicien et lire le
-message d'erreur « compte technicien introuvable » sans comprendre qu'il a sa
-propre ligne juste au-dessus.
+L'écran de connexion **ne demande plus** de type de compte : le back-office
+n'accepte que la régie, et un sélecteur qui n'offre qu'une valeur est un
+contrôle qui laisse croire à un choix.
+
+Le contrôle n'a pas disparu, il a changé de forme. Le serveur compare toujours
+le type annoncé au rôle réel et refuse (`403`) un compte qui ne correspond pas —
+c'est ce qui empêche un propriétaire de se connecter sur l'écran du technicien.
+Mais sur le web, le refus qui compte est l'autre : un compte `TECHNICIAN` ou
+`CLIENT` dont le numéro et le mot de passe sont exacts est refusé avec un
+message qui renvoie vers l'application mobile, pas avec « identifiants
+incorrects ».
 
 ---
 
@@ -351,9 +385,12 @@ clair).
 
 | Rôle | Numéro | Espace |
 | --- | --- | --- |
-| Super administrateur | `2250909090909` | web — gère toute la plateforme |
+| Super administrateur | `2250909090909` | web — back-office de régie |
 | Technicien | `2250102030405` | mobile `/tech/...` |
 | Propriétaire de zone | `2250707070707` | mobile `/home/...` |
+
+Les deux derniers se connectent dans l'application mobile. Le back-office web
+refuse leur connexion (`lib/auth.ts`) : ces numéros n'y servent à rien.
 
 L'OTP de démonstration (`123456`) reste accepté par l'API mobile
 `POST /api/auth/login`, mais plus par l'écran web.

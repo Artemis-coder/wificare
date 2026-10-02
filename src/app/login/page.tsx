@@ -5,36 +5,33 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { LOGIN_ERROR_MESSAGE } from "@/lib/auth";
-import {
-  ACCOUNT_TYPE_HINT,
-  ACCOUNT_TYPE_LABEL,
-  ACCOUNT_TYPES,
-  PASSWORD_LENGTH,
-  type AccountType,
-} from "@/lib/roles";
+import { PASSWORD_LENGTH } from "@/lib/roles";
 
 /**
- * Connexion à l'application web.
+ * Connexion au back-office de régie.
  *
- * Le type de compte est choisi avant le numéro : le serveur refuse un compte qui
- * ne correspond pas, et l'erreur est alors rattachée au sélecteur. Sous le champ
- * mot de passe, elle laisserait croire à un mot de passe erroné.
+ * Le back-office n'appartient qu'à la régie : le technicien et le propriétaire
+ * de zone ont leur espace dans l'application mobile, et le serveur refuse leur
+ * connexion ici (`lib/auth.ts`). Le sélecteur de type de compte a donc
+ * disparu — il ne restait qu'une valeur possible, et un bouton unique qui ne
+ * choisit rien est un contrôle qui laisse croire à un choix.
+ *
+ * Le refus « réservé à la régie » est rendu sous le numéro, et non sous le mot
+ * de passe : les identifiants sont alors parfaitement corrects, et c'est le
+ * rôle qui est en cause.
  */
 export default function LoginPage() {
   const router = useRouter();
-  const [accountType, setAccountType] = useState<AccountType>("SUPER_ADMIN");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [phoneError, setPhoneError] = useState("");
   const [passwordError, setPasswordError] = useState("");
-  const [accountTypeError, setAccountTypeError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setPhoneError("");
     setPasswordError("");
-    setAccountTypeError("");
 
     if (!phone || !password) {
       if (!phone) setPhoneError("Saisissez votre numéro de téléphone.");
@@ -47,7 +44,6 @@ export default function LoginPage() {
     const result = await signIn("credentials", {
       phone,
       password,
-      accountType,
       redirect: false,
     });
 
@@ -58,12 +54,10 @@ export default function LoginPage() {
       const message = LOGIN_ERROR_MESSAGE[code as keyof typeof LOGIN_ERROR_MESSAGE]
         ?? LOGIN_ERROR_MESSAGE.CredentialsSignin;
 
-      if (code === "mismatch" || code === "badtype") {
-        setAccountTypeError(message);
+      if (code === "notstaff" || code === "inactive") {
+        setPhoneError(message);
       } else if (code === "unknown" || code === "missing") {
         setPhoneError(message);
-      } else if (code === "inactive") {
-        setAccountTypeError(message);
       } else {
         setPasswordError(message);
       }
@@ -94,50 +88,6 @@ export default function LoginPage() {
           <h2>Connexion</h2>
           <p className="body-m" style={{ color: 'var(--text-secondary)' }}>Accédez à votre espace</p>
         </div>
-
-        {accountTypeError && (
-          <div role="alert" style={{ backgroundColor: 'var(--error-50)', color: 'var(--error-600)', padding: '12px', borderRadius: 'var(--radius-md)', marginBottom: '16px', fontSize: '14px' }}>
-            {accountTypeError}
-          </div>
-        )}
-
-        <fieldset style={{ border: 'none', padding: 0, margin: '0 0 20px' }}>
-          <legend className="label" style={{ marginBottom: '8px' }}>Type de compte</legend>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-            {ACCOUNT_TYPES.map((type) => {
-              const selected = type === accountType;
-
-              return (
-                <button
-                  key={type}
-                  type="button"
-                  onClick={() => {
-                    setAccountType(type);
-                    setAccountTypeError('');
-                  }}
-                  disabled={loading}
-                  aria-pressed={selected}
-                  style={{
-                    textAlign: 'left',
-                    padding: '10px 12px',
-                    borderRadius: 'var(--radius-md)',
-                    border: `1px solid ${selected ? 'var(--brand-600)' : 'var(--border-strong)'}`,
-                    backgroundColor: selected ? 'var(--brand-50)' : 'var(--bg-primary)',
-                    color: selected ? 'var(--brand-700)' : 'var(--text-primary)',
-                    cursor: loading ? 'not-allowed' : 'pointer',
-                  }}
-                >
-                  <span style={{ display: 'block', fontSize: '13px', fontWeight: 600 }}>
-                    {ACCOUNT_TYPE_LABEL[type]}
-                  </span>
-                  <span style={{ display: 'block', fontSize: '11px', color: 'var(--text-secondary)' }}>
-                    {ACCOUNT_TYPE_HINT[type]}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </fieldset>
 
         <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -197,7 +147,9 @@ export default function LoginPage() {
         </form>
 
         <div style={{ textAlign: 'center', marginTop: '24px', fontSize: '12px', color: 'var(--text-secondary)' }}>
-          Mode démo : super administrateur <strong>2250909090909</strong>, technicien <strong>2250102030405</strong>, propriétaire <strong>2250707070707</strong> — mot de passe <strong>1234</strong>
+          Back-office de régie. Le technicien et le propriétaire de zone se connectent dans l&apos;application mobile.
+          <br />
+          Mode démo : <strong>2250909090909</strong> — mot de passe <strong>1234</strong>
         </div>
       </div>
     </div>

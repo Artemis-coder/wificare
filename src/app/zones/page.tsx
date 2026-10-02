@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation';
 
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { isSuperAdmin } from '@/lib/roles';
+import { canUseBackoffice, isSuperAdmin } from '@/lib/roles';
 import { listZonesFor } from '@/lib/zones';
 import { ZoneList } from './zone-list';
 
@@ -44,6 +44,16 @@ export default async function ZonesPage({
   const session = await getServerSession(authOptions);
 
   if (!session) {
+        redirect('/login');
+  }
+
+  // Le back-office est réservé à la régie : un compte technicien ou
+  // propriétaire n'y a pas d'espace et son compte n'y est pas connecté
+  // (`lib/auth.ts` refuse sa connexion). Cette garde couvre le cas d'une
+  // session antérieure à cette règle, ou d'un rôle changé depuis la
+  // connexion — sans elle, la page resterait le seul endroit qui ne borne pas
+  // ce qu'elle affiche.
+  if (!canUseBackoffice(session.user.role)) {
     redirect('/login');
   }
 

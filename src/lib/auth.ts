@@ -3,7 +3,13 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import { prisma } from "./prisma";
 import { verifyPassword } from "./password";
 import { normalizePhone, phoneCandidates } from "./phone";
-import { ACCOUNT_TYPE_ROLE, type AccountType, type AppRole, isAccountType } from "./roles";
+import {
+  ACCOUNT_TYPE_ROLE,
+  canUseBackoffice,
+  type AccountType,
+  type AppRole,
+  isAccountType,
+} from "./roles";
 
 /**
  * Formulaire de connexion : téléphone, mot de passe de 4 chiffres et type de
@@ -66,6 +72,8 @@ export const LOGIN_ERROR_MESSAGE = {
   badpassword: "Mot de passe incorrect.",
   badtype: "Type de compte inconnu.",
   mismatch: "Ce compte ne correspond pas au type de compte choisi.",
+  notstaff:
+    "Le back-office est réservé à la régie. Utilisez l'application mobile WiFiCare.",
   AccessDenied: "Accès refusé.",
 } as const;
 
@@ -108,6 +116,21 @@ export const authOptions: NextAuthOptions = {
 
         if (!verifyPassword(password, user.passwordHash)) {
           throw new LoginRejected("badpassword");
+        }
+
+        // Le back-office est un outil de régie : il compte les comptes, répartit
+        // les interventions et valide les zones. Un propriétaire de zone et un
+        // technicien ont chacun leur espace dans l'application mobile, où se
+        // trouve tout ce qui les concerne. Les laisser entrer ici ne leur
+        // donnait qu'une seconde version de compteurs sur la plateforme
+        // entière, et une navigation qui ne mène à aucun de leurs écrans.
+        //
+        // Le refus porte sur le rôle, jamais sur le type de compte annoncé : le
+        // numéro et le mot de passe peuvent être parfaitement corrects, et c'est
+        // précisément pour cela qu'il faut le dire autrement qu'« identifiants
+        // incorrects ».
+        if (!canUseBackoffice(user.role)) {
+          throw new LoginRejected("notstaff");
         }
 
         if (accountType !== undefined && accountType !== "") {

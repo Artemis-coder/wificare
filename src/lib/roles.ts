@@ -109,6 +109,25 @@ export const isSuperAdmin = (role: AppRole | null | undefined): boolean =>
   role === "SUPER_ADMIN";
 
 /**
+ * Rôles qui ont un espace sur le back-office web.
+ *
+ * Le back-office est un outil de régie : il compte les comptes, répartit les
+ * interventions, valide les zones. Un propriétaire de zone et un technicien ont
+ * chacun leur espace dans l'application mobile, où ils déclarent une panne,
+ * tranchent un devis ou suivent un trajet. Leur donner aussi le web ne
+ * produisait qu'une seconde version de compteurs qui leur agrège la plateforme
+ * entière.
+ *
+ * L'application mobile n'a pas d'espace d'administration : ce tableau n'est donc
+ * pas une hiérarchie de droits, c'est la frontière entre les deux produits.
+ */
+export const WEB_ROLES: readonly AppRole[] = ["SUPER_ADMIN"];
+
+/** Ce rôle a-t-il un espace sur le back-office web ? */
+export const canUseBackoffice = (role: AppRole | null | undefined): boolean =>
+  role != null && WEB_ROLES.includes(role);
+
+/**
  * Vrai pour le rôle qui administre la plateforme.
  *
  * Alias d'`isSuperAdmin` : les deux noms disent la même chose depuis la fusion,
@@ -132,29 +151,29 @@ export type NavItem = {
 };
 
 export const NAV_ITEMS: readonly NavItem[] = [
-  { href: "/", label: "Tableau de bord", icon: "dashboard" },
-  { href: "/tickets", label: "Tickets", icon: "tickets" },
+  { href: "/", label: "Tableau de bord", icon: "dashboard", roles: WEB_ROLES },
+  { href: "/tickets", label: "Tickets", icon: "tickets", roles: WEB_ROLES },
   {
     href: "/admin/utilisateurs",
     label: "Utilisateurs",
     icon: "users",
-    roles: ["SUPER_ADMIN"],
+    roles: WEB_ROLES,
   },
   {
     href: "/admin/avis",
     label: "Avis clients",
     icon: "reviews",
-    roles: ["SUPER_ADMIN"],
+    roles: WEB_ROLES,
   },
   {
     href: "/admin/notifications",
     label: "Notifications",
     icon: "bell",
-    roles: ["SUPER_ADMIN"],
+    roles: WEB_ROLES,
   },
-  { href: "/zones", label: "Wi-Fi Zones", icon: "zones", roles: ["SUPER_ADMIN", "CLIENT"] },
-  { href: "/invoices", label: "Factures & Paiements", icon: "invoices" },
-  { href: "/profile", label: "Mon Profil", icon: "profile" },
+  { href: "/zones", label: "Wi-Fi Zones", icon: "zones", roles: WEB_ROLES },
+  { href: "/invoices", label: "Factures & Paiements", icon: "invoices", roles: WEB_ROLES },
+  { href: "/profile", label: "Mon Profil", icon: "profile", roles: WEB_ROLES },
 ];
 
 /** Entrées de navigation visibles par un rôle donné. */
