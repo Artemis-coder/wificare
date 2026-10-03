@@ -488,7 +488,20 @@ npm run wipe:demo         # exécute
 
 Le script (`prisma/wipe-demo.ts`) supprime les zones, dossiers client,
 équipements, demandes, rapports, devis, paiements, avis, suivis, notifications
-et diffusions, puis tous les comptes **sauf un super administrateur**.
+et diffusions, puis les comptes **sauf ceux indiqués par `--keep`**.
+
+`--keep` accepte plusieurs numéros séparés par des virgules :
+
+```bash
+npx tsx prisma/wipe-demo.ts --dry-run --keep 2250909090909,2250101407476
+npx tsx prisma/wipe-demo.ts --yes    --keep 2250909090909,2250101407476
+```
+
+Conserver un technicien en plus de l'administrateur laisse la régie avec quelqu'un
+à qui affecter une demande. **Au moins l'un des comptes conservés doit être
+`SUPER_ADMIN`**, faute de quoi plus personne n administersait la plateforme : le
+script refuse de finir dans cet état. Il refuse de même qu'un numéro demandé
+n'existe, plutôt que de vider la base sur une faute de frappe.
 
 Ce compte survit pour une raison précise : sans lui, plus personne ne peut se
 connecter au back-office. La connexion par numéro crée un compte `CLIENT`, et
@@ -496,10 +509,15 @@ aucun écran ne permet de se promouvoir soi-même en administrateur. Vider la
 base sans conserver d'administrateur verrouillerait la plateforme derrière sa
 seule porte d'entrée.
 
+L'activité des comptes conservés est remise à zéro (`loginCount`,
+`lastLoginAt`) : elle ne décrirait plus rien, puisque toutes les lignes du jeu
+de données sont parties. Leur identité ne l'est pas — numéro, rôle, statut et
+pays restent, ce sont les traits du compte et non son historique.
+
 Le numéro conservé est passé par `--keep`, et le script refuse de s'exécuter si
-ce compte n'existe pas ou n'est pas `SUPER_ADMIN` — plutôt que de vider la base
-en laissant personne pour la gérer. Sur une base Neon, préférer une branche à un
-`pg_dump` pour pouvoir remonter le temps : les suppressions sont irréversibles.
+ce compte n'existe pas ou si aucun n'est `SUPER_ADMIN` — plutôt que de vider la
+base en laissant personne pour la gérer. Sur une base Neon, préférer une branche
+à un `pg_dump` pour pouvoir remonter le temps : les suppressions sont irréversibles.
 
 Pour repartir d'une base vide puis rejouer la démonstration, enchaîner :
 

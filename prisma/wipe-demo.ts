@@ -3,15 +3,25 @@
  *
  * Le seed crée huit comptes de test. En les supprimant tous, plus personne ne
  * peut se connecter au back-office : la connexion par numéro crée un compte
- * `CLIENT`, jamais un administrateur. Ce script retire donc tout, sauf le
- * super administrateur indiqué par `--keep`, et laisse la base prête à
- * accueillir de vrais comptes.
+ * `CLIENT`, jamais un administrateur. Ce script retire donc tout, sauf les
+ * comptes indiqués par `--keep`, et laisse la base prête à accueillir de vrais
+ * comptes.
+ *
+ * `--keep` accepte plusieurs numéros séparés par des virgules : conserver aussi
+ * un technicien laisse la régie avec quelqu'un à qui affecter une demande, ce
+ * qu'un administrateur seul ne permet pas. Au moins l'un d'eux doit être
+ * `SUPER_ADMIN`, faute de quoi personne n administersait la plateforme.
+ *
+ * L'activité des comptes conservés est remise à zéro : il ne resterait pas
+ * d'historique d'un jeu de données dont toutes les lignes sont parties. Leur
+ * identité ne l'est pas — un numéro, un rôle, un pays ne décrivent pas ce qui a
+ * été effacé.
  *
  * Le schéma n'est pas touché : seules les lignes partent.
  *
  *   npx tsx prisma/wipe-demo.ts --dry-run     # compte ce qui partirait
  *   npx tsx prisma/wipe-demo.ts --yes          # l'exécute
- *   npx tsx prisma/wipe-demo.ts --yes --keep 2250909090909
+ *   npx tsx prisma/wipe-demo.ts --yes --keep 2250909090909,2250101407476
  *
  * Sans `--yes`, le script n'écrit rien. Les suppressions sont irréversibles :
  * sur une base Neon, préférer une branche à un `pg_dump` pour pouvoir
@@ -58,37 +68,69 @@ function arg(name: string): string | undefined {
   return i === -1 ? undefined : process.argv[i + 1];
 }
 
+/** Numéros passés à `--keep`, séparés par des virgules. */
+function keepArg(): string[] {
+  const raw = arg("--keep") ?? DEFAULT_KEEP;
+
+  return [
+    ...new Set(
+      raw
+        .split(",")
+        .map((phone) => phone.trim())
+        .filter(Boolean),
+    ),
+  ];
+}
+
 async function main() {
   const confirmed = process.argv.includes("--yes");
   const dryRun = process.argv.includes("--dry-run");
-  const keep = arg("--keep") ?? DEFAULT_KEEP;
+  const keep = keepArg();
 
-  const survivor = await prisma.user.findUnique({
-    where: { phone: keep },
+  const survivors = await prisma.user.findMany({
+    where: { phone: { in: keep } },
     select: { id: true, phone: true, name: true, role: true },
   });
 
-  if (!survivor) {
+  // Un numéro demandé et absent est une faute de frappe, pas une intention :
+  // conserver deux comptes sur trois laisserait croire que le troisième est
+  // encore là. On s'arrête plutôt que de vider la base sur un numéro faux.
+  const missing = keep.filter(
+    (phone) => !survivors.some((survivor) => survivor.phone === phone),
+  );
+
+  if (missing.length > 0) {
     console.error(
-      `Aucun compte au numéro ${keep}. Rien n'a été supprimé.\n` +
-        `Passez un autre numéro : npx tsx prisma/wipe-demo.ts --yes --keep <numéro>`,
-    );
-    process.exitCode = 1;
-    return;
-  }
-  if (survivor.role !== "SUPER_ADMIN") {
-    console.error(
-      `Le compte ${keep} est ${survivor.role}, pas SUPER_ADMIN. Le conserver ne\n` +
-        `laisserait personne pour administrer la plateforme.`,
+      `Aucun compte au numéro ${missing.join(", ")}. Rien n'a été supprimé.\n` +
+        `Passez les bons numéros : npx tsx prisma/wipe-demo.ts --yes --keep <numéros>`,
     );
     process.exitCode = 1;
     return;
   }
 
-  const doomedUsers = await prisma.user.count({ where: { id: { not: survivor.id } } });
+  // Sans administrateur, personne ne peut gérer les comptes, les rôles et les
+  // zones : la plateforme resterait sans porte d'entrée. Le script refuse donc
+  // de finir dans cet état.
+  if (!survivors.some((survivor) => survivor.role === "SUPER_ADMIN")) {
+    console.error(
+      `Aucun des comptes conservés (${keep.join(", ")}) n'est SUPER_ADMIN.\n` +
+        `Il ne resterait personne pour administrer la plateforme.`,
+    );
+    process.exitCode = 1;
+    return;
+  }
 
-  console.log(`Conservé       : ${survivor.name} (${survivor.phone}, ${survivor.role})`);
-  console.log(`Comptes retirés: ${doomedUsers}`);
+  const survivorIds = survivors.map((survivor) => survivor.id);
+
+  const doomedUsers = await prisma.user.count({
+    where: { id: { notIn: survivorIds } },
+  });
+
+  console.log("Conservés :");
+  for (const survivor of survivors) {
+    console.log(`  ${survivor.name} (${survivor.phone}, ${survivor.role})`);
+  }
+  console.log(`Comptes retirés : ${doomedUsers}`);
   console.log();
 
   if (dryRun) {
@@ -99,7 +141,8 @@ async function main() {
       console.log(`  ${table.label.padEnd(28)} ${count}`);
     }
     console.log(`  ${"comptes".padEnd(28)} ${doomedUsers}`);
-    console.log(`\nTotal : ${preview + doomedUsers} lignes.`);
+    console.log(`  ${"activité des conservés".padEnd(28)} ${survivors.length}`);
+    console.log(`\nTotal : ${preview + doomedUsers + survivors.length} lignes.`);
     console.log("Simulation. Relancez avec --yes pour exécuter.");
     return;
   }
@@ -114,11 +157,25 @@ async function main() {
     total += count;
     console.log(`  ${table.label.padEnd(28)} ${count}`);
   }
-  const { count: removed } = await prisma.user.deleteMany({ where: { id: { not: survivor.id } } });
+  const { count: removed } = await prisma.user.deleteMany({
+    where: { id: { notIn: survivorIds } },
+  });
   total += removed;
   console.log(`  ${"comptes".padEnd(28)} ${removed}`);
 
-  console.log(`\n${total} lignes supprimées. Il ne reste que ${survivor.phone}.`);
+  // L'activité des comptes conservés part avec le reste : un compteur de
+  // connexions resté à 3 décrirait un historique dont aucune ligne n'existe
+  // plus. Le pays, lui, reste — il décrit qui est le compte, pas ce qui a été
+  // fait.
+  const { count: reset } = await prisma.user.updateMany({
+    where: { id: { in: survivorIds } },
+    data: { loginCount: 0, lastLoginAt: null },
+  });
+  console.log(`  ${"activité des conservés".padEnd(28)} ${reset}`);
+
+  console.log(
+    `\n${total + reset} lignes supprimées. Il ne reste que ${keep.join(", ")}.`,
+  );
 }
 
 main()

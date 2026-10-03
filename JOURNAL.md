@@ -64,6 +64,19 @@ Les comptes déjà enregistrés se rattachent avec `npm run countries:backfill`,
 qui relit le plan de numérotation de chaque numéro. Il est sans danger à rejouer
 — seuls les comptes sans pays sont touchés — et n'écrit rien sans `--yes`.
 
+**`wipe:demo` sait conserver plus d'un compte.** Il n'en savait qu'un, et
+`--keep` ne prenait qu'un numéro : garder le technicien en plus de
+l'administrateur imposait de passer par un script jetable. `--keep` accepte
+maintenant des numéros séparés par des virgules, et la règle qui interdisait de
+finir sans administrateur s'applique à l'ensemble — au moins l'un des comptes
+conservés doit être `SUPER_ADMIN`. Un numéro demandé et absent arrête le script :
+vider la base sur une faute de frappe ne se rattrape pas.
+
+**L'activité des comptes conservés part avec le reste.** `loginCount` et
+`lastLoginAt` sont remis à zéro, parce qu'un compteur resté à 3 décrirait un
+historique dont plus aucune ligne n'existe. Leur identité ne bouge pas : numéro,
+rôle, statut et pays décrivent qui est le compte, pas ce qu'il a fait.
+
 ## 1.4.2 — 2 octobre 2026
 
 PostHog arrive dans le back-office, en trois volets.
