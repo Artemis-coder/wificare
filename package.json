@@ -12,7 +12,9 @@
     "phones:generate": "tsx scripts/generate-phone-countries.ts",
     "phones:check": "tsx scripts/check-phone-countries.ts",
     "wipe:demo": "tsx prisma/wipe-demo.ts",
-    "wipe:demo:dry": "tsx prisma/wipe-demo.ts --dry-run"
+    "wipe:demo:dry": "tsx prisma/wipe-demo.ts --dry-run",
+    "countries:backfill": "tsx prisma/backfill-user-countries.ts",
+    "countries:backfill:run": "tsx prisma/backfill-user-countries.ts --yes"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

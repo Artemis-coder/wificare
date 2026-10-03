@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { signTokens } from "@/lib/auth-tokens";
 import { hashPassword, isValidPassword } from "@/lib/password";
 import { normalizePhone } from "@/lib/phone";
+import { resolveCountryCode } from "@/lib/user-country";
 
 /** Les deux types de compte proposés à l'inscription. */
 const ACCOUNT_TYPES = ["TECHNICIAN", "WIFI_ZONE_OWNER"] as const;
@@ -24,6 +25,8 @@ type RegistrationBody = {
   password?: unknown;
   zoneName?: unknown;
   zoneLocation?: unknown;
+  /** Code ISO du pays choisi dans le sélecteur, « CI ». */
+  country?: unknown;
 };
 
 /**
@@ -93,6 +96,11 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    // Le pays que le client a choisi, ou celui que porte son numéro pour un
+    // client plus ancien qui n'envoie rien : c'est de là que vient le « CI » de
+    // la colonne, et ce que le tableau de bord regroupe.
+    const country = resolveCountryCode(body.country, phone);
+
     const user = await prisma.$transaction(async (tx) => {
       const created = await tx.user.create({
         data: {
@@ -102,6 +110,7 @@ export async function POST(request: NextRequest) {
           phone,
           passwordHash: hashPassword(body.password as string),
           role: ROLE_BY_ACCOUNT_TYPE[accountType],
+          country,
         },
       });
 

@@ -4,6 +4,66 @@ Ce qui a changé dans le produit, et pourquoi. Les détails d'implémentation so
 dans l'historique git et le README ; ici, on retient ce qui est utile à savoir
 six mois plus tard.
 
+## 1.4.3 — 3 octobre 2026
+
+La régie voit enfin **où l'application est utilisée**.
+
+### Ajouté
+
+**Une couverture géographique sur le tableau de bord**, entre les indicateurs et
+les actions rapides : les trois principaux pays, leur part en pourcentage des
+comptes, leurs connexions, et un menu qui déplie le pays par pays derrière.
+
+Trois pays, et non la liste entière. Un tableau de bord se lit en quelques
+secondes ; vingt lignes de pays l'allongent sans rien apprendre de plus à celui
+qui regarde. Le reste n'est pas perdu — il est regroupé sur une ligne « autres
+pays » qui nomme trois de ses membres et porte le total exact.
+
+**Le pays d'un compte est désormais une donnée.** Il ne l'était pas : le
+sélecteur de pays des écrans de connexion et d'inscription ne faisait que
+choisir le plan de numérotation du numéro, sans rien écrire. Le pays restait
+porté par le seul indicatif, exact mais illisible depuis une requête — on ne
+pouvait pas répartir les comptes par pays sans tous les ramener en mémoire. La
+colonne `User.country` comble le manque, et **l'application mobile n'a pas eu à
+changer** : le serveur déduit le pays du numéro qu'elle envoie déjà, ce qui
+rattrape au passage les comptes enregistrés avant le sélecteur.
+
+**Les connexions sont comptées** (`User.loginCount`, `User.lastLoginAt`). Elles
+ne l'étaient pas : rien ne distinguait un compte jamais connecté d'un compte
+inactif. Les deux chemins d'authentification écrivent — l'API mobile comme le
+back-office NextAuth — parce qu'un technicien qui travaille depuis l'application
+et un administrateur qui travaille depuis le web sont deux usages du même
+produit. L'écriture n'est jamais attendue et n'échoue jamais vers l'utilisateur :
+une mesure d'activité ratée doit coûter une ligne de journal, pas une connexion
+refusée à quelqu'un dont le mot de passe est le bon.
+
+### À retenir
+
+**Les compteurs de connexion partent de zéro, et c'est dit à l'écran.** Les
+sessions antérieures au suivi ne sont pas reconstituables : afficher le nombre
+dexact serait faux, et afficher « inconnu » le ferait passer pour un défaut. Le
+tableau de bord affiche 0 et porte la mention « depuis le suivi ».
+
+**Un pays ne se réécrit pas à la connexion.** Il est écrit une fois, à
+l'inscription, puis complété seulement s'il manque. Un compte qui voyage garde
+son pays d'inscription : l'indicatif d'un numéro ne dit que l'indicatif utilisé
+pour le joindre, pas d'où l'on utilise l'application.
+
+**Le regroupement se fait en base**, par `groupBy`. Ramener tous les comptes en
+mémoire pour les compter ferait grossir la requête au rythme de la plateforme,
+alors que c'est précisément la taille qui est mesurée. L'index sur `User.country`
+existe pour la même raison.
+
+**`knownCountry` et `countryByCode` ne font pas la même chose.** La seconde
+renvoie le pays par défaut pour un code inconnu, ce qui est le bon comportement
+pour valider une saisie et le mauvais pour afficher une colonne : un code absent
+des données deviendrait silencieusement « Côte d'Ivoire ». La première renvoie
+`null`, et l'écran affiche un pays non renseigné plutôt qu'un drapeau faux.
+
+Les comptes déjà enregistrés se rattachent avec `npm run countries:backfill`,
+qui relit le plan de numérotation de chaque numéro. Il est sans danger à rejouer
+— seuls les comptes sans pays sont touchés — et n'écrit rien sans `--yes`.
+
 ## 1.4.2 — 2 octobre 2026
 
 PostHog arrive dans le back-office, en trois volets.

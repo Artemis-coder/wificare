@@ -88,6 +88,21 @@
   /* Hauteur de la barre supérieure. Le panneau de notifications s'y accroche :
      il doit suivre la barre quand celle-ci se réduit sur téléphone. */
   --top-bar-h: 70px;
+
+  /* Palette de la couverture géographique, de la plus forte part à la plus
+     faible. Les six premières reprennent les teintes déjà en usage dans les
+     cartes d'indicateurs ; la septième est l'indigo des grands nombres, et le
+     huitième ton est celui des pays que la barre regroupe — distinct des sept
+     autres par sa valeur, non par sa teinte, pour qu'il se lise comme un reste
+     et pas comme un pays de plus. */
+  --geo-1: #2563eb;
+  --geo-2: #8b5cf6;
+  --geo-3: #06b6d4;
+  --geo-4: #16a34a;
+  --geo-5: #f59e0b;
+  --geo-6: #ec4899;
+  --geo-7: #6366f1;
+  --geo-others: #94a3b8;
 }
 
 /* La zone de contenu ne doit jamais déborder horizontalement : une carte trop
@@ -654,6 +669,241 @@ h3 { font-size: 16px; font-weight: 700; line-height: 1.4; }
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
+}
+
+/* --- Couverture géographique ------------------------------------------------
+   Répartition des comptes par pays. Une barre partage la largeur du bloc, puis
+   une ligne par pays reprend les mêmes chiffres. La barre se lit d'un coup
+   d'œil, la ligne se lit précisément : c'est la seconde qui porte les nombres,
+   et elle est donc complète, sans troncature ni « autres pays » qui cacherait
+   justement le pays que la régie cherche à voir arriver. */
+.geo {
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--elevation-1);
+  padding: 24px;
+  margin-bottom: 32px;
+}
+
+.geo-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+  padding-bottom: 18px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.geo-title {
+  margin: 0;
+  font-size: 17px;
+}
+
+.geo-subtitle {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+/* Trois mesures de tête, en pastilles. Le nombre est en gras et le nom suit :
+   l'œil prend le chiffre avant de lire, ce qui est l'ordre voulu. */
+.geo-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.geo-summary-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 6px 14px;
+  border-radius: var(--radius-full);
+  background-color: var(--neutral-50);
+  border: 1px solid var(--border-default);
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.geo-summary-item strong {
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+/* Rappel de la portée du chiffre : le suivi des connexions a commencé après
+   certains comptes, et lire « 0 connexion » comme « jamais utilisé » serait
+   faux. */
+.geo-summary-hint {
+  font-size: 11px;
+  color: var(--text-disabled);
+}
+
+/* Barre de répartition. Chaque segment est dimensionné par `flex-grow` sur la
+   part du pays — une largeur en pourcentage serait la même chose, mais ferait
+   déborder la barre dès qu'un segment trop étroit refuse de descendre sous sa
+   taille minimale. */
+.geo-bar {
+  display: flex;
+  gap: 3px;
+  height: 14px;
+  margin-bottom: 24px;
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  background-color: var(--neutral-100);
+}
+
+.geo-bar-segment {
+  flex-basis: 0;
+  /* Un pays à 0,2 % doit rester un trait visible : sans plancher, il
+     disparaîtrait et la barre sous-reporterait le total. */
+  min-width: 4px;
+}
+
+.geo-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+/* Sept colonnes, dont une proportionnelle qui porte la barre de la ligne. Les
+   largeurs fixes sont celles des chiffres : la part du pays doit rester lisible
+   même quand son nom occupe la moitié de la largeur. */
+.geo-row {
+  display: grid;
+  grid-template-columns: 20px 24px minmax(0, 1.3fr) minmax(0, 1fr) 104px 62px 116px;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.geo-row:first-child {
+  padding-top: 0;
+}
+
+.geo-row:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.geo-rank {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-disabled);
+  text-align: center;
+}
+
+.geo-flag {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.geo-name {
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.geo-dial {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-disabled);
+}
+
+.geo-track {
+  height: 8px;
+  border-radius: var(--radius-full);
+  background-color: var(--neutral-100);
+  overflow: hidden;
+}
+
+.geo-fill {
+  display: block;
+  height: 100%;
+  min-width: 3px;
+  border-radius: var(--radius-full);
+}
+
+.geo-count {
+  font-size: 13px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.geo-count-value {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+/* Chiffres alignés sur leur unité : des nombres sous 1 000 ne demandent pas de
+   séparateur de milliers, mais aligner la colonne évite que la liste tremble
+   d'une ligne à l'autre. */
+.geo-share {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.geo-logins {
+  font-size: 12px;
+  color: var(--text-disabled);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.geo-empty {
+  margin: 0;
+  padding: 24px;
+  border-radius: var(--radius-lg);
+  background-color: var(--neutral-50);
+  border: 1px dashed var(--border-strong);
+  font-size: 14px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+/* Menu de détail : un lien d'action, pas une carte. Il porte le nombre de pays
+   qu'il va montrer, pour que l'on sache s'il vaut le clic avant de le faire,
+   et il est dimensionné pour être une cible de pouce sur téléphone. */
+.geo-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 14px;
+  padding: 11px 16px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  background-color: var(--neutral-50);
+  color: var(--brand-600);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 180ms ease-out, border-color 180ms ease-out;
+}
+
+.geo-toggle:hover {
+  background-color: var(--brand-50);
+  border-color: var(--brand-500);
+}
+
+.geo-toggle-icon {
   flex-shrink: 0;
 }
 
@@ -1400,6 +1650,72 @@ select.field option {
     margin-bottom: 24px;
   }
 
+  /* --- Couverture géographique ----------------------------------------------
+     Sept colonnes ne tiennent pas dans la largeur d'un téléphone, et les
+     réduire toutes revient à écraser les chiffres. La ligne se replie donc sur
+     trois lignes de contenu : identité, mesures, puis la barre qui donne la
+     part au pays. Le rang disparaît — la liste est déjà triée, et le
+     pourcentage qui la suit en tient lieu. */
+  .geo {
+    padding: 18px;
+    margin-bottom: 24px;
+  }
+
+  .geo-row {
+    grid-template-columns: 26px minmax(0, 1fr) auto;
+    grid-template-areas:
+      "flag name   share"
+      "flag count  logins"
+      "track track track";
+    gap: 4px 10px;
+    padding: 14px 0;
+  }
+
+  .geo-row:first-child {
+    padding-top: 0;
+  }
+
+  .geo-rank {
+    display: none;
+  }
+
+  .geo-flag {
+    grid-area: flag;
+    align-self: center;
+    font-size: 22px;
+  }
+
+  .geo-name {
+    grid-area: name;
+    font-size: 15px;
+  }
+
+  .geo-track {
+    grid-area: track;
+    height: 6px;
+    margin-top: 6px;
+  }
+
+  .geo-count {
+    grid-area: count;
+  }
+
+  .geo-share {
+    grid-area: share;
+    font-size: 15px;
+  }
+
+  .geo-logins {
+    grid-area: logins;
+  }
+
+  /* Cible de pouce : le menu de détail est le seul moyen d'atteindre les pays
+     sous le podium, il ne peut pas être plus petit que le reste. */
+  .geo-toggle {
+    height: 48px;
+    font-size: 14px;
+  }
+
   .dashboard-grid,
   .stat-grid {
     margin-bottom: 24px;
@@ -1609,6 +1925,36 @@ select.field option {
   .stat-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;
+  }
+
+  /* Le bouton « Voir les comptes » passe sous le titre : à cette largeur il
+     se dispute la ligne avec lui, et le titre, qui porte l'information, perd
+     la coupe. Les pastilles de tête se resserrent pour tenir deux par
+     rangée. */
+  .geo-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .geo-header .btn {
+    width: 100%;
+  }
+
+  .geo-summary {
+    gap: 6px;
+  }
+
+  .geo-summary-item {
+    padding: 5px 11px;
+    font-size: 12px;
+  }
+
+  .geo-summary-item strong {
+    font-size: 14px;
+  }
+
+  .geo-bar {
+    height: 12px;
   }
 
   .kpi-card {

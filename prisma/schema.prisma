@@ -201,6 +201,23 @@ model User {
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
+  /// Pays de rattachement de l'abonné, ISO 3166-1 alpha-2.
+  ///
+  /// Il ne figurait nulle part : le sélecteur de pays de l'écran de connexion
+  /// ne faisait que guider la saisie du numéro, et le pays restait porté par le
+  /// seul plan de numérotation, donc indéchiffrable depuis une requête
+  /// d'agrégation. La colonne est ce qui permet au tableau de bord de répartir
+  /// les comptes par pays, et se remplit soit depuis le pays choisi à
+  /// l'inscription, soit — pour un numéro enregistré avant — en le déduisant de
+  /// son indicatif. Null tant que ni l'un ni l'autre n'a pu le dire.
+  country     String?
+  /// Connexions réussies depuis la mise en place du suivi, et dernière
+  /// connexion. Zéro et nulle tant que le suivi n'existait pas : le tableau de
+  /// bord affiche 0 plutôt qu'« inconnu », ce qui se distingue d'un compte
+  /// jamais connecté en consultant son dossier.
+  loginCount  Int        @default(0)
+  lastLoginAt DateTime?
+
   // Relations
   clients         Client[]       @relation("ClientUsers")
   tickets         Ticket[]       @relation("TechnicianTickets")
@@ -216,6 +233,10 @@ model User {
   broadcasts Broadcast[] @relation("Broadcasts")
   /// Suivis de position que ce technicien a envoyés sur ses demandes.
   technicianTrackings TechnicianTracking[]
+
+  /// Le tableau de bord regroupe les comptes par pays : sans index, chaque
+  /// rafraîchissement de la page compterait toute la table.
+  @@index([country])
 }
 
 enum Role {

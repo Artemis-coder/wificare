@@ -507,6 +507,28 @@ Pour repartir d'une base vide puis rejouer la démonstration, enchaîner :
 npm run wipe:demo && npx prisma db seed
 ```
 
+### 7.2 Rattacher les comptes existants à leur pays
+
+`User.country` est une colonne ajoutée après les premiers comptes : le sélecteur
+de pays des écrans de connexion et d'inscription ne faisait que choisir le plan
+de numérotation du numéro, sans rien écrire en base. Les comptes déjà
+enregistrés n'ont donc pas de pays, et le tableau de bord les compterait à part.
+
+```bash
+npm run countries:backfill      # compte ce qui partirait, n'écrit rien
+npm run countries:backfill:run  # exécute
+```
+
+Le script (`prisma/backfill-user-countries.ts`) relit le plan de numérotation de
+chaque numéro et écrit le pays qu'il reconnaît — la même lecture que celle de
+`lib/user-country`, donc le même pays qu'aurait donné l'écran de connexion. Sans
+argument, il n'écrit rien. Il est sans danger à rejouer : seuls les comptes sans
+pays sont touchés, et aucun compte n'est créé ni supprimé.
+
+C'est aussi le script à rejouer si l'on importe des comptes en masse : la
+connexion complète le pays d'un compte qui n'en a pas, mais elle ne le fait qu'au
+moment où la personne se connecte.
+
 ---
 
 ## 9. Modèle de données
@@ -515,7 +537,7 @@ npm run wipe:demo && npx prisma db seed
 
 | Modèle | Rôle | Liens |
 | --- | --- | --- |
-| `User` | compte : téléphone unique, rôle, statut | `Client`, `Ticket`, `Evaluation`, `Notification` |
+| `User` | compte : téléphone unique, rôle, statut, pays, activité | `Client`, `Ticket`, `Evaluation`, `Notification` |
 | `Client` | dossier d'un propriétaire de zone | `User?`, `WifiZone[]`, `Ticket[]` |
 | `WifiZone` | une zone Wi-Fi et sa position | `Client`, `Equipment[]`, `Ticket[]` |
 | `Equipment` | routeur, switch, ONT… d'une zone | `WifiZone` |
@@ -552,6 +574,30 @@ une réaffectation ultérieure réécrirait le passé.
 `TechnicianTracking` garde le technicien ayant envoyé la position, pour la même
 raison : la demande peut depuis avoir été réaffectée, et l'ETA affichée au
 client doit correspondre à la position qu'il voit.
+
+### 8.4 Pourquoi `User.country` est une colonne et pas une lecture du numéro
+
+Le pays d'un abonné est déjà dans son numéro : `+225…` est un numéro ivoirien.
+On pourrait donc lire `User.phone` et en déduire le pays à chaque affichage.
+
+On ne le fait pas, parce que cette lecture n'est pas une requête. Elle
+demanderait de ramener tous les comptes en mémoire, de passer chacun dans
+`lib/phone-countries`, et de compter en JavaScript — la requête croîtrait au
+rhythme de la plateforme, alors que sa taille est précisément ce qui est mesuré.
+`country` rend le regroupement possible en base, et l'index qui va avec.
+
+Deux règles d'écriture, à ne pas réécrire :
+
+- le pays vient **du client s'il l'envoie**, sinon **du numéro**. Un client plus
+  ancien — l'application mobile, qui n'envoie rien — est donc rattaché
+  correctement sans avoir à être modifié ;
+- le pays ne se réécrit **pas** à la connexion. Il n'est écrit que s'il manque.
+  Un compte qui voyage garde son pays d'inscription : l'indicatif d'un numéro
+  dit l'indicatif utilisé pour le joindre, pas d'où l'on utilise l'application.
+
+`loginCount` et `lastLoginAt` comptent les connexions depuis leur mise en place
+seulement. Les sessions antérieures ne sont pas reconstituables, et le tableau de
+bord le dit à l'écran plutôt que de laisser croire à un historique complet.
 
 ---
 

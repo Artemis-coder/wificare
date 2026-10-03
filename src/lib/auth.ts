@@ -4,6 +4,7 @@ import { encode, type JWT } from "next-auth/jwt";
 import { prisma } from "./prisma";
 import { verifyPassword } from "./password";
 import { normalizePhone, phoneCandidates } from "./phone";
+import { recordUserLogin } from "./user-country";
 import {
   ACCOUNT_TYPE_ROLE,
   canUseBackoffice,
@@ -180,6 +181,12 @@ export const authOptions: NextAuthOptions = {
             throw new LoginRejected("mismatch");
           }
         }
+
+        // La régie travaille depuis le web : sa connexion compte dans la mesure
+        // d'activité du pays, au même titre qu'une session ouverte depuis
+        // l'application mobile. L'écriture n'est pas attendue, pour ne pas
+        // retarder l'ouverture de session.
+        void recordUserLogin(user.id, user.phone);
 
         return {
           id: user.id,

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { signTokens } from "@/lib/auth-tokens";
 import { verifyPassword } from "@/lib/password";
 import { normalizePhone, phoneCandidates } from "@/lib/phone";
+import { countryCodeOfPhone, recordUserLogin } from "@/lib/user-country";
 import {
   ACCOUNT_TYPE_ROLE,
   accountTypeMismatchMessage,
@@ -62,7 +63,9 @@ export async function POST(request: NextRequest) {
         data: {
           phone: phoneNumber,
           name: `Client ${phoneNumber.slice(-4)}`,
-          role: "CLIENT" // Un numéro inconnu s'inscrit comme client
+          role: "CLIENT", // Un numéro inconnu s'inscrit comme client
+          // Ce compte naît d'une connexion : son pays vient de son numéro.
+          country: countryCodeOfPhone(phoneNumber),
         }
       });
     } else if (user.phone !== phoneNumber) {
@@ -106,6 +109,11 @@ export async function POST(request: NextRequest) {
       phone: user.phone,
       role: user.role,
     });
+
+    // Connexion réussie : elle compte pour la mesure d'activité du pays, et
+    // complète le pays d'un compte plus ancien au passage. L'écriture n'est pas
+    // attendue — elle ne doit pas retarder l'ouverture de session.
+    void recordUserLogin(user.id, user.phone);
 
     return NextResponse.json({
       data: {

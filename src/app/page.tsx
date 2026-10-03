@@ -6,7 +6,9 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 
 import { canUseBackoffice, isSuperAdmin } from '@/lib/roles';
+import { knownCountry } from '@/lib/user-country';
 import DashboardTicketRow from './dashboard-ticket-row';
+import DashboardCountries, { type CountryCoverage } from './dashboard-countries';
 
 export const dynamic = 'force-dynamic';
 
@@ -84,6 +86,47 @@ export default async function Dashboard() {
       technician: true,
     },
   });
+
+  // Couverture géographique : combien de comptes, et combien de connexions, dans
+  // chaque pays. Le regroupement se fait en base — ramener tous les comptes en
+  // mémoire pour les compter ici ferait grossir la requête au rythme de la
+  // plateforme, alors que c'est précisément la taille qui est mesurée.
+  const countryGroups = await prisma.user.groupBy({
+    by: ['country'],
+    _count: { _all: true },
+    _sum: { loginCount: true },
+  });
+
+  // Dénominateur des pourcentages : le total des comptes, pour que les parts
+  // ajoutent à 100 % — y compris quand un compte n'a pas encore de pays.
+  const accountedAccounts = countryGroups.reduce(
+    (sum, group) => sum + group._count._all,
+    0,
+  );
+
+  const countryCoverage: CountryCoverage[] = countryGroups
+    .map((group) => {
+      const accounts = group._count._all;
+      const country = knownCountry(group.country);
+
+      return {
+        code: group.country,
+        flag: country?.flag ?? '',
+        name: country?.name ?? 'Pays non renseigné',
+        dial: country?.dialLabel ?? '',
+        accounts,
+        share: accountedAccounts ? (accounts / accountedAccounts) * 100 : 0,
+        logins: group._sum.loginCount ?? 0,
+      };
+    })
+    // Le classement porte sur les comptes ; les connexions départagent, puis le
+    // nom rend l'ordre stable d'un rafraîchissement à l'autre.
+    .sort(
+      (a, b) =>
+        b.accounts - a.accounts ||
+        b.logins - a.logins ||
+        a.name.localeCompare(b.name, 'fr'),
+    );
 
   return (
     <div>
@@ -191,6 +234,11 @@ export default async function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Couverture géographique — avant les actions rapides : c'est une lecture
+          de la plateforme, là où les actions la font agir. Réservée à la régie,
+          comme les autres indicateurs qu'elle seule peut interpréter. */}
+      {canManage && <DashboardCountries countries={countryCoverage} />}
 
       {/* Quick Actions Bar */}
       <h3 style={{ marginBottom: '16px' }}>Actions Rapides</h3>
