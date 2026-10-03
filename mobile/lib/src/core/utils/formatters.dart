@@ -55,17 +55,10 @@ abstract final class Fmt {
     return _df('dd/MM/yyyy').format(value);
   }
 
-  /// Normalise un numéro ivoirien vers le format international `+225...`.
-  ///
-  /// Les numéros mobile ivoiriens s'écrivent `0707070707` (10 chiffres) : le
-  /// zéro national fait partie du numéro, il ne doit pas être retiré.
-  static String normalizePhone(String raw) {
-    final digits = raw.replaceAll(RegExp(r'[^0-9]'), '');
-    if (digits.isEmpty) return '';
-    if (digits.startsWith('225')) return '+$digits';
-    if (digits.startsWith('00')) return '+${digits.substring(2)}';
-    return '+225$digits';
-  }
+  /// Les numéros de téléphone ne sont pas formatés ici : ils dépendent du pays
+  /// de l'abonné, et c'est `PhoneCountries` qui connaît les 245 plans de
+  /// numérotation. Une règle propre à la Côte d'Ivoire dans un formateur
+  /// général donnerait deux vérités sur le même numéro.
 
   static String minutes(int? value) {
     if (value == null) return '—';

@@ -34,16 +34,21 @@ class AuthRepository {
     }
   }
 
-  /// Connexion par téléphone, avec le mot de passe du compte ou le code OTP de
-  /// démonstration (`123456`).
-  ///
-  /// Le login ne renvoie pas le dossier client : `me()` est appelé juste après
-  /// pour que l'application démarre avec le profil et les zones Wi-Fi.
-  Future<Session> login({
+/// Connexion par téléphone, avec le mot de passe du compte ou le code OTP de
+/// démonstration (`123456`).
+///
+/// Le login ne renvoie pas le dossier client : `me()` est appelé juste après
+/// pour que l'application démarre avec le profil et les zones Wi-Fi.
+///
+/// [remember] décide si les jetons sont conservés sur le téléphone. Sans cela,
+/// la session s'éteint avec l'application, et non au bout de quelques jours
+/// comme le veut la durée de vie des jetons.
+Future<Session> login({
     required String phone,
     String? password,
     String? otp,
     AccountType? accountType,
+    bool remember = true,
   }) async {
     final response = await api.post<Map<String, dynamic>>(
       '/auth/login',
@@ -55,7 +60,7 @@ class AuthRepository {
       },
     );
 
-    await _saveTokens(response);
+    await _saveTokens(response, remember: remember);
 
     return me();
   }
@@ -92,13 +97,17 @@ class AuthRepository {
     return me();
   }
 
-  Future<void> _saveTokens(Map<String, dynamic> response) async {
+  Future<void> _saveTokens(
+    Map<String, dynamic> response, {
+    bool? remember,
+  }) async {
     final data = response['data'] as Map<String, dynamic>;
     final tokens = data['tokens'] as Map<String, dynamic>;
 
     await storage.saveTokens(
       accessToken: tokens['accessToken'] as String,
       refreshToken: tokens['refreshToken'] as String,
+      persist: remember,
     );
   }
 

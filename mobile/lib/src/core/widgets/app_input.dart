@@ -23,6 +23,7 @@ class AppInput extends StatefulWidget {
     this.variant = AppInputVariant.text,
     this.maxLength,
     this.prefixIcon,
+    this.leading,
     this.suffix,
     this.focusNode,
     this.keyboardType,
@@ -43,6 +44,13 @@ class AppInput extends StatefulWidget {
   final AppInputVariant variant;
   final int? maxLength;
   final IconData? prefixIcon;
+
+  /// Ce qui précède le champ à la place d'une icône — le sélecteur de pays d'un
+  /// numéro de téléphone, par exemple. Il se remplace [prefixIcon] plutôt que
+  /// de s'y ajouter : deux éléments dans la même gouttière se chevauchent sur
+  /// un écran étroit.
+  final Widget? leading;
+
   final Widget? suffix;
   final FocusNode? focusNode;
 
@@ -154,9 +162,10 @@ class _AppInputState extends State<AppInput> {
             helperText: widget.helperText,
             helperMaxLines: 2,
             errorMaxLines: 2,
-            prefixIcon: widget.prefixIcon == null
-                ? null
-                : Icon(widget.prefixIcon, size: 20, color: colors.onSurfaceVariant),
+            prefixIcon: widget.leading ??
+                (widget.prefixIcon == null
+                    ? null
+                    : Icon(widget.prefixIcon, size: 20, color: colors.onSurfaceVariant)),
             suffixIcon: widget.suffix,
             counterText: '',
           ),

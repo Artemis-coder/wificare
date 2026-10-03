@@ -6,7 +6,16 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { LOGIN_ERROR_MESSAGE } from "@/lib/auth";
+import {
+  DEFAULT_COUNTRY_CODE,
+  countryByCode,
+  expectedDigitsLabel,
+  splitInternationalNumber,
+  validateNationalNumber,
+  type PhoneCountry,
+} from "@/lib/phone-countries";
 import { PASSWORD_LENGTH } from "@/lib/roles";
+import CountrySelect from "./country-select";
 
 /**
  * Connexion au back-office de régie.
@@ -20,14 +29,51 @@ import { PASSWORD_LENGTH } from "@/lib/roles";
  * Le refus « réservé à la régie » est rendu sous le numéro, et non sous le mot
  * de passe : les identifiants sont alors parfaitement corrects, et c'est le
  * rôle qui est en cause.
+ *
+ * Le numéro se saisit avec son pays, parce qu'un numéro n'a de sens qu'avec le
+ * plan de numérotation qui le reconnaît : `07 07 07 07 07` est un numéro
+ * ivoirien, dix chiffres de trop ailleurs. La vérification vient de
+ * `lib/phone-countries`, la même qui sert à l'application mobile.
  */
 export default function LoginPage() {
   const router = useRouter();
+  const [countryCode, setCountryCode] = useState(DEFAULT_COUNTRY_CODE);
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+  const [remember, setRemember] = useState(false);
   const [phoneError, setPhoneError] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const country = countryByCode(countryCode);
+
+  const chooseCountry = (code: string) => {
+    setCountryCode(code);
+    // Le plan change avec le pays : le message de longueur de l'ancien pays
+    // n'a plus de sens, et le laisser afficher enverrait l'utilisateur vers une
+    // erreur qui ne le concerne plus.
+    setPhoneError("");
+  };
+
+  /**
+   * Un numéro collé depuis une carte SIM ou un message arrive avec son
+   * indicatif, et cet indicatif dit son pays mieux que le sélecteur ne le
+   * suppose : on suit le numéro collé au lieu de le plaquer dans le pays choisi.
+   */
+  const adoptPastedNumber = (event: React.ClipboardEvent<HTMLInputElement>) => {
+    const pasted = event.clipboardData.getData("text").trim();
+
+    if (!pasted.startsWith("+") && !pasted.startsWith("00")) return;
+
+    const split = splitInternationalNumber(pasted);
+
+    if (!split.digits) return;
+
+    event.preventDefault();
+    setCountryCode(split.country.code);
+    setPhone(split.digits.replace(/\D/g, ""));
+    setPhoneError("");
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,11 +86,19 @@ export default function LoginPage() {
       return;
     }
 
+    const validation = validateNationalNumber(country, phone);
+
+    if (!validation.ok) {
+      setPhoneError(validation.message);
+      return;
+    }
+
     setLoading(true);
 
     const result = await signIn("credentials", {
-      phone,
+      phone: validation.e164,
       password,
+      remember,
       redirect: false,
     });
 
@@ -57,7 +111,7 @@ export default function LoginPage() {
       // numéro ni le mot de passe : savoir *pourquoi* une connexion échoue
       // (mot de passe erroné, compte inactif, mauvais produit) est ce qui
       // permet de distinguer un lot de fautes de frappe d'un compte bloqué.
-      captureLogin(code, false);
+      captureLogin(code, false, remember);
 
       const message = LOGIN_ERROR_MESSAGE[code as keyof typeof LOGIN_ERROR_MESSAGE]
         ?? LOGIN_ERROR_MESSAGE.CredentialsSignin;
@@ -74,7 +128,7 @@ export default function LoginPage() {
       return;
     }
 
-    captureLogin('success', true);
+    captureLogin("success", true, remember);
 
     router.push("/");
     router.refresh();
@@ -102,23 +156,34 @@ export default function LoginPage() {
         <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <label className="label" htmlFor="phone">Numéro de téléphone</label>
-            <input
-              id="phone"
-              type="tel"
-              inputMode="numeric"
-              placeholder="+2250102030405"
-              value={phone}
-              onChange={(e) => {
-                setPhone(e.target.value);
-                if (phoneError) setPhoneError("");
-              }}
-              aria-invalid={Boolean(phoneError)}
-              className="field"
-              style={phoneError ? { borderColor: 'var(--error-600)' } : undefined}
-              required
-            />
-            {phoneError && (
+            <div className="phone-row">
+              <CountrySelect
+                value={countryCode}
+                onChange={chooseCountry}
+                disabled={loading}
+              />
+              <input
+                id="phone"
+                className="field phone-number"
+                type="tel"
+                inputMode="numeric"
+                autoComplete="tel-national"
+                placeholder={country.example}
+                value={phone}
+                onPaste={adoptPastedNumber}
+                onChange={(event) => {
+                  setPhone(event.target.value.replace(/\D/g, ""));
+                  if (phoneError) setPhoneError("");
+                }}
+                aria-invalid={Boolean(phoneError)}
+                style={phoneError ? { borderColor: 'var(--error-600)' } : undefined}
+                required
+              />
+            </div>
+            {phoneError ? (
               <span style={{ fontSize: '12px', color: 'var(--error-600)' }}>{phoneError}</span>
+            ) : (
+              <PhoneHint country={country} digits={phone} />
             )}
           </div>
 
@@ -148,6 +213,20 @@ export default function LoginPage() {
             )}
           </div>
 
+          {/* Le libellé est frère de la case et non son parent : un `<label>`
+              qui enveloppe sa propre case renvoie l'activation à la case, qui se
+              retourne deux fois et reste dans son état initial. */}
+          <div className="check-row">
+            <input
+              id="remember"
+              type="checkbox"
+              checked={remember}
+              onChange={(event) => setRemember(event.target.checked)}
+              disabled={loading}
+            />
+            <label htmlFor="remember">Rester connecté sur ce poste</label>
+          </div>
+
           <button
             type="submit"
             className="btn btn-primary btn-lg"
@@ -161,10 +240,28 @@ export default function LoginPage() {
         <div style={{ textAlign: 'center', marginTop: '24px', fontSize: '12px', color: 'var(--text-secondary)' }}>
           Back-office de régie. Le technicien et le propriétaire de zone se connectent dans l&apos;application mobile.
           <br />
-          Mode démo : <strong>2250909090909</strong> — mot de passe <strong>1234</strong>
+          Mode démo : <strong>09 09 09 09 09</strong> (Côte d&apos;Ivoire) — mot de passe <strong>1234</strong>
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Rappel de la forme attendue, une fois le pays choisi.
+ *
+ * Le compte se fait pendant la saisie : afficher « 10 / 10 chiffres » dès le
+ * départ laisserait croire que le champ est déjà complet, et ne rien afficher
+ * obligerait l'utilisateur à compter ses chiffres un par un.
+ */
+function PhoneHint({ country, digits }: { country: PhoneCountry; digits: string }) {
+  const remaining = country.lengths[0] - digits.length;
+
+  return (
+    <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+      {remaining > 0 && digits.length > 0 ? `encore ${remaining} chiffre${remaining > 1 ? 's' : ''} · ` : ''}
+      {expectedDigitsLabel(country)} · ex. {country.example}
+    </span>
   );
 }
 
@@ -176,8 +273,8 @@ export default function LoginPage() {
  * tous les échecs pour retrouver le même motif. Le numéro et le mot de passe ne
  * sont jamais transmis — un mot de passe dans PostHog y resterait pour toujours.
  */
-function captureLogin(outcome: string, success: boolean): void {
+function captureLogin(outcome: string, success: boolean, remember: boolean): void {
   if (!posthog.__loaded) return;
 
-  posthog.capture('login_attempted', { outcome, success });
+  posthog.capture('login_attempted', { outcome, success, remembered: remember });
 }

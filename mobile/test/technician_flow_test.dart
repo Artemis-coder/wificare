@@ -364,7 +364,7 @@ void main() {
   ) async {
     await pumpApp(tester);
 
-    await tester.enterText(find.byType(TextField).at(0), '2250102030405');
+    await tester.enterText(find.byType(TextField).at(0), '0102030405');
     await settle(tester);
     await tester.enterText(find.byType(TextField).at(1), '1234');
     await settle(tester);
@@ -954,7 +954,7 @@ void main() {
   ) async {
     await pumpApp(tester);
 
-    await tester.enterText(find.byType(TextField).at(0), '2250102030405');
+    await tester.enterText(find.byType(TextField).at(0), '0102030405');
     await settle(tester);
     await tester.enterText(find.byType(TextField).at(1), '1234');
     await settle(tester);

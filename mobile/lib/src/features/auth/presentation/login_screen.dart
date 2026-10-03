@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -6,19 +7,21 @@ import '../../../core/domain/models.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/utils/formatters.dart';
+import '../../../core/utils/phone_countries.dart';
+import '../../../core/utils/phone_country_data.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_input.dart';
 import '../../../core/widgets/app_logo.dart';
+import '../../../core/widgets/phone_country_picker.dart';
 import '../../../core/widgets/states.dart';
 import '../application/auth_controller.dart';
 import 'widgets/account_type_selector.dart';
 
 /// Connexion au compte.
 ///
-/// L'utilisateur choisit son type de compte, saisit son téléphone et son mot
-/// passe de 4 chiffres.
+/// L'utilisateur choisit son type de compte, son pays, saisit son téléphone et
+/// son mot de passe de 4 chiffres.
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
@@ -31,6 +34,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _passwordController = TextEditingController();
 
   AccountType _accountType = AccountType.wifiZoneOwner;
+  late PhoneCountryData _country = PhoneCountries.defaultCountry;
+
+  /// Rester connecté est un choix, pas un défaut : la session ne survit pas à
+  /// la fermeture de l'application tant que la case n'est pas cochée.
+  bool _remember = false;
+
   String? _phoneError;
   String? _passwordError;
   String? _accountTypeError;
@@ -68,16 +77,29 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
   }
 
+  /// Changer de pays change le plan de numérotation : le message affiché vient
+  /// de l'ancien pays, et le laisser en place enverrait l'utilisateur vers une
+  /// erreur qui ne le concerne plus.
+  void _chooseCountry(PhoneCountryData country) {
+    setState(() {
+      _country = country;
+      _phoneError = null;
+    });
+  }
+
   Future<void> _submit() async {
     _clearErrors();
 
-    final phone = Fmt.normalizePhone(_phoneController.text);
+    final typed = _phoneController.text.trim();
     final password = _passwordController.text.trim();
 
-    if (phone.length < 8) {
-      _reportError('Saisissez un numéro de téléphone valide.', field: 'phone');
+    final validation = PhoneCountries.validate(_country, typed);
+
+    if (!validation.isAccepted) {
+      _reportError(validation.message!, field: 'phone');
       return;
     }
+
     if (password.length != kPasswordLength) {
       _reportError(
         'Le mot de passe comporte $kPasswordLength chiffres.',
@@ -89,10 +111,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     setState(() => _busy = true);
 
     try {
-      await ref.read(authControllerProvider.notifier).loginWithPassword(
-            phone: phone,
+      await ref
+          .read(authControllerProvider.notifier)
+          .loginWithPassword(
+            phone: validation.e164,
             password: password,
             accountType: _accountType,
+            remember: _remember,
           );
     } on ApiException catch (error) {
       // Un `403` signifie que le type de compte choisi ne correspond pas au
@@ -169,17 +194,29 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         AppInput(
                           controller: _phoneController,
                           label: 'Téléphone',
-                          hint: '+225 01 02 03 04 05',
+                          hint: _country.example,
+                          helperText: _phoneHelper(),
                           required: true,
                           errorText: _phoneError,
                           variant: AppInputVariant.phone,
-                          prefixIcon: Icons.phone_rounded,
+                          enabled: !_busy,
+                          leading: PhoneCountryPicker(
+                            country: _country,
+                            enabled: !_busy,
+                            onChanged: _chooseCountry,
+                          ),
+                          // La longueur admise dépend du pays : la borne par
+                          // défaut laisserait taper treize chiffres dans un plan
+                          // à huit, et le message d'erreur arriverait trop tard.
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                            LengthLimitingTextInputFormatter(_country.maxDigits),
+                          ],
                           textInputAction: TextInputAction.next,
-                          onChanged: (_) {
-                            if (_phoneError != null) {
-                              setState(() => _phoneError = null);
-                            }
-                          },
+                          // Le compte de caractères restants se lit sous le
+                          // champ : il avance donc à chaque frappe, même
+                          // lorsqu'aucune erreur n'est affichée.
+                          onChanged: (_) => setState(() => _phoneError = null),
                         ),
                         const SizedBox(height: AppSpacing.md),
                         AppInput(
@@ -189,6 +226,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           required: true,
                           errorText: _passwordError,
                           variant: AppInputVariant.password,
+                          enabled: !_busy,
                           prefixIcon: Icons.lock_outline_rounded,
                           textInputAction: TextInputAction.done,
                           onChanged: (value) {
@@ -197,6 +235,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             }
                           },
                           onSubmitted: _busy ? null : _submit,
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                        _RememberToggle(
+                          value: _remember,
+                          enabled: !_busy,
+                          onChanged: (value) => setState(() => _remember = value),
                         ),
                         const SizedBox(height: AppSpacing.lg),
                         AppButton(
@@ -231,6 +275,79 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ],
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Rappel de la forme attendue, une fois le pays choisi.
+  ///
+  /// Le compte se fait pendant la saisie : afficher « 10 / 10 chiffres » dès le
+  /// départ laisserait croire que le champ est déjà complet, et ne rien afficher
+  /// obligerait l'utilisateur à compter ses chiffres un par un.
+  String? _phoneHelper() {
+    if (_phoneError != null) return null;
+
+    final typed = _phoneController.text;
+    final remaining = _country.lengths.first - typed.length;
+
+    final rest = remaining > 0 && typed.isNotEmpty
+        ? 'encore $remaining chiffre${remaining > 1 ? 's' : ''} · '
+        : '';
+
+    return '$rest${_country.digitsLabel} · ex. ${_country.example}';
+  }
+}
+
+/// Case « rester connecté ».
+///
+/// La case est décochée par défaut : retenir une session est une décision de
+/// l'utilisateur, sur un téléphone qui peut être partagé. Elle est sous le mot
+/// de passe et au-dessus du bouton, là où la main se trouve déjà.
+class _RememberToggle extends StatelessWidget {
+  const _RememberToggle({
+    required this.value,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final bool value;
+  final bool enabled;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+
+    return Semantics(
+      checked: value,
+      child: InkWell(
+        onTap: enabled ? () => onChanged(!value) : null,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 24,
+                height: 24,
+                child: Checkbox(
+                  value: value,
+                  onChanged: enabled ? (checked) => onChanged(checked ?? false) : null,
+                  activeColor: colors.primary,
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  'Rester connecté sur ce téléphone',
+                  style: TextStyle(color: colors.onSurfaceVariant, fontSize: 13),
+                ),
+              ),
+            ],
           ),
         ),
       ),

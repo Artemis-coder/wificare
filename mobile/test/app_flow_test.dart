@@ -298,7 +298,7 @@ void main() {
     expect(find.text('Se connecter'), findsOneWidget);
     expect(find.text('Type de compte'), findsOneWidget);
 
-    await tester.enterText(find.byType(TextField).at(0), '2250707070707');
+    await tester.enterText(find.byType(TextField).at(0), '0707070707');
     await settle(tester);
     await tester.enterText(find.byType(TextField).at(1), '1234');
     await settle(tester);
@@ -321,7 +321,7 @@ void main() {
   ) async {
     await pumpApp(tester);
 
-    await tester.enterText(find.byType(TextField).at(0), '2250707070707');
+    await tester.enterText(find.byType(TextField).at(0), '0707070707');
     await settle(tester);
     await tester.enterText(find.byType(TextField).at(1), '1234');
     await settle(tester);
@@ -335,13 +335,15 @@ void main() {
   testWidgets('connexion : toast et champ en erreur', (tester) async {
     await pumpApp(tester);
 
-    // Numéro invalide : message éphémère + champ téléphone signalé.
+    // Numéro vide : message éphémère + champ téléphone signalé. Le texte vient
+    // de l'outil de numérotation, pas de l'écran : un seul message doit dire
+    // « ce numéro n'est pas valide ».
     await tester.tap(find.text('Se connecter'));
     await settle(tester, steps: 3);
     // Message éphémère (toast) + erreur affichée sous le champ téléphone.
-    expect(find.text('Saisissez un numéro de téléphone valide.'), findsNWidgets(2));
+    expect(find.text('Saisissez votre numéro de téléphone.'), findsNWidgets(2));
 
-    await tester.enterText(find.byType(TextField).at(0), '2250707070707');
+    await tester.enterText(find.byType(TextField).at(0), '0707070707');
     await settle(tester);
 
     // Mot de passe incomplet.
@@ -349,6 +351,65 @@ void main() {
     await settle(tester, steps: 3);
     expect(find.text('Le mot de passe comporte 4 chiffres.'), findsOneWidget);
     expect(find.textContaining('Se connecter'), findsWidgets);
+  });
+
+  testWidgets('connexion : le pays choisi commande le plan de numérotation', (
+    tester,
+  ) async {
+    await pumpApp(tester);
+
+    // Le champ annonce le plan du pays sélectionné : dix chiffres, exemple
+    // ivoirien.
+    expect(find.textContaining('10 chiffres'), findsOneWidget);
+
+    await tester.tap(find.textContaining('+225'));
+    await settle(tester, steps: 3);
+
+    // La liste est cherchable : « sen » mène au Sénégal sans faire défiler
+    // 245 pays.
+    await tester.enterText(
+      find.widgetWithIcon(TextField, Icons.search_rounded),
+      'sen',
+    );
+    await settle(tester);
+    await tester.tap(find.text('Sénégal').last);
+    await settle(tester, steps: 3);
+
+    expect(find.textContaining('9 chiffres'), findsOneWidget);
+
+    // Le champ limite la saisie au plan sénégalais : un numéro ivoirien tapé
+    // sous le mauvais drapeau est tronqué, sans être refusé — les plans mobiles
+    // sont plus étroits que les numéros réellement en circulation, et refuser
+    // sur cette base ferait perdre l'accès à des comptes existants.
+    await tester.enterText(find.byType(TextField).at(0), '0707070707');
+    await settle(tester);
+    expect(
+      tester.widget<TextField>(find.byType(TextField).at(0)).controller!.text,
+      '070707070',
+    );
+
+    await tester.enterText(find.byType(TextField).at(0), '701234567');
+    await settle(tester);
+    await tester.enterText(find.byType(TextField).at(1), '1234');
+    await settle(tester);
+    await tester.tap(find.text('Se connecter'));
+    await settle(tester, steps: 20);
+
+    expect(adapter.calls, contains('POST /auth/login'));
+  });
+
+  testWidgets('connexion : rester connecté est proposé, décoché par défaut', (
+    tester,
+  ) async {
+    await pumpApp(tester);
+
+    final checkbox = find.byType(Checkbox);
+    expect(checkbox, findsOneWidget);
+    expect(tester.widget<Checkbox>(checkbox).value, isFalse);
+
+    await tester.tap(checkbox);
+    await settle(tester);
+    expect(tester.widget<Checkbox>(find.byType(Checkbox)).value, isTrue);
   });
 
   testWidgets('connexion : un type de compte incohérent cible le sélecteur', (
@@ -359,7 +420,7 @@ void main() {
     await pumpApp(tester);
     adapter.statuses['/auth/login'] = 403;
 
-    await tester.enterText(find.byType(TextField).at(0), '2250102030405');
+    await tester.enterText(find.byType(TextField).at(0), '0102030405');
     await settle(tester);
     await tester.enterText(find.byType(TextField).at(1), '1234');
     await settle(tester);
@@ -872,7 +933,7 @@ void main() {
     // Étape 1 : identité.
     await tester.enterText(find.byType(TextField).at(0), 'Kouassi');
     await tester.enterText(find.byType(TextField).at(1), 'Marc');
-    await tester.enterText(find.byType(TextField).at(2), '2250707070707');
+    await tester.enterText(find.byType(TextField).at(2), '0707070707');
     await settle(tester);
 
     await tester.tap(find.text('Continuer'));
@@ -928,7 +989,7 @@ void main() {
 
     await tester.enterText(find.byType(TextField).at(0), 'Awa');
     await tester.enterText(find.byType(TextField).at(1), 'Traoré');
-    await tester.enterText(find.byType(TextField).at(2), '2250102030405');
+    await tester.enterText(find.byType(TextField).at(2), '0102030405');
     await settle(tester);
 
     await tester.tap(find.text('Continuer'));

@@ -1,5 +1,6 @@
 import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
+import { encode, type JWT } from "next-auth/jwt";
 import { prisma } from "./prisma";
 import { verifyPassword } from "./password";
 import { normalizePhone, phoneCandidates } from "./phone";
@@ -12,6 +13,27 @@ import {
 } from "./roles";
 
 /**
+ * Durée d'une session « rester connecté », en secondes.
+ *
+ * Un jeton ne peut pas être éternel : un an est la plus longue durée que l'on
+ * peut promettre sans qu'un jeton volé sur un poste de régie reste valable
+ * indéfiniment. En pratique, la session survit à la fermeture du navigateur,
+ * aux week-ends et aux vacances, et ne s'arrête que sur une déconnexion ou une
+ * année plus tard.
+ */
+const REMEMBERED_MAX_AGE = 365 * 24 * 60 * 60;
+
+/**
+ * Durée d'une session ordinaire : une journée de travail.
+ *
+ * Sans « rester connecté », le cookie de session reste dans le navigateur
+ * jusqu'à sa date d'expiration — NextAuth écrit toujours la même durée — mais le
+ * jeton qu'il contient, lui, expire. C'est le jeton qui fait foi : le cookie
+ * restant est ignoré puis remplacé à la prochaine connexion.
+ */
+const ORDINARY_MAX_AGE = 12 * 60 * 60;
+
+/**
  * Formulaire de connexion : téléphone, mot de passe de 4 chiffres et type de
  * compte. Le type de compte n'est pas une information fiable côté client : le
  * serveur le compare au rôle réel et refuse la connexion s'il diffère, pour
@@ -21,6 +43,8 @@ export type Credentials = {
   phone?: string;
   password?: string;
   accountType?: string;
+  /** Case « rester connecté » : le client l'envoie, le serveur en tient compte. */
+  remember?: boolean | string;
 };
 
 declare module "next-auth" {
@@ -37,6 +61,8 @@ declare module "next-auth" {
     id: string;
     phone: string;
     role: AppRole;
+    /** Session demandée comme durable par l'écran de connexion. */
+    remember?: boolean;
   }
 }
 
@@ -44,7 +70,19 @@ declare module "next-auth/jwt" {
   interface JWT {
     role: AppRole;
     phone: string;
+    /** Session durable : elle se renouvelle d'elle-même jusqu'à la déconnexion. */
+    remember?: boolean;
+    /** Secondes écoulées depuis 1970 où une session ordinaire prend fin. */
+    until?: number;
   }
+}
+
+/**
+ * Une case à cocher arrive selon la forme du formulaire qui l'a envoyée : un
+ * booléen depuis `signIn`, « on » ou « true » depuis un envoi HTML.
+ */
+function wantsRemember(value: boolean | string | undefined): boolean {
+  return value === true || value === "on" || value === "true";
 }
 
 /**
@@ -95,7 +133,7 @@ export const authOptions: NextAuthOptions = {
         accountType: { label: "Type de compte", type: "text" },
       },
       async authorize(credentials) {
-        const { phone, password, accountType } = (credentials ?? {}) as Credentials;
+        const { phone, password, accountType, remember } = (credentials ?? {}) as Credentials;
 
         if (!phone || !password) {
           throw new LoginRejected("missing");
@@ -148,19 +186,53 @@ export const authOptions: NextAuthOptions = {
           name: user.name,
           phone: user.phone,
           role: user.role,
+          remember: wantsRemember(remember),
         };
       },
     }),
   ],
   session: {
     strategy: "jwt",
+    // La durée du cookie est celle d'une session durable : c'est la plus longue
+    // des deux, et le jeton qu'il contient décide de ce qui expire vraiment.
+    maxAge: REMEMBERED_MAX_AGE,
+    // Une session durable se renouvelle tant que le poste est utilisé, sans
+    // jamais s'arrêter avant un an.
+    updateAge: 24 * 60 * 60,
+  },
+  jwt: {
+    /**
+     * Durée propre à chaque session.
+     *
+     * NextAuth n'écrit qu'une durée de cookie pour tout le monde, mais il
+     * délègue l'écriture du jeton : c'est ici que la case « rester connecté »
+     * trouve son effet. Une session ordinaire porte l'heure exacte de sa fin,
+     * ce qui l'empêche de glisser d'une journée à chaque rafraîchissement ; une
+     * session durable repart de son année complète, donc ne s'arrête jamais
+     * tant que le compte reste utilisé puis déconnecté volontairement.
+     */
+    encode: async ({ token, ...params }) => {
+      const now = Math.floor(Date.now() / 1000);
+      const claims = (token ?? {}) as JWT;
+
+      const maxAge = claims.remember
+        ? REMEMBERED_MAX_AGE
+        : Math.max(0, (claims.until ?? now) - now);
+
+      return encode({ ...params, token: claims, maxAge });
+    },
   },
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
         token.role = user.role;
         token.phone = user.phone;
+        token.remember = user.remember === true;
+        token.until = user.remember
+          ? undefined
+          : Math.floor(Date.now() / 1000) + ORDINARY_MAX_AGE;
       }
+
       return token;
     },
     async session({ session, token }) {

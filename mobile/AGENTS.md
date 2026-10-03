@@ -82,8 +82,15 @@ La connexion passe par le type de compte, le téléphone et le mot de passe de
 correspond pas au type choisi. Les erreurs de saisie sont signalées deux fois :
 message éphémère (`showAppSnackBar`) et erreur sous le champ concerné.
 
-Comptes de démonstration (mot de passe `1234`) : propriétaire `2250707070707`,
-technicien `2250102030405`.
+La case « Rester connecté sur ce téléphone » est **décochée par défaut** :
+cochée, les jetons sont écrits dans le stockage chiffré et la session survit à la
+fermeture de l'application ; décochée, ils ne restent qu'en mémoire
+(`TokenStorage.saveTokens(persist: false)`) et la session s'éteint avec
+l'application. Un jeton de renouvellement est réécrit là où le premier l'a été :
+`persist` nul reprend la décision de la connexion.
+
+Comptes de démonstration (mot de passe `1234`) : propriétaire `07 07 07 07 07`,
+technicien `01 02 03 04 05` — en saisie, donc sans l'indicatif +225.
 
 L'application ne propose que ces deux types de compte : un compte
 d'administration n'a pas d'espace mobile. Le back-office web connaît en plus le
@@ -112,6 +119,43 @@ sélecteur du formulaire de demande, et le serveur refuse une demande qui la
 concerne. Les équipements restent déclarables, et l'onglet « Équipements »
 l'annonce par un bandeau plutôt que de laisser le propriétaire découvrir la
 blocade en envoyant une panne qui aurait été refusée.
+
+## Numérotation des pays
+
+Un numéro de téléphone n'a de sens qu'avec le plan de numérotation qui le
+reconnaît : `07 07 07 07 07` est un numéro ivoirien, dix chiffres de trop
+partout ailleurs. Les écrans de connexion **et** d'inscription proposent donc un
+sélecteur de pays devant le champ (`PhoneCountryPicker`, dans `core/widgets/`),
+et le numéro est vérifié par `PhoneCountries.validate`
+(`core/utils/phone_countries.dart`).
+
+Les plans ne sont pas écrits à la main : `scripts/generate-phone-countries.ts`
+(`npm run phones:generate` depuis `wificare-web/`) lit les métadonnées publiées
+par `libphonenumber-js` — dépendance de **développement** seulement, jamais
+embarquée — et réécrit les deux jeux de données :
+`phone_countries.generated.dart` ici, `phone-countries.generated.ts` dans
+`src/lib/`. Un fichier `*.generated.*` ne se modifie donc jamais à la main.
+`npm run phones:check` vérifie les cas de référence côté web,
+`test/phone_countries_test.dart` côté mobile.
+
+Deux règles de validation, à ne pas confondre :
+
+- la **longueur** est un refus. C'est la faute la plus fréquente — un plan à huit
+  chiffres tapé en neuf — et la donnée est certaine ;
+- le **préfixe mobile** est un simple avertissement
+  (`PhoneCountries.prefixWarning`). Un préfixe absent de nos données ferait sinon
+  interdire un numéro valide, ce qui est bien plus grave qu'un numéro douteux
+  accepté.
+
+Le préfixe national est l'autre subtilité : en France `06 12 34 56 78` désigne
+le numéro `612345678`, le zéro ne fait pas partie du numéro, alors qu'en Côte
+d'Ivoire il en fait partie. Le champ `trunk` des données générées dit lequel
+écrire et lequel retirer.
+
+`Fmt.normalizePhone` a disparu : tout numéro passe par `PhoneCountries` côté
+mobile, par `src/lib/phone-countries.ts` côté back-office, et les deux lisent les
+mêmes données. Le pays par défaut reste `CI` — les comptes déjà enregistrés en
+base sont ivoiriens, et un autre défaut les rendrait introuvables.
 
 ## Espaces par rôle
 

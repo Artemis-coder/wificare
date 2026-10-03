@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -6,10 +7,12 @@ import '../../../core/domain/models.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/utils/formatters.dart';
+import '../../../core/utils/phone_countries.dart';
+import '../../../core/utils/phone_country_data.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_input.dart';
+import '../../../core/widgets/phone_country_picker.dart';
 import '../../../core/widgets/states.dart';
 import '../application/auth_controller.dart';
 import 'widgets/account_type_selector.dart';
@@ -52,6 +55,15 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   AccountType _accountType = AccountType.wifiZoneOwner;
   RegisterStep _step = RegisterStep.personal;
+  late PhoneCountryData _country = PhoneCountries.defaultCountry;
+
+  /// Numéro vérifié de l'étape précédente, écrit au format international.
+  ///
+  /// Il est mis de côté à ce moment-là parce que les étapes suivantes peuvent
+  /// revenir en arrière : revérifier à l'envoi risquerait de valider un pays
+  /// différent de celui choisi, si l'utilisateur en avait changé entre-temps.
+  String? _phone;
+
   bool _busy = false;
 
   String? _firstNameError;
@@ -140,13 +152,37 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     });
   }
 
+  /// Changer de pays change le plan de numérotation : le numéro déjà vérifié ne
+  /// vaut plus rien, et le message affiché venait de l'ancien pays.
+  void _selectCountry(PhoneCountryData country) {
+    setState(() {
+      _country = country;
+      _phone = null;
+      _phoneError = null;
+    });
+  }
+
+  /// Rappel de la forme attendue sous le champ téléphone.
+  ///
+  /// Le numéro lui-même est vérifié au moment de passer à l'étape suivante, là
+  /// où le pays choisi est encore à portée de regard.
+  String _phoneHelper() =>
+      '${_country.digitsLabel} · ex. ${_country.example}. '
+      "Sert d'identifiant de connexion";
+
   /// Valide l'étape courante et passe à la suivante.
   void _next() {
     switch (_step) {
       case RegisterStep.personal:
         final firstName = _firstNameController.text.trim();
         final lastName = _lastNameController.text.trim();
-        final phone = Fmt.normalizePhone(_phoneController.text);
+
+        // Le numéro est vérifié ici, une fois pour toutes : c'est ici que le
+        // pays est choisi, et l'utilisateur ne le verra plus ensuite.
+        final validation = PhoneCountries.validate(
+          _country,
+          _phoneController.text.trim(),
+        );
 
         if (lastName.isEmpty) {
           _reportError('Renseignez votre nom.', field: 'lastName');
@@ -156,14 +192,12 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           _reportError('Renseignez votre prénom.', field: 'firstName');
           return;
         }
-        if (phone.length < 8) {
-          _reportError(
-            'Saisissez un numéro de téléphone valide.',
-            field: 'phone',
-          );
+        if (!validation.isAccepted) {
+          _reportError(validation.message!, field: 'phone');
           return;
         }
         setState(() {
+          _phone = validation.e164;
           _step = _steps[_stepIndex + 1];
         });
       case RegisterStep.zone:
@@ -190,6 +224,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     final password = _passwordController.text.trim();
     final confirm = _passwordConfirmController.text.trim();
 
+    if (_phone == null) {
+      _reportError(
+        "Revenez à l'étape précédente pour renseigner votre numéro.",
+        field: 'phone',
+      );
+      return;
+    }
+
     if (password.length != kPasswordLength) {
       _reportError(
         'Le mot de passe doit contenir $kPasswordLength chiffres.',
@@ -212,7 +254,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             accountType: _accountType,
             firstName: _firstNameController.text.trim(),
             lastName: _lastNameController.text.trim(),
-            phone: Fmt.normalizePhone(_phoneController.text),
+            phone: _phone!,
             password: password,
             zoneName: _isOwner ? _zoneNameController.text.trim() : null,
             zoneLocation: _isOwner ? _zoneLocationController.text.trim() : null,
@@ -358,14 +400,23 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   AppInput(
                     controller: _phoneController,
                     label: 'Téléphone',
-                    hint: '+225 01 02 03 04 05',
-                    helperText: "Sert d'identifiant de connexion",
+                    hint: _country.example,
+                    helperText: _phoneHelper(),
                     required: true,
                     errorText: _phoneError,
                     variant: AppInputVariant.phone,
-                    prefixIcon: Icons.phone_rounded,
+                    enabled: !_busy,
+                    leading: PhoneCountryPicker(
+                      country: _country,
+                      enabled: !_busy,
+                      onChanged: _selectCountry,
+                    ),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(_country.maxDigits),
+                    ],
                     textInputAction: TextInputAction.done,
-                    onChanged: (_) => _clearError('phone'),
+                    onChanged: (_) => setState(() => _phoneError = null),
                   ),
                 ],
               ),

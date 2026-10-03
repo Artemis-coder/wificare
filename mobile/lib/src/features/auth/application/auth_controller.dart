@@ -127,10 +127,14 @@ class AuthController extends AsyncNotifier<Session?> {
   ///
   /// [accountType] est le type choisi dans l'écran de connexion : le serveur
   /// refuse un compte qui ne correspond pas.
+  ///
+  /// [remember] vient de la case « rester connecté » : sans elle, les jetons
+  /// restent en mémoire et la session disparaît à la fermeture de l'application.
   Future<void> loginWithPassword({
     required String phone,
     required String password,
     required AccountType accountType,
+    bool remember = true,
   }) async {
     state = const AsyncValue.loading();
 
@@ -144,12 +148,14 @@ class AuthController extends AsyncNotifier<Session?> {
               phone: phone,
               password: password,
               accountType: accountType,
+              remember: remember,
             ),
       );
 
       await AnalyticsService.capture('login_attempted', properties: {
         'outcome': 'success',
         'account_type': accountType.wire,
+        'remembered': remember,
       });
     } on ApiException catch (error) {
       // Le motif est déduit de l'erreur, jamais pris dans son message :
@@ -162,6 +168,7 @@ class AuthController extends AsyncNotifier<Session?> {
             ? 'network'
             : (error.statusCode ?? 0).toString(),
         'account_type': accountType.wire,
+        'remembered': remember,
       });
       rethrow;
     } catch (_) {
@@ -172,6 +179,7 @@ class AuthController extends AsyncNotifier<Session?> {
         'outcome': 'failure',
         'reason': 'unexpected',
         'account_type': accountType.wire,
+        'remembered': remember,
       });
       rethrow;
     }

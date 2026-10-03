@@ -871,6 +871,183 @@ select.field option {
   max-width: 460px;
 }
 
+/* Numéro de téléphone : le pays à gauche, le numéro à droite.
+ *
+ * Un numéro n'existe pas sans le plan de numérotation qui le reconnaît, donc
+ * les deux contrôles se lisent ensemble et partagent la hauteur du champ.
+ */
+.phone-row {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.phone-row .phone-number {
+  flex: 1 1 auto;
+}
+
+/* Sélecteur de pays.
+ *
+ * Le champ fermé ne montre que le drapeau et l'indicatif : c'est ce que
+ * l'utilisateur reconnaît de son numéro, et un nom complet y prendrait la
+ * moitié de la carte. La liste, elle, affiche le nom — c'est elle qui sert à
+ * choisir, et une ligne tronquée ne dit plus quel pays c'est.
+ */
+.country-picker {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.country-picker-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: 104px;
+  padding: 0 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.country-picker-button svg {
+  flex: 0 0 auto;
+  margin-left: auto;
+  color: var(--text-secondary);
+}
+
+.country-picker-button:disabled {
+  background-color: var(--neutral-100);
+  color: var(--text-disabled);
+  cursor: not-allowed;
+}
+
+.country-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  /* La largeur suit le champ, avec un plancher et un plafond : assez large
+     pour le nom du pays le plus long, jamais plus que la carte. */
+  width: max(260px, 100%);
+  max-width: min(360px, calc(100vw - 48px));
+  padding: 8px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-strong);
+  background-color: var(--bg-card);
+  box-shadow: var(--elevation-4);
+  z-index: 30;
+}
+
+.country-search {
+  height: 38px;
+  font-size: 14px;
+}
+
+.country-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  max-height: 260px;
+  overflow-y: auto;
+  /* La carte est centrée dans la page : une liste qui s'ouvre à droite
+     dépasserait vite de l'écran sur un téléphone. */
+  overscroll-behavior: contain;
+}
+
+.country-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.country-option:hover,
+.country-option[data-highlighted] {
+  background-color: var(--neutral-100);
+}
+
+.country-option[aria-selected="true"] {
+  background-color: var(--brand-50);
+  color: var(--brand-700);
+  font-weight: 600;
+}
+
+.country-option-flag {
+  flex: 0 0 auto;
+  font-size: 16px;
+}
+
+.country-option-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.country-option-dial {
+  flex: 0 0 auto;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.country-empty {
+  margin: 12px 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+/* Case « rester connecté ».
+ *
+ * Elle se lit comme une phrase, pas comme un contrôle de formulaire : le
+ * libellé est la zone à viser au doigt, et il est frère de la case plutôt que
+ * son parent — un `<label>` qui enveloppe sa propre case lui renvoie
+ * l'activation, qui se retourne deux fois et reste à son état initial.
+ */
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: -8px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-secondary);
+  user-select: none;
+}
+
+.check-row label {
+  cursor: pointer;
+}
+
+.check-row:hover {
+  color: var(--text-primary);
+}
+
+.check-row input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  accent-color: var(--brand-600);
+  cursor: pointer;
+}
+
+.check-row:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.check-row:has(input:disabled) label {
+  cursor: not-allowed;
+}
+
 /* Coque du profil : le bandeau colorectal déborde volontairement sous le
    gabarit du compte, le contenu suit avec une marge qui se réduit sur
    téléphone. */
