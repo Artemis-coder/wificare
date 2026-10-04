@@ -316,7 +316,7 @@ export default function BroadcastComposer({
           {/* Programmation : l'heure est saisie dans le fuseau du poste, et
               affichée telle quelle — la maintenance planifiée se décide toujours
               sur l'heure locale de celui qui l'annonce. */}
-          <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid var(--border-default)' }}>
+<div className="broadcast-reach-status">
             <label
               style={{
                 display: 'flex',

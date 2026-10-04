@@ -83,9 +83,21 @@ export default function BroadcastPreview({
 
       <div className="phone-frame">
         <div className="phone-screen">
-          <div className="phone-status-bar">
-            <span>9:41</span>
-            <span aria-hidden="true">▮▮▮</span>
+          {/* L'application derrière : elle n'est pas lue, elle est là pour
+              montrer que la notification recouvre un écran et ne le pousse
+              pas. */}
+          <div className="phone-backdrop" aria-hidden="true">
+            <div className="phone-status-bar">
+              <span>9:41</span>
+              <span>▮▮▮</span>
+            </div>
+            <div className="phone-backdrop-head" />
+            <div className="phone-backdrop-tile" />
+            <div className="phone-backdrop-tile" />
+            <div className="phone-backdrop-row" />
+            <div className="phone-backdrop-row" />
+            <div className="phone-backdrop-row" />
+            <div className="phone-backdrop-row" />
           </div>
 
           <div className="push-notification">

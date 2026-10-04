@@ -1003,15 +1003,26 @@ h3 { font-size: 16px; font-weight: 700; line-height: 1.4; }
 .broadcast-layout {
   display: grid;
   gap: 20px;
-  align-items: start;
+  /* Les trois colonnes prennent la hauteur de la plus haute : un cadre qui
+     s'arrête à mi-hauteur sous un cadre qui descend jusqu'en bas donne
+     l'impression de deux zones de tailles différentes, alors qu'elles portent
+     le même envoi. C'est `stretch`, la valeur par défaut, écrit ici pour être
+     explicite — parce que `start` est précisément le défaut à éviter ici.
+
+     En dessous de 1280 px, l'aperçu passe sur une ligne à lui, à pleine
+     largeur : il y partage sa hauteur avec le message, qui serait sinon seul
+     dans sa rangée et ne pourrait donc plus lui être égal. */
+  align-items: stretch;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
   grid-template-areas:
     'audience message'
-    'audience preview';
+    'preview preview';
 }
 
 /* Colonne du composeur. Le même cadre pour les trois : elles sont trois views
-   du même envoi, pas trois sections de taille différente. */
+   du même envoi, pas trois sections de taille différente. En colonne interne,
+   pour pouvoir glisser le contenu d'un bord à l'autre — le bouton d'envoi en
+   bas, l'état du push en bas, le téléphone au milieu. */
 .broadcast-col {
   grid-area: var(--col);
   background-color: var(--bg-card);
@@ -1020,6 +1031,8 @@ h3 { font-size: 16px; font-weight: 700; line-height: 1.4; }
   box-shadow: var(--elevation-1);
   padding: 20px;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .broadcast-col-audience { --col: audience; }
@@ -1167,25 +1180,58 @@ h3 { font-size: 16px; font-weight: 700; line-height: 1.4; }
   font-weight: 600;
 }
 
-/* Aperçu du téléphone. Le cadre est plus étroit que la colonne qui le porte :
-   le message doit se lire à l'échelle où il sonnera. */
+/* Aperçu du téléphone : l'écran entier, et la notification posée par-dessus.
+   Un cadre de 200 px posé sur un aplat ne disait qu'une chose — qu'un message
+   tiendrait dans un rectangle. L'écran complet montre ce qui se passe
+   vraiment : la notification recouvre le contenu, ne le pousse pas, et c'est
+   ce recouvrement qui décide de ce qu'on lit. */
 .phone-frame {
   width: 100%;
-  max-width: 280px;
-  margin: 0 auto;
+  max-width: 286px;
+  margin: auto;
   border: 1px solid var(--neutral-300);
-  border-radius: 26px;
+  border-radius: 30px;
   background-color: var(--neutral-900);
-  padding: 10px;
-  box-shadow: var(--elevation-2);
+  padding: 8px;
+  box-shadow: var(--elevation-3);
 }
 
 .phone-screen {
-  border-radius: 18px;
+  position: relative;
+  aspect-ratio: 9 / 19;
+  border-radius: 22px;
   background: linear-gradient(170deg, #1e293b 0%, #0f172a 100%);
-  padding: 12px 10px;
-  min-height: 210px;
   overflow: hidden;
+}
+
+/* L'application derrière la notification. Elle n'est pas là pour être lue :
+   des blocs neutres suffisent à montrer qu'il y a un écran, et ils ne
+   concurrencent pas le texte à juger. */
+.phone-backdrop {
+  position: absolute;
+  inset: 0;
+  padding: 14px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.phone-backdrop-head {
+  height: 30px;
+  border-radius: 9px;
+  background-color: rgba(255, 255, 255, 0.09);
+}
+
+.phone-backdrop-tile {
+  height: 52px;
+  border-radius: 11px;
+  background-color: rgba(255, 255, 255, 0.06);
+}
+
+.phone-backdrop-row {
+  height: 34px;
+  border-radius: 9px;
+  background-color: rgba(255, 255, 255, 0.045);
 }
 
 .phone-status-bar {
@@ -1199,13 +1245,47 @@ h3 { font-size: 16px; font-weight: 700; line-height: 1.4; }
   font-variant-numeric: tabular-nums;
 }
 
-/* La notification telle qu'elle tombe par-dessus l'écran verrouillé. */
+/* La notification telle qu'elle tombe : posée sur l'écran, pas dans un coin de
+   la page. Elle vient se placer sous la barre d'état et recouvre le contenu. */
 .push-notification {
-  background-color: rgba(255, 255, 255, 0.96);
-  border-radius: 14px;
+  position: absolute;
+  top: 30px;
+  left: 9px;
+  right: 9px;
+  background-color: rgba(255, 255, 255, 0.97);
+  border-radius: 16px;
   padding: 12px;
   color: var(--neutral-900);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.5);
+  animation: push-in 260ms ease-out;
+}
+
+/* Elle arrive par-dessus, comme le fait le système : sans ce mouvement, la
+   notification était déjà là avant même qu'on ait écrit quoi que ce soit. */
+@keyframes push-in {
+  from {
+    opacity: 0;
+    transform: translateY(-14px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Petit trait sous la carte, comme sur les notifications d'Android : c'est lui
+   qui dit que la carte est posée au-dessus de l'écran et non posée dedans. */
+.push-notification::after {
+  content: '';
+  position: absolute;
+  left: 14px;
+  bottom: -5px;
+  width: 10px;
+  height: 10px;
+  background-color: rgba(255, 255, 255, 0.97);
+  transform: rotate(45deg);
+  border-radius: 2px;
 }
 
 .push-notification-head {
@@ -1359,6 +1439,37 @@ h3 { font-size: 16px; font-weight: 700; line-height: 1.4; }
   color: var(--text-secondary);
   margin-top: 4px;
   line-height: 1.4;
+}
+
+/* Les trois colonnes ayant la même hauteur, leur contenu se répartit : l'état
+   du push descend en bas de la carte des destinataires, le bouton d'envoi
+   descend en bas de la carte du message, le téléphone se centre dans la sienne.
+   Sans cela, chaque colonne s'arrête où son texte s'arrête et les trois cadres
+   ont des bases décalées — ce qui est exactement ce qu'on voulait éviter. */
+.broadcast-reach-status {
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-default);
+}
+
+/* La carte du message est la plus courte en contenu : son formulaire doit
+   occuper la hauteur restante, sinon la marge automatique du bouton s'applique
+   à l'intérieur d'un bloc et ne pousse plus rien. */
+.broadcast-col-message > form {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.broadcast-col-message form > .form-actions:last-child {
+  margin-top: auto;
+}
+
+/* La barre de titre du composeur ne doit pas être repoussée par le contenu :
+   elle reste en haut quoi qu'il arrive, pour que les trois colonnes se lisent
+   d'un même niveau. */
+.broadcast-col-head {
+  flex-shrink: 0;
 }
 
 /* Colonne principale et colonne latérale d'une page de détail. */
@@ -2697,5 +2808,11 @@ select.field option {
   .action-card:hover,
   .btn:active {
     transform: none;
+  }
+
+  /* L'arrivée par-dessus de la notification d'aperçu : elle ne dit rien du
+     texte affiché, seulement qu'il vient d'être écrit. */
+  .push-notification {
+    animation: none;
   }
 }
