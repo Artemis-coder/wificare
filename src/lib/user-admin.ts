@@ -6,7 +6,12 @@ import { authOptions } from "./auth";
 import { getApiUser } from "./api-auth";
 import { prisma } from "./prisma";
 import { isSuperAdmin, type AppRole } from "./roles";
-import { hashPassword, isValidPassword, PASSWORD_LENGTH } from "./password";
+import {
+  hashPassword,
+  isValidPassword,
+  verifyPassword,
+  PASSWORD_LENGTH,
+} from "./password";
 import { normalizePhone } from "./phone";
 
 /**
@@ -286,4 +291,75 @@ async function hasOtherActiveSuperAdmin(excludeId: string): Promise<boolean> {
   });
 
   return count > 0;
+}
+
+/**
+ * Change le mot de passe du compte connecté.
+ *
+ * `updateUser` refuse toute auto-modification, et pour de bonnes raisons : la
+ * garde qui protège le dernier administrateur d'une rétrogradation ne doit pas
+ * pouvoir être contournée par le compte concerné. Un mot de passe n'a pas ce
+ * risque — changer le sien est au contraire ce qu'un profil doit permettre — donc
+ * cette fonction ne contourne pas `updateUser`, elle s'y ajoute.
+ *
+ * Le mot de passe actuel est exigé. Une session laissée ouverte sur un poste de
+ * régie permettrait sinon de fixer un mot de passe que le titulaire ne connaît pas,
+ * et de lui fermer la plateforme sans qu'il puisse s'en sortir : il ne lui
+ * resterait qu'un autre administrateur pour le débloquer.
+ *
+ * Les deux erreurs — mot de passe actuel faux, nouveau mot de passe refusé —
+ * sont volontairement distinctes : l'une se corrige d'un coup d'œil, l'autre
+ * demande de relire la consigne. Les fusionner obligerait à afficher « mot de
+ * passe incorrect » pour une saisie trop courte, ce qui ferait perdre celui qui
+ * ne voit pas où il s'est trompé.
+ */
+export async function changeOwnPassword(
+  actorId: string,
+  currentPassword: unknown,
+  nextPassword: unknown,
+): Promise<AdminResult<null>> {
+  if (typeof currentPassword !== "string" || !currentPassword) {
+    return fail("Saisissez votre mot de passe actuel.", 400);
+  }
+
+  if (!isValidPassword(nextPassword)) {
+    return fail(
+      `Le nouveau mot de passe doit comporter ${PASSWORD_LENGTH} chiffres.`,
+      400,
+    );
+  }
+
+  const account = await prisma.user.findUnique({
+    where: { id: actorId },
+    select: { id: true, passwordHash: true },
+  });
+
+  if (!account) {
+    return fail("Compte introuvable.", 404);
+  }
+
+  // Un compte créé par OTP n'a pas d'empreinte : il n'y a rien à vérifier, et
+  // lui en créer une à partir d'un mot de passe que personne ne possède
+  // reviendrait à lui laisser un accès qu'il n'a pas demandé.
+  if (!account.passwordHash) {
+    return fail("Ce compte n'a pas de mot de passe : connectez-vous par code.", 409);
+  }
+
+  if (!verifyPassword(currentPassword, account.passwordHash)) {
+    return fail("Mot de passe actuel incorrect.", 400);
+  }
+
+  // Réécrire le même mot de passe ressemblerait à un changement réussi alors
+  // que rien n'a bougé, et sur un poste partagé laisserait croire que le mot de
+  // passe a été renouvelé.
+  if (verifyPassword(nextPassword, account.passwordHash)) {
+    return fail("Le nouveau mot de passe doit différer de l'actuel.", 400);
+  }
+
+  await prisma.user.update({
+    where: { id: actorId },
+    data: { passwordHash: hashPassword(nextPassword) },
+  });
+
+  return { ok: true, data: null };
 }

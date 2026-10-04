@@ -793,7 +793,40 @@ l'empreinte ne l'est jamais. Les six endpoints qui exposaient le compte du
 technicien — détail d'une demande, liste des demandes, décision sur un devis,
 dossier client — le font désormais par sélection explicite.
 
-### 10.6 Ce qui n'est pas protégé, et pourquoi
+### 10.6 Changer son propre mot de passe
+
+`updateUser` (`src/lib/user-admin.ts`) refuse **toute** auto-modification :
+« Vous ne pouvez pas modifier votre propre compte. » La garde qui empêche le
+dernier administrateur de se rétrograder ne doit pas pouvoir être contournée par
+le compte concerné.
+
+Un mot de passe n'a pas ce risque : changer le sien est ce qu'un profil doit
+permettre. `changeOwnPassword` ne contourne donc pas `updateUser`, il s'y ajoute
+— et il est séparé dans la même intention : le profil est le seul endroit où une
+personne agit sur son propre compte.
+
+Trois règles, toutes dans `changeOwnPassword` :
+
+| Règle | Raison |
+| --- | --- |
+| le mot de passe **actuel** est exigé | une session laissée ouverte sur un poste de régie pourrait sinon fixer un mot de passe que le titulaire ne connaît pas, et le fermer dehors sans issue |
+| le nouveau doit **différer** de l'actuel | réécrire le même mot de passe ressemblerait à un changement réussi alors que rien n'a bougé |
+| un compte **sans mot de passe** est refusé | créé par code, il n'a pas d'empreinte ; lui en créer une à partir d'un mot de passe que personne ne possède reviendrait à lui donner un accès qu'il n'a pas demandé |
+
+La confirmation est relue dans la server action, pas seulement dans le formulaire :
+celui-ci est une aide à la saisie, il n'est pas une garantie, et une action
+appelée directement — un script, une extension — n'y passe pas.
+
+**Changer son mot de passe déconnecte.** La session est un JWT, et le back-office
+n'a pas d'annulation de session : rien ne permettrait de fermer les autres sessions,
+ni même de savoir lesquelles existent. Se déconnecter est donc la seule façon de
+prouver que le nouveau mot de passe fonctionne, et d'éviter qu'un poste de régie
+partagé reste ouvert sous le compte de celui qui vient de le renouveler.
+L'écran de connexion reconnaît `?changed=1` et dit ce qu'il s'est passé, faute de
+quoi la personne arrive devant un écran muet et finit par essayer l'ancien mot
+de passe, qu'elle croit avoir changé.
+
+### 10.7 Ce qui n'est pas protégé, et pourquoi
 
 | Point | Situation |
 | --- | --- |

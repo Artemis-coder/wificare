@@ -267,3 +267,45 @@ export function toStoragePhone(country: PhoneCountry, raw: string): string {
 
   return `${country.dial}${digits}`;
 }
+
+/**
+ * Un numéro écrit pour être lu : `+225 09 09 09 09 09`.
+ *
+ * `User.phone` est stocké en un seul tenant — `2250909090909` — pour être lisible
+ * en base et cherchable dans une requête. C'est la bonne forme pour une colonne
+ * de tableau, où l'on compare des chaînes, et la mauvaise pour une fiche : là où
+ * l'on regarde une identité, le numéro doit se lire comme un numéro.
+ *
+ * Les chiffres nationaux sont regroupés par deux à partir de la droite. C'est
+ * la lecture que donne l'indicatif west-africain (`+225 07 07 07 07 07`) et elle
+ * reste lisible sur les autres plans : un nombre impair de chiffres laisse un
+ * groupe de un en tête, `+33 6 12 34 56 78`, qu'aucune lecture ne rendrait
+ * autrement.
+ *
+ * Le regroupement par paires est un choix d'affichage, pas une donnée de
+ * numérotation : il ne sert qu'ici, et ne touche jamais à ce qui est stocké.
+ */
+export function formatPhoneForDisplay(
+  phone: string,
+  countryCode: string | null
+): string {
+  const digits = digitsOf(phone);
+
+  if (!digits) return "";
+
+  // Le pays déjà connu est préféré ; à défaut, le numéro le dit lui-même.
+  const country =
+    (countryCode ? BY_CODE.get(countryCode.toUpperCase()) : undefined) ??
+    splitInternationalNumber(phone).country;
+
+  const national = digits.startsWith(country.dial)
+    ? digits.slice(country.dial.length)
+    : digits;
+
+  return `${country.dialLabel} ${groupPairs(national)}`;
+}
+
+/** `0909090909` devient `09 09 09 09 09`. */
+function groupPairs(digits: string): string {
+  return digits.replace(/(\d{2})(?=\d)/g, "$1 ");
+}

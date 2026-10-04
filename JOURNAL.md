@@ -77,6 +77,35 @@ vider la base sur une faute de frappe ne se rattrape pas.
 historique dont plus aucune ligne n'existe. Leur identité ne bouge pas : numéro,
 rôle, statut et pays décrivent qui est le compte, pas ce qu'il a fait.
 
+**Mon profil parle enfin à la régie.** La page annonçait « vos identifiants Wi-Fi
+Zone » et affichait un décompte de zones rattachées — un compte d'administration
+n'a ni dossier client ni emplacements, donc le compteur valait toujours zéro et le
+vocabulaire appartenait au propriétaire de zone. Elle affichait aussi `USR-2026-001`
+comme identifiant de repli : une référence inventée, qui n'a de sens nulle part et
+qui n'est arrivée que parce qu'un `user?.id ||` la glissait en silence.
+
+Elle montre maintenant ce qui décrit le compte et son activité : l'identité, le
+numéro lisible (`+225 09 09 09 09 09` plutôt que `2250909090909` — le format
+stocké est fait pour être cherché, pas lu), le pays, la dernière connexion, les
+connexions, les appareils abonnés. Elle indique ce que vaut le rôle, là où le
+badge ne disait que son nom.
+
+Plus aucun style en ligne sur la page : tout est passé en classe, et la fiche est
+enfin lisible sur téléphone. Une mise en page en style inline ne peut pas être
+surchargée par un media query — la règle était déjà écrite dans ce journal, et la
+page ne la suivait pas.
+
+**Un administrateur peut enfin changer son mot de passe.** `updateUser` refuse
+toute auto-modification, à juste titre : la garde qui empêche le dernier
+administrateur de se rétrograder ne doit pas être contournable par le compte
+concerné. Un mot de passe n'a pas ce risque. `changeOwnPassword` s'ajoute donc à
+`updateUser` au lieu de le contourner, et exige le mot de passe actuel — sans lui,
+une session laissée ouverte sur un poste de régie suffirait à fermer le compte de
+son titulaire dehors, sans qu'il ait où aller. Le changement **déconnecte** : la
+session est un JWT sans révocation, donc déconnecter est la seule façon de prouver
+que le nouveau mot de passe fonctionne. L'écran de connexion reconnaît
+`?changed=1`, sinon la personne devant un écran muet retente l'ancien mot de passe.
+
 ## 1.4.2 — 2 octobre 2026
 
 PostHog arrive dans le back-office, en trois volets.

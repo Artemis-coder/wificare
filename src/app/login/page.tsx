@@ -3,7 +3,7 @@
 import { signIn } from "next-auth/react";
 import posthog from "posthog-js";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import { LOGIN_ERROR_MESSAGE } from "@/lib/auth";
 import {
@@ -37,6 +37,7 @@ import CountrySelect from "./country-select";
  */
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [countryCode, setCountryCode] = useState(DEFAULT_COUNTRY_CODE);
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
@@ -44,6 +45,13 @@ export default function LoginPage() {
   const [phoneError, setPhoneError] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Après un changement de mot de passe, le formulaire renvoie ici pour que la
+  // personne se reconnecte avec le nouveau. Sans ce bandeau, elle arrive devant
+  // un écran qui ne lui dit rien et finit par essayer l'ancien mot de passe,
+  // qu'elle croit avoir changé. Lu dans l'URL et non gardé en état : il n'a pas
+  // à survivre à une action de l'utilisateur.
+  const passwordChanged = searchParams.get("changed") === "1";
 
   const country = countryByCode(countryCode);
 
@@ -154,6 +162,12 @@ export default function LoginPage() {
         </div>
 
         <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {passwordChanged && (
+            <div role="status" className="alert alert-success">
+              Mot de passe modifié. Connectez-vous avec le nouveau.
+            </div>
+          )}
+
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <label className="label" htmlFor="phone">Numéro de téléphone</label>
             <div className="phone-row">

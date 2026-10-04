@@ -1,11 +1,29 @@
-import { prisma } from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
-import Link from 'next/link';
-import { ROLE_LABEL } from '@/lib/roles';
+
+import { getServerSession } from 'next-auth';
+
+import { prisma } from '@/lib/prisma';
+import { authOptions } from '@/lib/auth';
+import { canUseBackoffice, ROLE_LABEL, PASSWORD_LENGTH } from '@/lib/roles';
+import { formatPhoneForDisplay } from '@/lib/phone-countries';
+import { knownCountry } from '@/lib/user-country';
+import { ChangePasswordForm } from './change-password-form';
 import { SignOutButton } from './sign-out-button';
-import { canUseBackoffice } from '@/lib/roles';
+
+/**
+ * Mon profil — la fiche du compte connecté.
+ *
+ * Cette page était écrite pour un propriétaire de zone : elle annonçait « vos
+ * identifiants Wi-Fi Zone » et affichait un décompte de zones rattachées, qui
+ * vaut toujours zéro pour la régie. Un administrateur n'a ni dossier client ni
+ * emplacements — ce sont les notions du propriétaire — et la page lui montrait
+ * donc des compteurs vides sous un vocabulaire qui n'était pas le sien.
+ *
+ * Elle montre ici ce qui décrit le compte et son activité : l'identité, le
+ * numéro et le pays, l'activité, et la seule action qui lui appartient —
+ * changer son propre mot de passe, impossible ailleurs. `lib/user-admin` refuse
+ * l'auto-modification, et pour de bonnes raisons : voir `changeOwnPassword`.
+ */
 
 export const dynamic = 'force-dynamic';
 
@@ -15,11 +33,36 @@ const STATUS_LABEL = {
   SUSPENDED: 'Suspendu',
 } as const;
 
+/** Ce que vaut le rôle, en une phrase : un badge seul dit le nom, pas la portée. */
+const ROLE_SCOPE: Record<string, string> = {
+  SUPER_ADMIN:
+    'Gère les comptes, les rôles et l’ensemble de la plateforme',
+  TECHNICIAN: 'Traite les demandes d’intervention qui lui sont affectées',
+  CLIENT: 'Suit ses demandes depuis l’application',
+};
+
+const DATE_FORMAT = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'long' });
+
+const DATE_TIME_FORMAT = new Intl.DateTimeFormat('fr-FR', {
+  dateStyle: 'long',
+  timeStyle: 'short',
+});
+
+/** « aujourd'hui », « hier », « il y a 3 jours ». */
+function since(then: Date): string {
+  const days = Math.floor((Date.now() - then.getTime()) / 86_400_000);
+
+  if (days < 1) return 'aujourd’hui';
+  if (days === 1) return 'hier';
+
+  return `il y a ${days} jours`;
+}
+
 export default async function ProfilePage() {
   const session = await getServerSession(authOptions);
 
   if (!session) {
-        redirect('/login');
+    redirect('/login');
   }
 
   // Le back-office est réservé à la régie : un compte technicien ou
@@ -36,109 +79,208 @@ export default async function ProfilePage() {
   // non sur le nom, qui n'est pas unique.
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
-    include: {
-      clients: {
-        include: {
-          wifiZones: true,
-        },
-      },
+    select: {
+      id: true,
+      name: true,
+      firstName: true,
+      lastName: true,
+      phone: true,
+      role: true,
+      status: true,
+      country: true,
+      loginCount: true,
+      lastLoginAt: true,
+      createdAt: true,
+      passwordHash: true,
+      _count: { select: { pushTokens: true, pushSubscriptions: true } },
     },
   });
 
+  // Le compte a été supprimé entre la connexion et cette page : la session
+  // reste valide, son porteur n'existe plus. Une fiche qui inventerait des
+  // valeurs afficherait un profil pour quelqu'un qui n'a pas de compte.
+  if (!user) {
+    redirect('/login');
+  }
+
+  const country = knownCountry(user.country);
+  const initial =
+    user.name?.trim()[0] ?? user.firstName?.trim()[0] ?? user.phone.slice(-1);
+
+  // Un compte créé par code n'a pas de nom. L'ancienne page tombait sur
+  // « Détenteur Wi-Fi », qui décrit un propriétaire de zone, pas un
+  // administrateur : mieux vaut le pays, puis les derniers chiffres du numéro.
+  const displayName =
+    user.name?.trim() ||
+    [user.firstName, user.lastName].filter(Boolean).join(' ').trim() ||
+    country?.name ||
+    `Compte ${user.phone.slice(-4)}`;
+
+  const alertDevices = user._count.pushTokens + user._count.pushSubscriptions;
+
   return (
-    <div style={{ maxWidth: '800px', margin: '0 auto' }}>
-      <div className="page-header" style={{ marginBottom: '24px' }}>
+    <div className="profile-page">
+      <div className="page-header">
         <div className="page-header-text">
-          <h1>Mon Profil &amp; Compte</h1>
-          <p className="body-m" style={{ color: 'var(--text-secondary)' }}>
-            Consultez les informations de votre compte et vos identifiants Wi-Fi Zone.
+          <h1>Mon profil</h1>
+          <p className="body-m">
+            Votre compte d&apos;administration, son activité et son mot de passe.
           </p>
         </div>
       </div>
 
-      {/* Main Profile Card */}
-      <div className="panel panel-lg" style={{ overflow: 'hidden', marginBottom: '24px', padding: 0 }}>
-        {/* Banner Header */}
-        <div style={{ height: '120px', background: 'linear-gradient(135deg, var(--brand-700) 0%, var(--accent-purple) 100%)', position: 'relative' }}></div>
-        
+      <section className="panel profile-card" aria-labelledby="profile-identity">
+        <div className="profile-banner" aria-hidden="true" />
+
         <div className="profile-body">
-          <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '24px' }}>
-            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: '20px' }}>
-              <div style={{ width: '88px', height: '88px', borderRadius: '50%', backgroundColor: 'var(--brand-600)', color: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px', fontWeight: 800, border: '4px solid var(--bg-primary)', boxShadow: 'var(--elevation-2)' }}>
-                {user?.name?.[0] || 'U'}
-              </div>
-              <div>
-                <h2 style={{ fontSize: '22px', fontWeight: 800, margin: 0 }}>{user?.name || session.user?.name || 'Détenteur Wi-Fi'}</h2>
-                <div style={{ color: 'var(--text-secondary)', fontSize: '14px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
-                  <span className="badge badge-brand">
-                    <span className="badge-dot"></span>
-                    {user ? ROLE_LABEL[user.role] : ROLE_LABEL[session.user.role]}
-                  </span>
-                  <span>• Inscrit le {user?.createdAt ? new Date(user.createdAt).toLocaleDateString('fr-FR') : 'Récemment'}</span>
-                </div>
-              </div>
-            </div>
-          </div>
+          <div className="profile-identity">
+            <span className="profile-avatar" aria-hidden="true">
+              {initial.toUpperCase()}
+            </span>
 
-          {/* Details Section */}
-          <div className="two-col-grid" style={{ gap: '20px', paddingTop: '16px', borderTop: '1px solid var(--border-default)' }}>
-            <div>
-              <div className="label" style={{ marginBottom: '6px' }}>Numéro de Téléphone (Identifiant)</div>
-              <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)' }}>
-                {user?.phone || session.user.phone || 'Non renseigné'}
-              </div>
-            </div>
-
-            <div>
-              <div className="label" style={{ marginBottom: '6px' }}>Statut du Compte</div>
-              <div>
-                <span className={`badge ${user?.status === 'ACTIVE' ? 'badge-success' : 'badge-warning'}`}>
-                  <span className="badge-dot"></span>
-                  {STATUS_LABEL[user?.status ?? 'ACTIVE']}
+            <div className="profile-identity-text">
+              <h2 id="profile-identity">{displayName}</h2>
+              <div className="profile-meta">
+                <span className="badge badge-purple">
+                  <span className="badge-dot" />
+                  {ROLE_LABEL[user.role]}
+                </span>
+                <span
+                  className={`badge ${user.status === 'ACTIVE' ? 'badge-success' : 'badge-warning'}`}
+                >
+                  <span className="badge-dot" />
+                  {STATUS_LABEL[user.status]}
                 </span>
               </div>
+              {ROLE_SCOPE[user.role] && (
+                <p className="profile-scope">{ROLE_SCOPE[user.role]}</p>
+              )}
+            </div>
+          </div>
+
+          <div className="profile-details">
+            <div className="profile-detail">
+              <span className="label">Téléphone — votre identifiant</span>
+              <span className="profile-detail-value">
+                {country && (
+                  <span className="profile-flag" aria-hidden="true">
+                    {country.flag}
+                  </span>
+                )}
+                {formatPhoneForDisplay(user.phone, user.country)}
+              </span>
             </div>
 
-            <div>
-              <div className="label" style={{ marginBottom: '6px' }}>ID Client / Référence</div>
-              <div style={{ fontSize: '14px', fontFamily: 'monospace', color: 'var(--brand-700)', fontWeight: 600 }}>
-                {user?.id || 'USR-2026-001'}
-              </div>
+            <div className="profile-detail">
+              <span className="label">Pays de rattachement</span>
+              {country ? (
+                <span className="profile-detail-value">
+                  {country.name}
+                  <span className="profile-detail-note">{country.dialLabel}</span>
+                </span>
+              ) : (
+                <span className="profile-detail-value">
+                  <span className="profile-detail-note">
+                    Non renseigné — il sera déduit de votre numéro à la prochaine
+                    connexion
+                  </span>
+                </span>
+              )}
             </div>
 
-            <div>
-              <div className="label" style={{ marginBottom: '6px' }}>Nombre de Wi-Fi Zones rattachées</div>
-              <div style={{ fontSize: '16px', fontWeight: 600 }}>
-                {user?.clients?.reduce((acc, c) => acc + c.wifiZones.length, 0) || 0} Zone(s)
-              </div>
+            <div className="profile-detail">
+              <span className="label">Compte créé le</span>
+              <span className="profile-detail-value">
+                {DATE_FORMAT.format(user.createdAt)}
+              </span>
+            </div>
+
+            <div className="profile-detail">
+              <span className="label">Identifiant du compte</span>
+              <span className="profile-detail-value profile-detail-ref">
+                {user.id}
+              </span>
+              <span className="profile-detail-note">
+                À communiquer au support : c&apos;est ce qui identifie votre compte
+                autrement que par votre numéro.
+              </span>
             </div>
           </div>
         </div>
-      </div>
+      </section>
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+      <section className="panel profile-panel" aria-labelledby="profile-activity">
+        <h3 id="profile-activity">Activité</h3>
+
+        <div className="profile-details">
+          <div className="profile-detail">
+            <span className="label">Dernière connexion</span>
+            <span className="profile-detail-value">
+              {user.lastLoginAt ? (
+                <>
+                  {DATE_TIME_FORMAT.format(user.lastLoginAt)}
+                  <span className="profile-detail-note">
+                    {since(user.lastLoginAt)}
+                  </span>
+                </>
+              ) : (
+                <span className="profile-detail-note">
+                  Jamais mesurée — le suivi a commencé après la création de votre
+                  compte
+                </span>
+              )}
+            </span>
+          </div>
+
+          <div className="profile-detail">
+            <span className="label">Connexions</span>
+            <span className="profile-detail-value">
+              {user.loginCount}
+              <span className="profile-detail-note">
+                depuis la mise en place du suivi, application et back-office
+                confondus
+              </span>
+            </span>
+          </div>
+
+          <div className="profile-detail">
+            <span className="label">Alertes sur ce poste</span>
+            <span className="profile-detail-value">
+              {alertDevices}
+              <span className="profile-detail-note">
+                appareil{alertDevices > 1 ? 's' : ''} abonné
+                {alertDevices > 1 ? 's' : ''} aux notifications
+              </span>
+            </span>
+          </div>
+        </div>
+      </section>
+
+      <section className="panel profile-panel" aria-labelledby="profile-security">
+        <h3 id="profile-security">Mot de passe</h3>
+
+        {user.passwordHash ? (
+          <>
+            <p className="profile-panel-lead">
+              Votre mot de passe comporte {PASSWORD_LENGTH} chiffres.
+            </p>
+            <ChangePasswordForm />
+          </>
+        ) : (
+          <>
+            <p className="profile-panel-lead">
+              Ce compte n&apos;a pas de mot de passe : il se connecte par code.
+            </p>
+            <p className="profile-note">
+              Un mot de passe se définit depuis la page des comptes.
+            </p>
+          </>
+        )}
+      </section>
+
+      <div className="profile-footer">
         <SignOutButton />
       </div>
-
-      {/* Mes Wi-Fi Zones Rattachées */}
-      {user?.clients && user.clients.length > 0 && (
-        <div className="panel">
-          <h3 style={{ marginBottom: '16px' }}>Emplacements &amp; Wi-Fi Zones associées</h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {user.clients.flatMap(c => c.wifiZones).map(zone => (
-              <div key={zone.id} style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '12px', padding: '12px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-default)', backgroundColor: 'var(--neutral-50)' }}>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: '15px' }}>{zone.name}</div>
-                  <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>📍 {zone.location}</div>
-                </div>
-                <Link href="/zones" className="btn btn-secondary btn-md">
-                  Voir la zone
-                </Link>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
