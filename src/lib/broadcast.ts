@@ -3,7 +3,26 @@ import { BroadcastStatus, NotificationType, Role, UserStatus } from "@prisma/cli
 import { prisma } from "./prisma";
 import { notify } from "./notifications";
 import { STAFF_ROLES } from "./roles";
+import {
+  BROADCAST_AUDIENCES,
+  isBroadcastAudience,
+  type BroadcastAudience,
+} from "./broadcast-audiences";
+import { BODY_MAX, TITLE_MAX } from "./broadcast-limits";
 import { devicesSubscribedFor } from "./push";
+
+// Les audiences et les longueurs sont pures et vivent dans leurs propres
+// modules, pour que l'interface puisse les importer sans tirer le serveur.
+// Réexportées ici parce que ce module reste le point d'entrée de ce qui décrit
+// une campagne.
+export {
+  AUDIENCE_HINT,
+  AUDIENCE_LABEL,
+  BROADCAST_AUDIENCES,
+  isBroadcastAudience,
+  type BroadcastAudience,
+} from "./broadcast-audiences";
+export { BODY_MAX, TITLE_MAX } from "./broadcast-limits";
 
 /**
  * Messages de la régie à toute la plateforme.
@@ -18,38 +37,6 @@ import { devicesSubscribedFor } from "./push";
  * in-app, push Android et Web Push — afin qu'un message de la régie apparaisse
  * exactement comme un changement de statut, sans second circuit à maintenir.
  */
-
-/** Audiences proposées. Chacune est un ensemble de rôles, pas une liste de comptes. */
-export const BROADCAST_AUDIENCES = {
-  ALL: "ALL",
-  CLIENTS: "CLIENTS",
-  TECHNICIANS: "TECHNICIANS",
-  STAFF: "STAFF",
-} as const;
-
-export type BroadcastAudience =
-  (typeof BROADCAST_AUDIENCES)[keyof typeof BROADCAST_AUDIENCES];
-
-export const AUDIENCE_LABEL: Record<BroadcastAudience, string> = {
-  ALL: "Tout le monde",
-  CLIENTS: "Propriétaires de zone",
-  TECHNICIANS: "Techniciens",
-  STAFF: "Équipe d'administration",
-};
-
-export const AUDIENCE_HINT: Record<BroadcastAudience, string> = {
-  ALL: "Clients, techniciens et équipe d'administration.",
-  CLIENTS: "Les propriétaires de zone, qui commandent et paient les interventions.",
-  TECHNICIANS: "Les techniciens, qui interviennent sur le terrain.",
-  STAFF: "Vous et les autres comptes de super administrateur.",
-};
-
-export function isBroadcastAudience(value: unknown): value is BroadcastAudience {
-  return (
-    typeof value === "string" &&
-    (Object.values(BROADCAST_AUDIENCES) as readonly string[]).includes(value)
-  );
-}
 
 /** Rôles correspondant à une audience. */
 function rolesFor(audience: BroadcastAudience): Role[] {
@@ -84,10 +71,6 @@ export async function audienceUserIds(
 
   return users.map((user) => user.id);
 }
-
-/** Longueur des champs, calée sur ce que le téléphone sait afficher. */
-export const TITLE_MAX = 80;
-export const BODY_MAX = 240;
 
 export type BroadcastInput = {
   audience: BroadcastAudience;

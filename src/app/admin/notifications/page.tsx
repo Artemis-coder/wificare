@@ -13,7 +13,6 @@ import {
   fetchScheduledBroadcasts,
   loadAudiences,
 } from './actions';
-import AndroidPushStatus from './android-push-status';
 import BroadcastList from './broadcast-list';
 import BroadcastStatsPanel from './broadcast-stats';
 import BroadcastComposer from './broadcast-composer';
@@ -64,7 +63,7 @@ export default async function NotificationConsolePage() {
   const subscribedAccounts = everyone?.devices ?? 0;
 
   return (
-    <div style={{ maxWidth: '860px', margin: '0 auto' }}>
+    <div className="console-page">
       <div className="page-header">
         <div>
           <h1>Notifications</h1>
@@ -76,13 +75,19 @@ export default async function NotificationConsolePage() {
 
       {stats && <BroadcastStatsPanel stats={stats} />}
 
-      <BroadcastComposer audiences={audiences} />
-
-      <AndroidPushStatus
-        configured={isPushConfigured()}
-        subscribedAccounts={subscribedAccounts}
-        totalAccounts={activeAccounts}
-      />
+      {/* Le composeur prend toute la largeur : ses trois colonnes n'ont de sens
+          côte à côte, et l'aperçu doit rester en regard du champ que l'on
+          tape. L'état du push est passé dans sa colonne « Destinataires » —
+          c'est là qu'il sert, à côté du nombre de téléphones de l'audience
+          choisie, et plus trois écrans plus bas. */}
+      <div style={{ marginBottom: '24px' }}>
+        <BroadcastComposer
+          audiences={audiences}
+          pushConfigured={isPushConfigured()}
+          subscribedAccounts={subscribedAccounts}
+          totalAccounts={activeAccounts}
+        />
+      </div>
 
       <BroadcastList scheduled={scheduled} history={broadcasts} />
 
