@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/domain/models.dart';
 import '../../../core/network/api_exception.dart';
+import '../../../core/system/app_version.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/phone_countries.dart';
@@ -267,11 +268,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ],
                   ),
                   const SizedBox(height: AppSpacing.xl),
-                  Text(
-                    '© ${DateTime.now().year} WiFi Care — version 1.0.0',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: colors.onSurfaceVariant, fontSize: 11),
-                  ),
+                  const AppVersionFooter(),
                 ],
               ),
             ),

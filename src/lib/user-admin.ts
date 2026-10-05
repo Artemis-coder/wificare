@@ -4,6 +4,7 @@ import { Role, UserStatus } from "@prisma/client";
 
 import { authOptions } from "./auth";
 import { getApiUser } from "./api-auth";
+import { dispatchPendingTickets } from "./dispatch";
 import { prisma } from "./prisma";
 import { isSuperAdmin, type AppRole } from "./roles";
 import {
@@ -275,11 +276,34 @@ export async function updateUser(
     return fail("Aucune modification demandée.", 400);
   }
 
-  const user = await prisma.user.update({
-    where: { id: targetId },
-    data,
-    select: USER_SELECT,
+  // Un compte mis hors service ne peut pas rester déclaré disponible : il
+  // continuerait de recevoir des demandes qu'il ne peut pas faire, et le
+  // back-office afficherait un technicien en ligne sur un compte désactivé. La
+  // disponibilité est retirée au même moment que le statut, et ses propositions
+  // en attente sont closes pour que la demande reparte immédiatement.
+  const leavingService = data.status !== undefined && data.status !== "ACTIVE";
+
+  const user = await prisma.$transaction(async (tx) => {
+    if (leavingService) {
+      await tx.taskOffer.updateMany({
+        where: { technicianId: targetId, status: "PENDING" },
+        data: { status: "WITHDRAWN", respondedAt: new Date() },
+      });
+    }
+
+    return tx.user.update({
+      where: { id: targetId },
+      data: {
+        ...data,
+        ...(leavingService ? { isOnline: false, onlineSince: null } : {}),
+      },
+      select: USER_SELECT,
+    });
   });
+
+  if (leavingService) {
+    await dispatchPendingTickets();
+  }
 
   return { ok: true, data: toPublicUser(user) };
 }

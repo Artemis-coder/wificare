@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
+import { TaskOfferStatus } from '@prisma/client';
 import { authOptions } from '@/lib/auth';
 import { redirect, notFound } from 'next/navigation';
 import Link from 'next/link';
@@ -14,6 +15,23 @@ import TechnicianMap from './technician-map';
 export const dynamic = 'force-dynamic';
 
 const DISTANCE_NUMBER_FORMAT = { minimumFractionDigits: 1, maximumFractionDigits: 1 } as const;
+
+/** Lecture d'une proposition, dans les mots de celui qui a répondu. */
+const OFFER_LABEL: Record<TaskOfferStatus, string> = {
+  PENDING: 'En attente',
+  ACCEPTED: 'A acceptée',
+  DECLINED: 'A refusé',
+  WITHDRAWN: 'Sans réponse',
+  EXPIRED: 'Expirée',
+};
+
+const OFFER_BADGE: Record<TaskOfferStatus, string> = {
+  PENDING: 'badge-warning',
+  ACCEPTED: 'badge-success',
+  DECLINED: 'badge-danger',
+  WITHDRAWN: 'badge-neutral',
+  EXPIRED: 'badge-neutral',
+};
 
 // La distance est stockée en mètres, mais lue en kilomètres dès que ça vaut le coup :
 // « à 850 m » se lit mieux que « à 0,8 km ».
@@ -95,6 +113,13 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
           lines: true,
           payment: true,
         },
+      },
+      taskOffers: {
+        select: {
+          status: true,
+          technician: { select: { name: true } },
+        },
+        orderBy: { offeredAt: "desc" },
       },
     },
   });
@@ -365,8 +390,47 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
                 </div>
               </div>
             ) : (
-              <div style={{ color: 'var(--text-disabled)', fontSize: '13px' }}>
-                Aucun technicien affecté pour le moment.
+              // Une demande sans technicien n'est pas une demande sans
+              // mouvement : elle circule. La régie a besoin de savoir
+              // jusqu'où elle est allée — qui l'a refusée, qui n'a pas
+              // répondu — sinon elle ne peut pas juger si le délai vient de
+              // l'absence d'équipe ou d'une offre que personne ne veut.
+              <div>
+                <div style={{ color: 'var(--text-disabled)', fontSize: '13px', marginBottom: '8px' }}>
+                  Aucun technicien affecté pour le moment.
+                </div>
+
+                {ticket.taskOffers.length > 0 && (
+                  <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                    <div className="label" style={{ marginBottom: '6px' }}>
+                      Circulation
+                    </div>
+                    <div style={{ marginBottom: '8px' }}>
+                      {ticket.dispatchRound} vague{ticket.dispatchRound > 1 ? 's' : ''} ·
+                      {' '}
+                      {ticket.taskOffers.filter((offer) => offer.status === 'PENDING').length}{' '}
+                      en attente
+                    </div>
+                    <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+                      {ticket.taskOffers.slice(0, 6).map((offer) => (
+                        <li
+                          key={`${offer.technician.name}-${offer.status}`}
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            gap: '8px',
+                            padding: '4px 0',
+                          }}
+                        >
+                          <span>{offer.technician.name ?? 'Technicien'}</span>
+                          <span className={`badge ${OFFER_BADGE[offer.status]}`}>
+                            {OFFER_LABEL[offer.status]}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             )}
 

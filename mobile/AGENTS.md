@@ -16,6 +16,7 @@ React Native ni iOS dans ce projet.
 | Ouverture d'URL / téléphone / géo | `url_launcher` |
 | Carte du trajet | `flutter_map` + `latlong2` |
 | Cache d'images | `cached_network_image` |
+| Version installée | `package_info_plus` |
 | Formatage fr-FR | `intl` |
 
 Aucune génération de code (`freezed`, `json_serializable`, `build_runner`) :
@@ -35,6 +36,7 @@ lib/
       providers/                 providers d'infrastructure partagés
       router/app_router.dart    routes, redirections, libellés d'onglets
       storage/token_storage.dart
+      system/app_version.dart   version installée, lue sur le paquet
       theme/                    WiFiColors (ThemeExtension) + AppTheme + tokens
       utils/formatters.dart
       widgets/                  bibliothèque de widgets réutilisables
@@ -429,6 +431,31 @@ Le nom de la marque est défini à trois endroits qui doivent rester alignés :
 | `tool/build_release.sh` (`APP_NAME`) | `WiFiCare` |
 | `android/app/src/main/AndroidManifest.xml` (`android:label`) | `WiFiCare` |
 | libellé et logo du back-office (`src/app/layout.tsx`) | `WiFiCare` |
+
+## Version de l'application
+
+La version affichée est **lue sur le paquet installé**
+(`core/system/app_version.dart`, `package_info_plus`), jamais écrite dans le
+code. Elle est montrée à deux endroits : le pied de page de l'écran de
+connexion (`AppVersionFooter`) et la ligne « Version » des deux profils
+(`AppVersionText`).
+
+C'était une constante `AppConfig.appVersion = '1.0.0'` plus trois libellés
+écrits à la main, et les quatre sont restés à `1.0.0` pendant six versions
+livrées. Le numéro affiché n'était pas faux d'un point de vue syntaxique — il
+ne compilait pas — mais il était faux, et personne ne l'a vu parce que rien ne
+le rendait faux à la compilation.
+
+Deux conséquences à ne pas rouvrir :
+
+- **aucun numéro de version en dur**, pas même « pour le cas où la plateforme ne
+  répondrait pas ». Sans platform channel (un test, un hôte sans
+  implémentation), l'application affiche le texte sans numéro plutôt qu'un
+  numéro inventé ;
+- `versionCode` (`7` dans `1.6.0+7`) doit augmenter à chaque version livrée :
+  Android refuse d'installer par-dessus un APK dont il n'a pas augmenté. C'est
+  la partie après le `+` qui compte pour l'installation, la partie avant pour
+  l'affichage — les deux doivent changer ensemble.
 
 La signature reste celle de debug : l'APK est installable, mais pas publiable
 sur Google Play tant qu'une keystore de release n'a pas été générée.

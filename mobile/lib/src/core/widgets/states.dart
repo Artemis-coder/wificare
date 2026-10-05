@@ -166,14 +166,26 @@ class InfoRow extends StatelessWidget {
   const InfoRow({
     super.key,
     required this.label,
-    required this.value,
+    this.value = '',
+    this.valueWidget,
     this.icon,
     this.onTap,
     this.valueColor,
   });
 
   final String label;
+
+  /// Valeur textuelle. Ignorée dès que [valueWidget] est fourni.
   final String value;
+
+  /// Valeur composée, quand elle n'est pas un texte.
+  ///
+  /// La version de l'application est lue sur le paquet installé, donc elle
+  /// n'existe pas au moment où la ligne est construite : la passer en `String`
+  /// obligerait à la deviner, puis à la corriger à la main — ce que trois
+  /// écrans ont fait, et tous trois sont restés à `1.0.0`.
+  final Widget? valueWidget;
+
   final IconData? icon;
   final VoidCallback? onTap;
   final Color? valueColor;
@@ -203,16 +215,17 @@ class InfoRow extends StatelessWidget {
                     style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
                   ),
                   const SizedBox(height: 2),
-                  Text(
-                    value,
-                    style: TextStyle(
-                      color: valueColor ?? colors.onSurface,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      decoration: onTap == null ? null : TextDecoration.underline,
-                      decorationColor: colors.onSurfaceVariant,
-                    ),
-                  ),
+                  valueWidget ??
+                      Text(
+                        value,
+                        style: TextStyle(
+                          color: valueColor ?? colors.onSurface,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          decoration: onTap == null ? null : TextDecoration.underline,
+                          decorationColor: colors.onSurfaceVariant,
+                        ),
+                      ),
                 ],
               ),
             ),

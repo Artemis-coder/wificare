@@ -154,6 +154,12 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { href: "/", label: "Tableau de bord", icon: "dashboard", roles: WEB_ROLES },
   { href: "/tickets", label: "Tickets", icon: "tickets", roles: WEB_ROLES },
   {
+    href: "/techniciens",
+    label: "Techniciens",
+    icon: "users",
+    roles: WEB_ROLES,
+  },
+  {
     href: "/admin/utilisateurs",
     label: "Utilisateurs",
     icon: "users",

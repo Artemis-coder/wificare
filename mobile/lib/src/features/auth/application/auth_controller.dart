@@ -236,7 +236,7 @@ class AuthController extends AsyncNotifier<Session?> {
     }
   }
 
-  Future<void> logout() async {
+Future<void> logout() async {
     // Le jeton est retiré avant la destruction de la session : l'API doit
     // encore reconnaître l'appelant. Sans cela, le téléphone continuerait de
     // recevoir les notifications du compte quitté.

@@ -7,13 +7,35 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:wificare_app/src/app.dart';
 import 'package:wificare_app/src/core/network/api_client.dart';
 import 'package:wificare_app/src/core/providers/infra_providers.dart';
+import 'package:wificare_app/src/core/push/push_service.dart';
 import 'package:wificare_app/src/core/storage/token_storage.dart';
 import 'package:wificare_app/src/core/widgets/notification_bell.dart';
 
 import 'fake_api.dart';
+
+/// Service de notifications simulé, déjà « tapped ».
+///
+/// Le vrai service ne se laisse pas piloter depuis un test : ses écouteurs sont
+/// posés par Firebase, absent de l'environnement de test. Ce qui est vérifié ici
+/// n'est pas la réception du message — c'est le trajet qui suit, celui qui décide
+/// où l'utilisateur atterrit. Il est donc remplacé par un service qui rend une
+/// cible déjà choisie.
+class FakePushService extends PushService {
+  FakePushService({this.offerId, this.ticketId});
+
+  final String? offerId;
+  final String? ticketId;
+
+  @override
+  String? takePendingOfferId() => offerId;
+
+  @override
+  String? takePendingTicketId() => ticketId;
+}
 
 /// Canal Android du suivi de position : mêmes noms que
 /// `com.wificare.mobile/location` côté Kotlin.
@@ -126,6 +148,25 @@ void main() {
   final cashCalls = <String>[];
   String? cashError;
 
+  // Le circuit de répartition : présence du technicien, file des demandes
+  // proposées, et issue de la prise ou du refus. Chaque test repart d'un
+  // technicien hors ligne et sans file — un circuit qui tournerait déjà
+  // masquerait ce qu'un test cherche à vérifier.
+  var online = false;
+
+  /// Minutes écoulées depuis le dernier signal du technicien : un valeur
+  /// positive produit la situation « en ligne, mais injoignable ».
+  var minutesSinceSeen = 0;
+
+  var offers = <Map<String, dynamic>>[];
+
+  /// Refus du serveur sur une prise : c'est la course entre deux techniciens,
+  /// et elle se joue par un `409` que l'application doit montrer tel quel.
+  String? acceptError;
+
+  /// Une demande remise dans la file n'appartient plus au technicien.
+  var released = false;
+
   setUp(() {
     status = 'ASSIGNED';
     notifications = _seedNotifications();
@@ -141,6 +182,14 @@ void main() {
     quoteStatus = 'SENT';
     assigned = true;
 
+    // Circuit de répartition remis à zéro pour les mêmes raisons.
+    online = false;
+    minutesSinceSeen = 0;
+    offers = <Map<String, dynamic>>[];
+    acceptError = null;
+    released = false;
+
+
     // Plateforme de suivi absente par défaut : c'est le cas de tout test qui ne
     // s'intéresse pas à la localisation, et cela évite qu'un appel de canal sans
     // gestionnaire reste en suspens jusqu'au délai maximal. Le test dédié
@@ -154,6 +203,16 @@ void main() {
     installFakeGeolocator();
     addTearDown(removeFakeGeolocator);
     FlutterSecureStorage.setMockInitialValues({});
+
+    // Version du paquet installé : c'est elle que le profil affiche.
+    PackageInfo.setMockInitialValues(
+      appName: 'WiFi Care',
+      packageName: 'ci.wificare.app',
+      version: '1.6.0',
+      buildNumber: '7',
+      buildSignature: '',
+    );
+
     adapter = FakeHttpAdapter({
       '/auth/login': (_, _) => {
         'data': {
@@ -175,14 +234,81 @@ void main() {
         'data': FakeApiData.ticket(
           't-tech-1',
           '#TK-2026-001',
-          status,
-          technicianId: 'tech-1',
+          released ? 'NEW' : status,
+          technicianId: released ? null : 'tech-1',
           // Un devis envoyé retire l'annulation au technicien : le client en a
           // connaissance et doit trancher.
           quoteInvoice: hasQuote
               ? FakeApiData.quote(ticketId: 't-tech-1', status: quoteStatus)
               : null,
         ),
+      },
+      // Le circuit de répartition. La présence et la file sont relues par le
+      // même appel, et c'est ce même appel qui fait tourner la répartition :
+      // le serveur ne se contente donc pas de répondre, il propose au passage
+      // les demandes en attente aux techniciens disponibles.
+      '/technicians/offers': (_, _) => FakeApiData.offerPoll(
+        online: online,
+        minutesSinceSeen: minutesSinceSeen,
+        items: offers,
+      ),
+      'POST /technicians/presence': (path, body) {
+        online = (body as Map)['online'] as bool;
+
+        return {
+          'data': FakeApiData.presence(online: online, minutesSinceSeen: 0),
+        };
+      },
+      'POST /offers/o-1/accept': (path, _) {
+        // La course se perd par un vrai statut HTTP : un `200` porteur d'une
+        // erreur ne remonterait pas dans l'application, et le test passerait à
+        // côté de ce qu'il est censé vérifier.
+        if (acceptError != null) {
+          adapter.statuses['POST /offers/o-1/accept'] = 409;
+          return {'error': acceptError};
+        }
+
+        offers.removeWhere((item) => item['id'] == 'o-1');
+        assigned = true;
+
+        return {
+          'data': FakeApiData.ticket(
+            't-offer-1',
+            '#TK-2026-050',
+            'ASSIGNED',
+            technicianId: 'tech-1',
+          ),
+        };
+      },
+      'POST /offers/o-1/decline': (path, _) {
+        offers.removeWhere((item) => item['id'] == 'o-1');
+
+        return {
+          'data': {'declinedAt': '2026-02-20T09:00:00.000Z'},
+        };
+      },
+      // La demande vient d'être prise : elle est au technicien, et son détail
+      // redevient lisible — il en était privé tant qu'elle n'était qu'une offre.
+      '/tickets/t-offer-1': (_, _) => {
+        'data': FakeApiData.ticket(
+          't-offer-1',
+          '#TK-2026-050',
+          'ASSIGNED',
+          technicianId: 'tech-1',
+        ),
+      },
+      'POST /tickets/t-tech-1/release': (path, _) {
+        released = true;
+        status = 'NEW';
+
+        return {
+          'data': FakeApiData.ticket(
+            't-tech-1',
+            '#TK-2026-001',
+            'NEW',
+            technicianId: null,
+          ),
+        };
       },
       // Le rapport deposition du compte rendu. Le serveur le refuse en double,
       // et la premiere ecriture suffit ici.
@@ -272,14 +398,16 @@ void main() {
       // qui fait apparaître la nouvelle demande.
       // Le second ticket n'est servi qu'une fois `assigned` vrai : c'est ce qui
       // permet de vérifier que la notification — et non un rechargement manuel —
-      // fait apparaître la demande.
+      // fait apparaître la demande. Une demande remise dans la file sort de la
+      // liste : elle n'est plus à ce technicien.
       '/tickets': (path, body) => FakeApiData.ticketPage([
-        FakeApiData.ticket(
-          't-tech-1',
-          '#TK-2026-001',
-          status,
-          technicianId: 'tech-1',
-        ),
+        if (!released)
+          FakeApiData.ticket(
+            't-tech-1',
+            '#TK-2026-001',
+            status,
+            technicianId: 'tech-1',
+          ),
         if (assigned)
           FakeApiData.ticket(
             't-tech-2',
@@ -323,7 +451,11 @@ void main() {
 
   /// [onboardingSeen] vaut `true` par défaut : l'écran d'accueil des
   /// autorisations est vérifié ailleurs, il ne doit pas détourner ces parcours.
-  Widget buildApp({bool onboardingSeen = true}) {
+  ///
+  /// [push] permet de simuler une notification sur laquelle le technicien a
+  /// tapé : le vrai service ne peut pas être atteint depuis un test, Firebase
+  /// n'y existant pas.
+  Widget buildApp({bool onboardingSeen = true, PushService? push}) {
     final dio = Dio();
     dio.httpClientAdapter = adapter;
     final refreshDio = Dio()..httpClientAdapter = adapter;
@@ -339,6 +471,7 @@ void main() {
           ),
         ),
         onboardingSeenProvider.overrideWithValue(onboardingSeen),
+        if (push != null) pushServiceProvider.overrideWithValue(push),
       ],
       child: const WiFiCareApp(),
     );
@@ -350,13 +483,39 @@ void main() {
     }
   }
 
-  Future<void> pumpApp(WidgetTester tester) async {
+  Future<void> pumpApp(WidgetTester tester, {PushService? push}) async {
     tester.view.physicalSize = const Size(1280, 2856);
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 
-    await tester.pumpWidget(buildApp());
+    await tester.pumpWidget(buildApp(push: push));
     await settle(tester);
+  }
+
+  /// Simule le retour au premier plan, le geste qui suit un tap sur une
+  /// notification alors que l'application était fermée.
+  ///
+  /// L'événement passe par le canal du moteur plutôt que par
+  /// `handleAppLifecycleStateChanged`, déprécié : c'est ce que reçoit réellement
+  /// l'application sur un téléphone.
+  Future<void> resumeApp(WidgetTester tester) async {
+    tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+      'flutter/lifecycle',
+      const StringCodec().encodeMessage(AppLifecycleState.resumed.toString()),
+      (_) {},
+    );
+
+    await settle(tester, steps: 20);
+  }
+
+  /// Se connecte en technicien, comme le ferait un vrai téléphone.
+  Future<void> loginTechnician(WidgetTester tester) async {
+    await tester.enterText(find.byType(TextField).at(0), '0102030405');
+    await settle(tester);
+    await tester.enterText(find.byType(TextField).at(1), '1234');
+    await settle(tester);
+    await tester.tap(find.text('Se connecter'));
+    await settle(tester, steps: 24);
   }
 
   testWidgets('connexion technicien : accueil dédié, sans zones ni factures', (
@@ -925,6 +1084,15 @@ void main() {
     // La barre de navigation reste visible, sur l'accueil.
     expect(find.byType(NavigationBar), findsOneWidget);
     expect(find.text('Demandes'), findsOneWidget);
+
+    // Même version que celle du profil client : c'est le même APK.
+    await tester.scrollUntilVisible(
+      find.text('version 1.6.0 (7)'),
+      150,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await settle(tester);
+    expect(find.text('version 1.6.0 (7)'), findsOneWidget);
   });
 
   testWidgets('technicien : les avis reçus sont visibles, en lecture seule', (
@@ -983,5 +1151,308 @@ void main() {
     expect(adapter.calls, contains('PATCH /notifications/n-1'));
     expect(adapter.calls, isNot(contains('GET /home/tickets/t-tech-1')));
     expect(find.text('#TK-2026-001'), findsWidgets);
+  });
+
+  testWidgets('technicien : la disponibilité commande la répartition', (
+    tester,
+  ) async {
+    await pumpApp(tester);
+    await loginTechnician(tester);
+
+    // Hors ligne, le circuit ne lui propose rien : l'écran doit le dire, sinon
+    // « aucune demande » se lirait comme une panne qui n'existe pas.
+    expect(find.text('Vous êtes hors ligne'), findsOneWidget);
+    expect(
+      find.text('Aucune demande ne vous sera proposée. Activez pour recevoir celles qui arrivent.'),
+      findsOneWidget,
+    );
+    expect(find.text('1 demande vous est proposée'), findsNothing);
+
+    expect(adapter.calls, contains('GET /technicians/offers'));
+
+    await tester.tap(find.byType(Switch));
+    await settle(tester, steps: 20);
+
+    expect(
+      adapter.calls,
+      contains('POST /technicians/presence'),
+      reason: 'la disponibilité est enregistrée par le serveur, pas seulement en local',
+    );
+    expect(find.text('Vous êtes en ligne'), findsOneWidget);
+
+    // Se mettre en ligne relit la file dans la foulée : attendre le tic suivant
+    // laisserait le technicien devant un écran vide pendant cinq secondes.
+    expect(
+      adapter.calls.where((call) => call == 'GET /technicians/offers').length,
+      greaterThan(1),
+    );
+
+    await tester.tap(find.byType(Switch));
+    await settle(tester, steps: 20);
+
+    expect(find.text('Vous êtes hors ligne'), findsOneWidget);
+    expect(online, isFalse);
+  });
+
+  testWidgets(
+    'technicien : en ligne mais injoignable, l\'écran ne promet rien',
+    (tester) async {
+      online = true;
+      minutesSinceSeen = 40;
+
+      await pumpApp(tester);
+      await loginTechnician(tester);
+
+      // La disponibilité est une intention, pas une preuve : elle survit à un
+      // téléphone déchargé. Un « vous êtes en ligne » ici ferait croire que des
+      // demandes vont arriver alors que l'application ne parle plus au serveur.
+      expect(find.text('En ligne, mais injoignable'), findsOneWidget);
+      expect(
+        find.text(
+          'Votre application ne parle plus au serveur depuis un moment. '
+          'Réouvrez-la pour recevoir les demandes.',
+        ),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets('technicien : prendre la demande proposée l\'attribue', (
+    tester,
+  ) async {
+    online = true;
+    offers = [FakeApiData.offer(id: 'o-1')];
+
+    await pumpApp(tester);
+    await loginTechnician(tester);
+
+    // Le bandeau ne s'affiche que s'il y a quelque chose à proposer : un
+    // « 0 demande » en permanence ferait du vide une information.
+    expect(find.text('1 demande vous est proposée'), findsOneWidget);
+
+    await tester.tap(find.text('1 demande vous est proposée'));
+    await settle(tester, steps: 20);
+
+    expect(find.text('Demandes disponibles'), findsOneWidget);
+    expect(find.text('En ligne'), findsOneWidget);
+
+    // La file porte le contenu de la demande : c'est elle, et non la
+    // référence seule, qui permet de décider.
+    expect(find.text('#TK-2026-050'), findsOneWidget);
+    expect(find.text('Connexion impossible'), findsOneWidget);
+    expect(find.text('Mme Aya Traoré · WiFi Zone Cocody Riviera'), findsOneWidget);
+
+    await tester.tap(find.text('#TK-2026-050'));
+    await settle(tester, steps: 20);
+
+    expect(find.text('Prendre cette demande'), findsOneWidget);
+    expect(find.text('Refuser cette demande'), findsOneWidget);
+
+    await tester.tap(find.text('Prendre cette demande'));
+    await settle(tester, steps: 24);
+
+    expect(adapter.calls, contains('POST /offers/o-1/accept'));
+
+    // La demande prise ouvre son écran d'intervention, pas une feuille
+    // refermée : la feuille n'a plus de contexte de navigation.
+    expect(find.text('Intervention'), findsWidgets);
+    expect(find.text('#TK-2026-050'), findsWidgets);
+    expect(find.text('Prendre cette demande'), findsNothing);
+    expect(offers, isEmpty);
+  });
+
+  testWidgets('technicien : refuser rend la demande aux autres', (
+    tester,
+  ) async {
+    online = true;
+    offers = [
+      FakeApiData.offer(id: 'o-1'),
+      FakeApiData.offer(
+        id: 'o-2',
+        ticketId: 't-offer-2',
+        reference: '#TK-2026-051',
+      ),
+    ];
+
+    await pumpApp(tester);
+    await loginTechnician(tester);
+
+    expect(find.text('2 demandes vous sont proposées'), findsOneWidget);
+
+    await tester.tap(find.text('2 demandes vous sont proposées'));
+    await settle(tester, steps: 20);
+
+    await tester.tap(find.text('#TK-2026-050'));
+    await settle(tester, steps: 20);
+
+    // Le refus n'est pas un geste anodin : la demande part chez les autres.
+    await tester.tap(find.text('Refuser cette demande'));
+    await settle(tester, steps: 20);
+
+    expect(find.text('Refuser cette demande ?'), findsOneWidget);
+    expect(
+      find.text(
+        'Elle sera proposée aux autres techniciens en ligne. Vous ne la verrez plus.',
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Refuser'));
+    // La bannière est éphémère : la boucle de répartition la remplace à son
+    // prochain passage, cinq secondes plus tard. Elle est donc relue tout de
+    // suite, avant que la cadence ne soit atteinte.
+    await settle(tester, steps: 8);
+
+    expect(adapter.calls, contains('POST /offers/o-1/decline'));
+
+    // Elle disparaît pour lui, et l'autre reste : refuser n'est pas quitter la
+    // file.
+    expect(find.text('#TK-2026-050'), findsNothing);
+    expect(find.text('#TK-2026-051'), findsOneWidget);
+    expect(
+      find.text('Demande refusée. Elle est proposée aux autres techniciens.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('technicien : une demande déjà prise disparaît de la file', (
+    tester,
+  ) async {
+    online = true;
+    offers = [FakeApiData.offer(id: 'o-1')];
+    acceptError = 'Cette demande a déjà été prise par un autre technicien.';
+
+    await pumpApp(tester);
+    await loginTechnician(tester);
+
+    await tester.tap(find.text('1 demande vous est proposée'));
+    await settle(tester, steps: 20);
+
+    await tester.tap(find.text('#TK-2026-050'));
+    await settle(tester, steps: 20);
+
+    await tester.tap(find.text('Prendre cette demande'));
+    // Motif éphémère : relu avant le passage suivant de la boucle de
+    // répartition, qui viendrait l'effacer.
+    await settle(tester, steps: 8);
+
+    // Le motif est montré tel quel : c'est lui qui explique pourquoi la
+    // proposition n'aboutit pas, et une formule générique ferait croire à un
+    // réseau coupé.
+    expect(
+      find.text('Cette demande a déjà été prise par un autre technicien.'),
+      findsOneWidget,
+    );
+
+    // La feuille reste ouverte : la fermer ferait disparaître le motif, qui
+    // serait affiché sur l'écran d'à côté, sous la barrière.
+    expect(find.text('Prendre cette demande'), findsOneWidget);
+  });
+
+  testWidgets('technicien : hors ligne, l\'écran des offres le dit', (
+    tester,
+  ) async {
+    offers = [FakeApiData.offer(id: 'o-1')];
+
+    await pumpApp(tester);
+    await loginTechnician(tester);
+
+    await tester.tap(find.text('Demandes'));
+    await settle(tester, steps: 20);
+
+    // Sans availability, il n'y a pas de bandeau d'entrée : la liste des offres
+    // s'ouvre par le push, ou une fois en ligne.
+    expect(find.text('1 demande vous est proposée'), findsNothing);
+    expect(
+      find.text(
+        'Vous êtes hors ligne : aucune demande ne vous est proposée. '
+        'Mettez-vous en ligne depuis l’accueil.',
+      ),
+      findsNothing,
+      reason: 'l\'écran des offres n\'est pas atteint depuis les onglets du technicien',
+    );
+  });
+
+  testWidgets('technicien : une demande impossible à faire revient dans le circuit', (
+    tester,
+  ) async {
+    await pumpApp(tester);
+    await loginTechnician(tester);
+
+    await tester.tap(find.text('Demandes'));
+    await settle(tester, steps: 20);
+    await tester.tap(find.text('#TK-2026-001'));
+    await settle(tester, steps: 20);
+
+    // Tant qu'il n'est pas parti, la demande peut revenir dans le circuit.
+    // Annuler, lui, la supprimerait pour le client.
+    await tester.scrollUntilVisible(
+      find.text('Remettre à un autre technicien'),
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await settle(tester);
+
+    await tester.tap(find.text('Remettre à un autre technicien'));
+    await settle(tester, steps: 20);
+
+    expect(find.text('Remettre dans la file ?'), findsOneWidget);
+    expect(
+      find.text(
+        '#TK-2026-001 sera proposée aux autres techniciens en ligne. '
+        'Elle n\'est pas annulée : le client reste en attente d\'un technicien.',
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Remettre'));
+    await settle(tester, steps: 24);
+
+    expect(adapter.calls, contains('POST /tickets/t-tech-1/release'));
+
+    // Le suivi est arrêté : le trajet ne porte plus sur rien, et le client ne
+    // doit pas voir une ETA pour un technicien qui n'est plus attendu.
+    expect(adapter.calls, contains('POST /tickets/t-tech-1/tracking/stop'));
+
+    // L'écran ne propose plus rien sur une demande qui n'est plus la sienne.
+    expect(find.text('Demande remise dans la file'), findsOneWidget);
+    expect(
+      find.text(
+        'Elle est proposée aux autres techniciens en ligne. Elle n\'est pas '
+        'annulée : le client reste en attente d\'un technicien.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Signaler une impossibilité'), findsNothing);
+    expect(find.text('Prendre en charge'), findsNothing);
+
+    await tester.tap(find.text('Retour à mes demandes'));
+    await settle(tester, steps: 20);
+
+    // Elle n'est plus à lui : elle a disparu de sa liste.
+    expect(find.text('#TK-2026-001'), findsNothing);
+  });
+
+  testWidgets('technicien : la notification d\'une offre ouvre la file', (
+    tester,
+  ) async {
+    online = true;
+    offers = [FakeApiData.offer(id: 'o-1')];
+
+    // La session est déjà restaurée : c'est le cas réel d'un technicien qui
+    // tapait sur la notification, application fermée.
+    FlutterSecureStorage.setMockInitialValues(Map.of(_session));
+
+    await pumpApp(tester, push: FakePushService(offerId: 'o-1'));
+    await settle(tester, steps: 20);
+
+    await resumeApp(tester);
+
+    expect(find.text('Demandes disponibles'), findsOneWidget);
+
+    // La proposition nommée par la notification s'ouvre d'elle-même : la file
+    // la porte, et c'est elle qui décide.
+    expect(find.text('Prendre cette demande'), findsOneWidget);
+    expect(find.text('#TK-2026-050'), findsWidgets);
   });
 }

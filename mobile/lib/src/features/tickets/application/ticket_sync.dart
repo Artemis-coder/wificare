@@ -54,6 +54,11 @@ final ticketSyncProvider = Provider<void>((ref) {
 /// `ZONE_VALIDATED` et `ZONE_DELETED` portent aussi un `ticketId` — la zone
 /// peut concerner une demande — mais ne la modifient pas. Les recharger n'y
 /// changerait rien et ferait vibrer l'écran pour rien.
+///
+/// Une proposition de tâche ne change rien non plus : la demande n'est pas celle
+/// du technicien, il ne l'a pas dans ses listes, et c'est sa file d'offres qui
+/// suit le circuit. La recharger ici ferait clignoter une liste qui ne bougera
+/// pas.
 bool _changesTickets(AppNotificationType type) => switch (type) {
   AppNotificationType.ticketAssigned ||
   AppNotificationType.ticketStatusChanged ||
@@ -62,6 +67,7 @@ bool _changesTickets(AppNotificationType type) => switch (type) {
   AppNotificationType.quoteAccepted ||
   AppNotificationType.quoteRejected => true,
   AppNotificationType.ticketSubmitted ||
+  AppNotificationType.taskOffer ||
   AppNotificationType.zoneValidated ||
   AppNotificationType.zoneDeleted => false,
 };

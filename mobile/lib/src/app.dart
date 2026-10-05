@@ -44,27 +44,42 @@ class _WiFiCareAppState extends ConsumerState<WiFiCareApp>
     }
   }
 
-  /// Ouvre la demande sur laquelle l'utilisateur a tapé sur la notification.
+  /// Ouvre ce sur quoi l'utilisateur a tapé dans la notification.
   ///
-  /// Le push n'est reçu que par le téléphone : l'identifiant de la demande est
-  /// mis en attente par le service, et consommé au retour dans l'application.
+  /// Le push n'est reçu que par le téléphone : l'identifiant est mis en attente
+  /// par le service, et consommé au retour dans l'application. Deux cibles
+  /// possibles, parce qu'une notification peut porter l'une ou l'autre : la
+  /// demande d'un technicien qui l'a prise, et la proposition d'une demande
+  /// qu'il n'a pas encore acceptée. La seconde s'ouvre sur la file des offres,
+  /// qui en porte le contenu — l'ouvrir comme une demande lui renverrait un
+  /// refus, la n'étant pas encore la sienne.
   void _openTicketFromNotification() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
 
-      final ticketId = ref.read(pushServiceProvider).takePendingTicketId();
+      final push = ref.read(pushServiceProvider);
+      final offerId = push.takePendingOfferId();
+      final ticketId = push.takePendingTicketId();
 
-      if (ticketId == null) return;
+      if (offerId == null && ticketId == null) return;
 
-      // Sans session, la demande n'est pas visible : la redirection de sécurité
-      // du routeur enverra de toute façon vers la connexion.
+      // Sans session, rien n'est visible : la redirection de sécurité du
+      // routeur enverra de toute façon vers la connexion.
       if (!ref.read(authControllerProvider.notifier).isAuthenticated) return;
+
+      final router = ref.read(appRouterProvider);
+
+      if (offerId != null) {
+        if (ref.read(currentUserProvider)?.role != UserRole.technician) return;
+        router.go('${TechnicianRoutes.offers}?offer=$offerId');
+        return;
+      }
 
       final prefix = ref.read(currentUserProvider)?.role == UserRole.technician
           ? TechnicianRoutes.tickets
           : Routes.tickets;
 
-      ref.read(appRouterProvider).go('$prefix/$ticketId');
+      router.go('$prefix/$ticketId');
     });
   }
 

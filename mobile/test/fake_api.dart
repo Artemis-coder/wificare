@@ -251,6 +251,92 @@ abstract final class FakeApiData {
     },
   };
 
+  /// Présence du technicien, telle que le serveur la renvoie.
+  ///
+  /// `minutesSinceSeen` sert à produire un technicien « en ligne mais
+  /// injoignable » : son application a cessé de parler au serveur alors qu'il a
+  /// toujours demandé à recevoir des demandes. L'écart entre les deux est
+  /// exactement ce que l'écran doit annoncer, sinon il afficherait un « en ligne »
+  /// qui ne recevra rien.
+  static Map<String, dynamic> presence({
+    required bool online,
+    int? minutesSinceSeen,
+    DateTime? onlineSince,
+  }) => {
+    'isOnline': online,
+    'onlineSince': online
+        ? (onlineSince ??
+              DateTime.now()
+                  .subtract(const Duration(minutes: 40))
+                  .toIso8601String())
+        : null,
+    'lastSeenAt': online
+        ? (minutesSinceSeen == null
+              ? DateTime.now().toIso8601String()
+              : DateTime.now()
+                    .subtract(Duration(minutes: minutesSinceSeen))
+                    .toIso8601String())
+        : null,
+  };
+
+  /// Demande proposée à un technicien, en attente de sa réponse.
+  ///
+  /// La demande est embarquée dans l'offre : tant qu'il ne l'a pas prise, il n'a
+  /// aucun droit de lecture dessus, et le serveur ne lui renverrait que ce
+  /// contenu s'il ne le faisait pas. Un test qui n'afficherait que la référence
+  /// ne vérifierait donc rien de ce que l'écran des offres doit montrer.
+  static Map<String, dynamic> offer({
+    required String id,
+    String ticketId = 't-offer-1',
+    String reference = '#TK-2026-050',
+    String priority = 'URGENT',
+    String description = 'Plus aucun accès Internet depuis ce matin.',
+    String? clientContact = '+2250707070707',
+    bool located = true,
+  }) => {
+    'id': id,
+    'offeredAt': DateTime.now().toIso8601String(),
+    'ticket': {
+      'id': ticketId,
+      'reference': reference,
+      'type': 'Connexion impossible',
+      'priority': priority,
+      'description': description,
+      'status': 'NEW',
+      'createdAt': DateTime.now()
+          .subtract(const Duration(minutes: 20))
+          .toIso8601String(),
+      'wifiZone': {
+        'id': 'zone-offer',
+        'name': 'WiFi Zone Cocody Riviera',
+        'location': 'Cocody Riviera 2',
+        'latitude': located ? 5.3595 : null,
+        'longitude': located ? -3.9677 : null,
+      },
+      'client': {
+        'id': 'client-offer',
+        'name': 'Mme Aya Traoré',
+        'contact': clientContact,
+      },
+      'files': <dynamic>[],
+    },
+  };
+
+  /// Réponse `GET /technicians/offers` : la présence et la file dans le même
+  /// objet, parce qu'elles arrivent dans le même appel — et que cet appel est
+  /// aussi ce qui fait tourner la répartition.
+  static Map<String, dynamic> offerPoll({
+    required bool online,
+    List<Map<String, dynamic>> items = const [],
+    int? minutesSinceSeen,
+  }) => {
+    'data': {
+      ...presence(online: online, minutesSinceSeen: minutesSinceSeen),
+      'serverNow': DateTime.now().toIso8601String(),
+      'items': items,
+    },
+  };
+
   /// Notification in-app, avec `readAt` renseigné si elle a été lue.
   static Map<String, dynamic> notification(
     String id,

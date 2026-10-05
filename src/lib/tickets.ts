@@ -1,7 +1,8 @@
 import { NotificationType, Priority, TicketStatus } from "@prisma/client";
 
 import { prisma } from "./prisma";
-import { adminIds, leastLoadedTechnicianId, notify } from "./notifications";
+import { notify } from "./notifications";
+import { alertRegieWithoutTechnician, dispatchPendingTickets } from "./dispatch";
 import { isSuperAdmin, type AppRole } from "./roles";
 
 /**
@@ -45,12 +46,13 @@ export type CreateTicketInput = {
 };
 
 /**
- * Crée une demande et la répartit.
+ * Crée une demande et la met en circulation.
  *
- * L'affectation est automatique : la demande part vers le technicien le moins
- * chargé dès qu'un technicien est en service, sans attendre de décision de régie.
- * Une demande n'attend donc que lorsqu'aucun technicien n'est disponible, cas
- * auquel les administrateurs en sont prévenus pour en nommer un ou en créer un.
+ * La demande n'est affectée à personne : elle est proposée à tous les
+ * techniciens qui se sont déclarés en ligne, et le premier qui l'accepte la
+ * prend. La demande est donc toujours créée à l'état `NEW`, et c'est
+ * `lib/dispatch.ts` qui décide s'il y a quelqu'un à qui la proposer — ou si la
+ * régie doit être prévenue qu'elle attend.
  */
 export async function createTicket(
   input: CreateTicketInput
@@ -82,23 +84,33 @@ export async function createTicket(
   const count = await prisma.ticket.count();
   const reference = `#TK-${new Date().getFullYear()}-${String(count + 1).padStart(3, "0")}`;
 
-  const technicianId = await leastLoadedTechnicianId();
-
   const ticket = await prisma.ticket.create({
     data: {
       reference,
       type: input.type,
       priority,
-      status: technicianId ? TicketStatus.ASSIGNED : TicketStatus.NEW,
+      status: TicketStatus.NEW,
       description: input.description || null,
       clientId,
       wifiZoneId: zone.id,
-      technicianId,
     },
     include: TICKET_INCLUDE,
   });
 
-  await announceNewTicket(ticket, zone.name, zone.client.userId);
+  // La répartition est déclenchée après l'écriture : elle ne propose que des
+  // demandes déjà enregistrées, et une notification qui ouvrirait une demande
+  // introuvable serait pire qu'une demande qui circule cinq secondes plus tard.
+  const dispatch = await dispatchPendingTickets();
+
+  if (dispatch.ticketsDispatched === 0) {
+    await alertRegieWithoutTechnician({
+      id: ticket.id,
+      reference: ticket.reference,
+      type: ticket.type,
+      wifiZone: { name: zone.name },
+      client: { name: ticket.client.name },
+    });
+  }
 
   return { ok: true, data: ticket };
 }
@@ -232,54 +244,18 @@ export async function loadReadableTicket(
 }
 
 /**
- * Prévient les bons destinataires d'une demande entrante.
- *
- * L'affectation étant automatique, le technicien désigné est prévenu en même
- * temps que le client. Le cas sans technicien reste la seule situation où la
- * demande revient à la file de répartition.
- */
-async function announceNewTicket(
-  ticket: TicketWithRelations,
-  zoneName: string,
-  clientUserId: string | null
-): Promise<void> {
-  if (ticket.technicianId) {
-    await notify({
-      userIds: [ticket.technicianId],
-      type: NotificationType.TICKET_ASSIGNED,
-      title: "Nouvelle intervention assignée",
-      body: `${ticket.reference} · ${zoneName} — ${ticket.type}. Elle vous a été attribuée automatiquement.`,
-      ticketId: ticket.id,
-    });
-
-    if (clientUserId) {
-      await notify({
-        userIds: [clientUserId],
-        type: NotificationType.TICKET_ASSIGNED,
-        title: "Demande transmise au technicien",
-        body: `${ticket.reference} a été transmise à ${ticket.technician?.name ?? "un technicien"}.`,
-        ticketId: ticket.id,
-      });
-    }
-
-    return;
-  }
-
-  await notify({
-    userIds: await adminIds(),
-    type: NotificationType.TICKET_SUBMITTED,
-    title: "Nouvelle demande à répartir",
-    body: `${ticket.reference} · ${ticket.client.name} · ${zoneName} — ${ticket.type}.`,
-    ticketId: ticket.id,
-  });
-}
-
-/**
  * Affecte un technicien choisi par la régie.
  *
  * Réservée au super administrateur : affecter quelqu'un qui n'a pas été choisi
- * automatiquement est une décision d'encadrement, pas une action de terrain. Un
- * technicien ne peut donc pas s'attribuer une demande, ni affecter un collègue.
+ * par la répartition est une décision d'encadrement, pas une action de terrain.
+ * Un technicien ne peut donc pas s'attribuer une demande, ni affecter un
+ * collègue.
+ *
+ * Elle prime sur le circuit habituel : la demande cesse d'être proposée aux
+ * techniciens en ligne, qui ne reçoivent plus rien la concernant. Les
+ * propositions déjà parties sont retirées, faute de quoi un technicien
+ * déciderait d'accepter une demande qui a déjà un technicien et se retrouverait
+ * devant un refus au moment de partir.
  *
  * Réaffecter une demande déjà en cours est possible : le technicien précédent
  * est prévenu qu'elle lui est retirée, faute de quoi il se déplacerait pour une
@@ -315,6 +291,14 @@ export async function assignTicket(
   }
 
   const previousTechnicianId = existing.technicianId;
+
+  // La demande cesse de circuler : les propositions en attente sont retirées
+  // pour que plus aucun technicien en ligne ne puisse la prendre. Elles sont
+  // supprimées et non simplement closes, pour qu'une affectation ultérieure ne
+  // soit pas bloquée par un historique de propositions sans objet.
+  await prisma.taskOffer.deleteMany({
+    where: { ticketId, status: "PENDING" },
+  });
 
   const ticket = await prisma.ticket.update({
     where: { id: ticketId },
@@ -354,6 +338,83 @@ export async function assignTicket(
       ticketId: ticket.id,
     });
   }
+
+  return { ok: true, data: ticket };
+}
+
+/**
+ * Statuts où le technicien peut encore rendre une demande.
+ *
+ * Tant qu'il n'est pas parti, la demande lui a été proposée et rien n'a encore
+ * été fait sur place : la rendre ne gêne personne. Après, il y a un
+ * déplacement, peut-être des pièces remplacées, et la demande est réellement en
+ * cours — ce n'est plus un choix mais une annulation, et elle passe par le
+ * statut `CANCELED` du technicien.
+ */
+const RELEASABLE_STATUSES: TicketStatus[] = [
+  TicketStatus.NEW,
+  TicketStatus.ASSIGNED,
+  TicketStatus.CONFIRMED,
+];
+
+/**
+ * Rend une demande au circuit de répartition.
+ *
+ * Le geste est celui du technicien : il a accepté, puis il ne peut plus y
+ * aller — plus de temps, moyen de transport cassé, phishing à faire. La demande
+ * repart alors en boucle chez les techniciens encore disponibles, au lieu d'être
+ * annulée : le client a signalé une panne, elle n'est pas résolue.
+ *
+ * Sa proposition est supprimée et non marquée comme refusée : le technicien n'a
+ * pas refusé le travail, il l'a rendu. C'est ce qui lui permet de se le voir
+ * reproposé plus tard s'il se remet en ligne — ce qu'un refus rendrait
+ * impossible.
+ */
+export async function releaseTicket(
+  auth: TicketActor,
+  ticketId: string
+): Promise<TicketResult<TicketWithRelations>> {
+  const writable = await loadWritableTicket(auth, ticketId);
+
+  if (!writable.ok) {
+    return fail(writable.error, writable.status);
+  }
+
+  if (!RELEASABLE_STATUSES.includes(writable.data.status)) {
+    return fail(
+      "Cette demande est déjà engagée : elle ne peut plus être remise en attente.",
+      409
+    );
+  }
+
+  await prisma.taskOffer.deleteMany({
+    where: { ticketId, technicianId: auth.userId },
+  });
+
+  const ticket = await prisma.ticket.update({
+    where: { id: ticketId },
+    data: {
+      technicianId: null,
+      status: TicketStatus.NEW,
+      // La remise n'est pas un nouvel essai : repartir de zéro ferait dire à la
+      // régie qu'une demande quatre fois proposée n'a été proposée qu'une fois.
+      lastDispatchedAt: null,
+    },
+    include: TICKET_INCLUDE,
+  });
+
+  // Le client ne doit pas croire que quelqu'un s'est déplacé pour rien.
+  if (ticket.client.userId) {
+    await notify({
+      userIds: [ticket.client.userId],
+      type: NotificationType.TICKET_STATUS_CHANGED,
+      title: "Technicien indisponible",
+      body: `${ticket.reference} est à nouveau proposée aux techniciens disponibles.`,
+      ticketId: ticket.id,
+    });
+  }
+
+  await dispatchPendingTickets();
 
   return { ok: true, data: ticket };
 }

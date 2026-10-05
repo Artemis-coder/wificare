@@ -19,6 +19,7 @@ import '../../features/shell/presentation/client_shell.dart';
 import '../../features/tickets/presentation/ticket_detail_screen.dart';
 import '../../features/tickets/presentation/ticket_new_screen.dart';
 import '../../features/tickets/presentation/tickets_list_screen.dart';
+import '../../features/technician/presentation/offers_screen.dart';
 import '../../features/technician/presentation/technician_dashboard_screen.dart';
 import '../../features/technician/presentation/technician_profile_screen.dart';
 import '../../features/technician/presentation/technician_shell.dart';
@@ -79,6 +80,18 @@ abstract final class TechnicianRoutes {
   /// tâche de terrain, et lui donner un onglet de plus chargerait une barre
   /// déjà encombrée.
   static const wallet = '/tech/dashboard/wallet';
+
+  /// Demandes que le circuit propose au technicien, en attente qu'il en
+  /// prenne une.
+  ///
+  /// Page enfant de l'accueil, comme le profil : ce n'est pas une tâche de
+  /// terrain — il n'y est pas encore affecté — et lui donner un onglet
+  /// signifierait y faire figurer des demandes qui ne sont pas les siennes.
+  ///
+  /// Elle porte un paramètre `offer` : une notification push ouvre l'écran avec
+  /// l'identifiant de la proposition, et la feuille de détail s'ouvre dès que la
+  /// file contient cette proposition.
+  static const offers = '/tech/dashboard/offers';
 
   static const List<String> branches = ['dashboard', 'tickets', 'reviews'];
 }
@@ -312,6 +325,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                     name: 'tech-wallet',
                     path: 'wallet',
                     builder: (_, _) => const TechnicianWalletScreen(),
+                  ),
+                  GoRoute(
+                    name: 'tech-offers',
+                    path: 'offers',
+                    builder: (_, state) => OffersScreen(
+                      initialOfferId: state.uri.queryParameters['offer'],
+                    ),
                   ),
                 ],
               ),

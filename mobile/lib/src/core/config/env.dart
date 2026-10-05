@@ -36,7 +36,12 @@ class AppConfig {
   );
 
   static const String appName = 'WiFi Care';
-  static const String appVersion = '1.0.0';
+
+  // La version de l'application n'est pas déclarée ici. Elle est lue sur le
+  // paquet installé (`core/system/app_version.dart`) : une constante écrite à la
+  // main dans ce fichier est restée à `1.0.0` pendant six versions, sur trois
+  // écrans, et personne ne l'a vue parce que le numéro n'était pas faux
+  // pour autant que le téléphone vernissait.
 
   /// Contact support, partagé par les profils client et technicien.
   static const String supportEmail = 'support@wificare.ci';

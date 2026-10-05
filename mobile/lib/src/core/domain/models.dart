@@ -297,6 +297,161 @@ class Ticket {
   );
 }
 
+/// Ce que le technicien sait de sa propre disponibilité.
+///
+/// L'état est celui du serveur, jamais celui d'un bouton : le serveur est seul à
+/// savoir si la demande a atteint le Technicien, et un écran qui afficherait un
+/// « en ligne » optimiste ferait croire que la répartition tourne quand elle
+/// n'est jamais partie.
+class TechnicianPresence {
+  const TechnicianPresence({
+    required this.isOnline,
+    this.onlineSince,
+    this.lastSeenAt,
+  });
+
+  /// Le technicien a demandé à recevoir des demandes.
+  final bool isOnline;
+
+  /// Depuis quand, s'il est en ligne.
+  final DateTime? onlineSince;
+
+  /// Dernière fois que l'application a parlé au serveur.
+  final DateTime? lastSeenAt;
+
+  /// En ligne, mais l'application ne parle plus au serveur depuis un moment.
+  ///
+  /// La disponibilité est une intention, pas une preuve : elle survit à la
+  /// fermeture de l'application, ce qui est voulu, mais aussi à un téléphone
+  /// déchargé. L'écran le dit plutôt que d'afficher un « disponible » qui ne
+  /// recevra rien.
+  bool get isStale {
+    final seen = lastSeenAt;
+    if (!isOnline || seen == null) return false;
+    return DateTime.now().difference(seen) > const Duration(minutes: 15);
+  }
+
+  factory TechnicianPresence.fromJson(Map<String, dynamic> json) =>
+      TechnicianPresence(
+        isOnline: JsonX.flag(json['isOnline']),
+        onlineSince: JsonX.date(json['onlineSince']),
+        lastSeenAt: JsonX.date(json['lastSeenAt']),
+      );
+}
+
+/// Demande proposée à un technicien en ligne, en attente de sa réponse.
+///
+/// La demande est embarquée ici plutôt que d'être lue à part : tant que le
+/// technicien ne l'a pas acceptée, il n'a aucun droit de lecture dessus. Sans
+/// cet élément, il devrait choisir une offre sur la seule référence, sans savoir
+/// ni le lieu ni la panne — et l'écran des offres ne pourrait pas afficher le
+/// détail de ce qu'il est censé décider.
+class TaskOffer {
+  const TaskOffer({
+    required this.id,
+    required this.offeredAt,
+    required this.ticketId,
+    required this.reference,
+    required this.type,
+    required this.priority,
+    required this.description,
+    required this.createdAt,
+    required this.zoneName,
+    required this.zoneLocation,
+    required this.zoneLatitude,
+    required this.zoneLongitude,
+    required this.clientName,
+    required this.clientContact,
+    required this.photos,
+  });
+
+  /// Identifiant de la proposition : c'est lui qui est transmis au serveur pour
+  /// accepter ou refuser, et non l'identifiant de la demande.
+  final String id;
+  final DateTime? offeredAt;
+
+  final String ticketId;
+  final String reference;
+  final String type;
+  final Priority priority;
+  final String? description;
+  final DateTime? createdAt;
+
+  final String zoneName;
+  final String zoneLocation;
+  final double? zoneLatitude;
+  final double? zoneLongitude;
+
+  final String clientName;
+  final String clientContact;
+
+  /// Photos jointes par le client. C'est à cette taille qu'on juge d'un boîtier
+  /// mal branché : sans elles, le technicien décide à l'aveugle.
+  final List<FileAttachment> photos;
+
+  /// La zone est-elle localisée, et l'application peut-elle donc proposer un
+  /// itinéraire ? Une zone sans coordonnées n'affiche pas de carte : une carte
+  /// sans point donnerait l'impression d'un suivi cassé.
+  bool get hasLocation =>
+      zoneLatitude != null && zoneLongitude != null && (zoneLatitude != 0 || zoneLongitude != 0);
+
+  factory TaskOffer.fromJson(Map<String, dynamic> json) {
+    final ticket = JsonX.map(json['ticket']);
+    final zone = JsonX.map(ticket['wifiZone']);
+    final client = JsonX.map(ticket['client']);
+
+    return TaskOffer(
+      id: JsonX.str(json['id']),
+      offeredAt: JsonX.date(json['offeredAt']),
+      ticketId: JsonX.str(ticket['id']),
+      reference: JsonX.str(ticket['reference']),
+      type: JsonX.str(ticket['type']),
+      priority: Priority.fromWire(JsonX.strOrNull(ticket['priority'])),
+      description: JsonX.strOrNull(ticket['description']),
+      createdAt: JsonX.date(ticket['createdAt']),
+      zoneName: JsonX.str(zone['name'], fallback: 'Zone inconnue'),
+      zoneLocation: JsonX.str(zone['location']),
+      zoneLatitude: JsonX.decimalOrNull(zone['latitude']),
+      zoneLongitude: JsonX.decimalOrNull(zone['longitude']),
+      clientName: JsonX.str(client['name'], fallback: 'Client'),
+      clientContact: JsonX.str(client['contact']),
+      photos: JsonX.list(ticket['files']).map(FileAttachment.fromJson).toList(),
+    );
+  }
+}
+
+/// Réponse du serveur à la lecture de la file des offres.
+///
+/// Elle porte la présence du technicien et la file dans le même objet parce
+/// qu'elles arrivent dans le même appel : ce même appel est aussi ce qui fait
+/// tourner la répartition, et séparer les deux obligerait le technicien à payer
+/// deux requêtes pour lire la même chose.
+class OfferPoll {
+  const OfferPoll({
+    required this.presence,
+    required this.offers,
+    this.serverNow,
+  });
+
+  final TechnicianPresence presence;
+  final List<TaskOffer> offers;
+
+  /// Heure du serveur, pour mesurer la durée de validité d'une proposition sans
+  /// compter sur l'horloge du téléphone, qui peut être fausse.
+  final DateTime? serverNow;
+
+  factory OfferPoll.fromJson(Map<String, dynamic> json) => OfferPoll(
+    presence: TechnicianPresence.fromJson(json),
+    offers: JsonX.list(json['items']).map(TaskOffer.fromJson).toList(),
+    serverNow: JsonX.date(json['serverNow']),
+  );
+
+  static const OfferPoll empty = OfferPoll(
+    presence: TechnicianPresence(isOnline: false),
+    offers: <TaskOffer>[],
+  );
+}
+
 /// Position partagée par le technicien pendant son déplacement.
 ///
 /// L'ETA est calculée par le serveur : le téléphone ne fait que l'afficher.

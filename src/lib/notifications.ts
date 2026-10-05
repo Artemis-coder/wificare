@@ -1,4 +1,4 @@
-import { NotificationType, TicketStatus } from "@prisma/client";
+import { NotificationType } from "@prisma/client";
 import { prisma } from "./prisma";
 import { STAFF_ROLES } from "./roles";
 import { notifyPush } from "./push";
@@ -25,6 +25,15 @@ type NotificationInput = {
   title: string;
   body: string;
   ticketId?: string;
+  /**
+   * Clés additionnelles pour le push.
+   *
+   * `ticketId` ne suffit pas à tout : une demande proposée à un technicien n'est
+   * pas encore la sienne, et ouvrir son détail lui renverrait un refus — l'API
+   * ne laisse pas lire une demande qui n'est pas affectée. Il lui faut
+   * l'identifiant de la proposition, transmis ici.
+   */
+  extraData?: Record<string, string>;
 };
 
 /**
@@ -57,6 +66,7 @@ export async function notify(input: NotificationInput): Promise<void> {
       title: input.title,
       body: input.body,
       ticketId: input.ticketId,
+      extraData: input.extraData,
     });
 
     await notifyWebPush(targets, {
@@ -72,6 +82,11 @@ export async function notify(input: NotificationInput): Promise<void> {
 /**
  * Identifiants des administrateurs : ce sont eux qui répartissent le travail.
  * La régie n'a plus qu'un profil, le super administrateur.
+ *
+ * Elle n'est plus appelée à la création d'une demande dès qu'un technicien est
+ * disponible : la demande part alors à tous les techniciens en ligne
+ * (`lib/dispatch.ts`). Elle ne reste le destinataire que lorsqu'aucun n'est
+ * en ligne, et il n'y a alors personne d'autre à qui la demander.
  */
 export async function adminIds(): Promise<string[]> {
   const admins = await prisma.user.findMany({
@@ -83,59 +98,22 @@ export async function adminIds(): Promise<string[]> {
 }
 
 /**
- * Statuts qui comptent comme une demande encore en cours de traitement.
+ * Techniciens en ligne : ceux qui se sont déclarés disponibles.
  *
- * Une intervention close, annulée ou terminée ne pèse plus dans la charge d'un
- * technicien : le compter reviendrait à envoyer la prochaine demande au
- * technicien qui a, il y a six mois, traité le plus d'interventions.
+ * La liste est triée du plus ancien en ligne au plus récent. L'ordre ne change
+ * rien à la répartition — la demande part à tout le monde — mais il rend
+ * l'ordre d'apparition des notifications prévisible d'un passage à l'autre.
+ *
+ * Le compte est filtré sur son statut : un technicien hors service qui garde
+ * l'application ouverte ne doit pas recevoir de demande, et son intention
+ * déclarée ne remplace pas une décision de la régie.
  */
-const OPEN_TICKET_STATUSES: TicketStatus[] = [
-  TicketStatus.NEW,
-  TicketStatus.TO_VERIFY,
-  TicketStatus.ASSIGNED,
-  TicketStatus.CONFIRMED,
-  TicketStatus.EN_ROUTE,
-  TicketStatus.DIAGNOSING,
-  TicketStatus.PENDING_QUOTE,
-  TicketStatus.REPAIRING,
-  TicketStatus.COMPLETED,
-  TicketStatus.PENDING_PAYMENT,
-];
-
-/**
- * Renvoie le technicien auquel une nouvelle demande revient automatiquement.
- *
- * L'affectation n'est plus une décision de régie : dès qu'un technicien est en
- * service, la demande lui est adressée sans intervention humaine. Le choix se
- * fait sur la charge réelle — le nombre de demandes en cours — afin que deux
- * techniciens ne s'accumulent pas sur le même backlog pendant que l'autre reste
- * libre. À charge égale, le plus ancien compte est servi le premier : c'est ce
- * qui fait tourner les demandes dans un ordre stable et prévisible plutôt qu'à
- * l'arrivée de la première requête.
- *
- * Renvoie `null` si aucun technicien n'est en service : la demande attend alors
- * dans la file de répartition du super administrateur.
- */
-export async function leastLoadedTechnicianId(): Promise<string | null> {
+export async function onlineTechnicianIds(): Promise<string[]> {
   const technicians = await prisma.user.findMany({
-    where: { role: "TECHNICIAN", status: "ACTIVE" },
-    select: {
-      id: true,
-      createdAt: true,
-      _count: {
-        select: {
-          tickets: { where: { status: { in: OPEN_TICKET_STATUSES } } },
-        },
-      },
-    },
-    orderBy: { createdAt: "asc" },
+    where: { role: "TECHNICIAN", status: "ACTIVE", isOnline: true },
+    select: { id: true },
+    orderBy: { onlineSince: { sort: "asc", nulls: "last" } },
   });
 
-  if (technicians.length === 0) {
-    return null;
-  }
-
-  return technicians.reduce((least, technician) =>
-    technician._count.tickets < least._count.tickets ? technician : least
-  ).id;
+  return technicians.map((technician) => technician.id);
 }

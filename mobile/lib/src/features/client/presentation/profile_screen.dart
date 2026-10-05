@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/config/env.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/system/app_version.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_avatar.dart';
@@ -193,7 +194,7 @@ class ProfileScreen extends ConsumerWidget {
                   children: [
                     InfoRow(label: 'Application', value: 'WiFi Care Client'),
                     const Divider(),
-                    InfoRow(label: 'Version', value: '1.0.0'),
+                    InfoRow(label: 'Version', valueWidget: const AppVersionText()),
                     const Divider(),
                     ListTile(
                       contentPadding: EdgeInsets.zero,

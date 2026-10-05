@@ -8,10 +8,65 @@ import '../domain/tracking_point.dart';
 /// Le technicien n'a pas de dossier client : il est identifié par son
 /// `userId`, passé à l'API comme `technicianId` pour ne renvoyer que les
 /// demandes qui lui sont affectées. Il ne crée ni zone ni équipement.
+///
+/// Il accède aussi à deux choses qui ne sont pas des interventions : sa
+/// disponibilité, et la file des demandes qui lui sont proposées mais ne lui
+/// appartiennent pas encore. Les deux vont dans le même repository — c'est la
+/// même question, « puis-je prendre cette demande », et la réponse commence par
+/// « suis-je disponible ».
 class TechnicianRepository {
   TechnicianRepository(this._api);
 
   final ApiClient _api;
+
+  /// Se met en ligne ou hors ligne.
+  ///
+  /// L'état est celui du serveur, et la réponse le renvoie : afficher « en
+  /// ligne » avant que l'appel ne soit passé ferait croire que la répartition
+  /// tourne quand elle n'est peut-être jamais partie.
+  Future<TechnicianPresence> setPresence({required bool online}) async {
+    final response = await _api.post<Map<String, dynamic>>(
+      '/technicians/presence',
+      data: {'online': online},
+    );
+
+    final data = response['data'] as Map<String, dynamic>?;
+
+    return TechnicianPresence.fromJson(data ?? const <String, dynamic>{});
+  }
+
+  /// Lit la file des demandes proposées, et fait tourner la répartition.
+  ///
+  /// L'appel est à la fois la lecture et le tic de la boucle de répartition : le
+  /// serveur en profite pour proposer les demandes en attente aux techniciens
+  /// disponibles. D'où le nom `poll` plutôt que `offers` — c'est un aller-retour
+  /// qui fait vivre le circuit, pas une simple consultation.
+  Future<OfferPoll> pollOffers() async {
+    final response = await _api.get<Map<String, dynamic>>('/technicians/offers');
+    return OfferPoll.fromJson(response['data'] as Map<String, dynamic>);
+  }
+
+  /// Prend la demande. Un seul technicien peut gagner : le serveur répond par
+  /// un refus explicite si un autre l'a prise entre-temps.
+  Future<Ticket> acceptOffer(String offerId) async {
+    final response = await _api.post<Map<String, dynamic>>('/offers/$offerId/accept');
+    return Ticket.fromJson(response['data'] as Map<String, dynamic>);
+  }
+
+  /// Renonce à la demande. Elle repart chez les autres, et ne sera plus
+  /// reproposée au même technicien.
+  Future<void> declineOffer(String offerId) async {
+    await _api.post<Map<String, dynamic>>('/offers/$offerId/decline');
+  }
+
+  /// Rend une demande déjà prise dans le circuit.
+  ///
+  /// Réservé au moment où le technicien n'est pas encore parti : après, il y a
+  /// un déplacement et un rapport d'intervention, et la demande s'annule.
+  Future<Ticket> releaseTicket(String ticketId) async {
+    final response = await _api.post<Map<String, dynamic>>('/tickets/$ticketId/release');
+    return Ticket.fromJson(response['data'] as Map<String, dynamic>);
+  }
 
   /// Demandes affectées au technicien, éventuellement filtrées par statut.
   Future<Page<Ticket>> myTickets({

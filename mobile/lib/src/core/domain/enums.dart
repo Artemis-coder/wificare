@@ -312,6 +312,7 @@ enum TicketCategory {
 enum AppNotificationType {
   ticketSubmitted('TICKET_SUBMITTED', Icons.campaign_outlined),
   ticketAssigned('TICKET_ASSIGNED', Icons.assignment_ind_outlined),
+  taskOffer('TASK_OFFER', Icons.add_task_rounded),
   ticketStatusChanged('TICKET_STATUS_CHANGED', Icons.sync_alt_rounded),
   ticketCanceled('TICKET_CANCELED', Icons.cancel_outlined),
   quoteSent('QUOTE_SENT', Icons.request_quote_outlined),

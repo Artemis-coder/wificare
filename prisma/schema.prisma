@@ -119,6 +119,10 @@ enum NotificationType {
   ZONE_DELETED
   /// Message adressé par l'équipe d'administration à toute la plateforme.
   BROADCAST
+  /// Une demande est proposée à un technicien en ligne, en attente de sa
+  /// réponse. Ne se produit pas pour une demande affectée : il n'y a alors plus
+  /// personne à solliciter.
+  TASK_OFFER
 }
 
 // ----------------------------------------
@@ -218,6 +222,29 @@ model User {
   loginCount  Int        @default(0)
   lastLoginAt DateTime?
 
+  /// Le technicien se dit-il disponible pour une nouvelle demande ?
+  ///
+  /// C'est une **intention déclarée**, pas une observation : elle survit à la
+  /// fermeture de l'application, parce qu'un technicien en tournée ne garde pas
+  /// son écran allumé. Le technicien la pose lui-même, et elle tient jusqu'à ce
+  /// qu'il la retire — un compte qui s'éteindrait avec l'application ne
+  /// recevrait plus rien une fois le téléphone rangé, ce qui est précisément le
+  /// moment où il faut le joindre.
+  ///
+  /// Elle ne prouve donc pas que le téléphone répondra. `lastSeenAt` est cette
+  /// preuve : le back-office affiche les deux, et c'est ce qui permet de
+  /// distinguer « disponible » d'« en ligne mais injoignable ». Une offre faite
+  /// à un technicien injoignable expire et la demande repart : la boucle se
+  /// referme d'elle-même, sans qu'il faille une règle pour deviner l'intention.
+  isOnline    Boolean   @default(false)
+  /// Depuis quand le technicien s'est déclaré disponible. Réponse à « il est en
+  /// ligne depuis une heure ou il vient de se poser ? ».
+  onlineSince DateTime?
+  /// Dernière preuve de vie de l'appareil. Renseigné à chaque appel de
+  /// présence et à chaque lecture de la file des offres, donc uniquement quand
+  /// l'application parle réellement au serveur.
+  lastSeenAt  DateTime?
+
   // Relations
   clients         Client[]       @relation("ClientUsers")
   tickets         Ticket[]       @relation("TechnicianTickets")
@@ -233,6 +260,8 @@ model User {
   broadcasts Broadcast[] @relation("Broadcasts")
   /// Suivis de position que ce technicien a envoyés sur ses demandes.
   technicianTrackings TechnicianTracking[]
+  /// Demandes qui lui ont été proposées et auxquelles il n'a pas encore répondu.
+  taskOffers TaskOffer[] @relation("TechnicianOffers")
 
   /// Le tableau de bord regroupe les comptes par pays : sans index, chaque
   /// rafraîchissement de la page compterait toute la table.
@@ -331,6 +360,18 @@ model Ticket {
   clientId     String
   wifiZoneId   String
   technicianId String?
+  /// Combien de fois la demande a été proposée à des techniciens en ligne.
+  ///
+  /// La demande ne va pas à un technicien choisi d'avance : elle part à tous
+  /// ceux qui se sont déclarés disponibles, et le premier qui l'accepte la prend.
+  /// Ce compteur dit à la régie combien de fois la demande est repassée, et
+  /// surtout si elle circule — une demande qui en est à sa douzième vague n'a
+  /// pas un problème de file mais une équipe qui n'en veut pas.
+  dispatchRound Int      @default(0)
+  /// Dernière vague de répartition émise. Une demande qui n'en a pas est
+  /// nouvelle ; une demande dont la dernière passe est vieille de plusieurs
+  /// minutes circule sans que personne ne la prenne.
+  lastDispatchedAt DateTime?
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
@@ -343,6 +384,7 @@ model Ticket {
   evaluation    Evaluation?
   notifications Notification[]
   tracking      TechnicianTracking[]
+  taskOffers    TaskOffer[]
 }
 
 enum Priority {
@@ -353,9 +395,9 @@ enum Priority {
 }
 
 enum TicketStatus {
-  NEW // Nouveau
+  NEW // Nouveau — en attente d'un technicien, soit parce qu'aucun n'est en ligne, soit parce que la demande circule
   TO_VERIFY // À vérifier
-  ASSIGNED // Affecté
+  ASSIGNED // Affecté — un technicien en ligne a accepté la demande
   CONFIRMED // Rendez-vous confirmé
   EN_ROUTE // En route
   DIAGNOSING // En diagnostic
@@ -365,6 +407,68 @@ enum TicketStatus {
   PENDING_PAYMENT // Paiement en attente
   CLOSED // Clôturé
   CANCELED // Annulé
+}
+
+// ----------------------------------------
+// Répartition des demandes aux techniciens en ligne
+// ----------------------------------------
+
+/// Suite donnée par un technicien à une demande qui lui a été proposée.
+///
+/// Ce n'est pas un statut de la demande : la demande reste la même, c'est la
+/// réponse du technicien qui change. La garder à part permet à une demande de
+/// circuler — le technicien qui refuse est écarté, les autres restent en lice —
+/// là où un statut porté par la demande aurait signifié sa fin.
+enum TaskOfferStatus {
+  /// Proposée, en attente de réponse. C'est le seul état qui affiche la demande
+  /// dans la file du technicien.
+  PENDING
+  /// Le technicien a pris la demande : elle est affectée et ne circule plus.
+  ACCEPTED
+  /// Le technicien a refusé. Cette réponse est définitive pour cette demande :
+  /// on ne repropose pas à quelqu'un qui vient de dire non, et la demande
+  /// repart chez les autres.
+  DECLINED
+  /// Retirée sans réponse : le technicien s'est déconnecté, ou un autre a pris
+  /// la demande entre-temps. Sans reproposition immédiate — elle repartira après
+  /// un délai, ce qui laisse au technicien le temps de revenir.
+  WITHDRAWN
+  /// Personne n'a répondu dans le délai. La demande est redistribuée, y
+  /// compris au même technicien s'il est toujours disponible.
+  EXPIRED
+}
+
+/// Proposition d'une demande à un technicien en ligne.
+///
+/// Une seule ligne par couple demande / technicien : c'est à la fois ce qui
+/// empêche d'envoyer deux fois la même demande au même technicien, et ce qui
+/// permet de se rappeler qu'il a déjà refusé. Sans cet historique, il faudrait
+/// choisir entre l'insister et l'oublier, et les deux sont faux.
+///
+/// La répartition elle-même est dans `lib/dispatch.ts` ; ce modèle ne porte que
+/// l'état de la conversation entre la demande et un technicien.
+model TaskOffer {
+  id           String          @id @default(uuid())
+  ticketId     String
+  technicianId String
+  status       TaskOfferStatus @default(PENDING)
+  /// Dernière fois où la demande a été proposée à ce technicien. Sert de point
+  /// de départ au délai de redistribution d'une proposition retirée ou expirée.
+  offeredAt    DateTime        @default(now())
+  /// Date de la réponse : acceptation, refus, retrait ou expiration. C'est cet
+  /// horodatage qui commande le délai avant de reproposer : un technicien ne se
+  /// voit pas renvoyer la même demande toutes les cinq secondes.
+  respondedAt  DateTime?
+
+  ticket     Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  technician User   @relation("TechnicianOffers", fields: [technicianId], references: [id], onDelete: Cascade)
+
+  @@unique([ticketId, technicianId])
+  /// La file du technicien : ses propositions en attente, sans relire la table.
+  @@index([technicianId, status])
+  /// L'affichage côté régie : combien de propositions sont parties pour une
+  /// demande donnée.
+  @@index([ticketId, status])
 }
 
 // ----------------------------------------

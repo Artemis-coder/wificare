@@ -144,6 +144,15 @@ class PushService {
   /// à ouvrir au retour dans l'application.
   String? _pendingTicketId;
 
+  /// Identifiant de la proposition sur laquelle l'utilisateur a tapé.
+  ///
+  /// Séparé de [_pendingTicketId] parce que ce n'est pas la même chose à
+  /// ouvrir : une demande proposée n'est pas encore celle du technicien, et son
+  /// détail lui renverrait un refus — l'API ne laisse pas lire une demande non
+  /// affectée. Il faut donc passer par la file des offres, qui porte le
+  /// contenu, et y indiquer la proposition à présenter.
+  String? _pendingOfferId;
+
   bool _available = false;
   bool _initialized = false;
 
@@ -159,6 +168,13 @@ class PushService {
     final ticketId = _pendingTicketId;
     _pendingTicketId = null;
     return ticketId;
+  }
+
+  /// Proposition à ouvrir au retour dans l'application, puis oubliée.
+  String? takePendingOfferId() {
+    final offerId = _pendingOfferId;
+    _pendingOfferId = null;
+    return offerId;
   }
 
   Future<void> initialize() async {
@@ -289,6 +305,19 @@ class PushService {
   }
 
   void _onOpened(RemoteMessage message) {
+    // Une proposition n'ouvre pas une demande : elle ouvre la feuille de
+    // décision qui lui correspond. Les deux sont mémorisées séparément, pour
+    // qu'un message de demande ne se retrouve pas traité comme une proposition
+    // par défaut.
+    final offerId = message.data['offerId'] as String?;
+
+    if (message.data['type'] == 'TASK_OFFER' &&
+        offerId != null &&
+        offerId.isNotEmpty) {
+      _pendingOfferId = offerId;
+      return;
+    }
+
     final ticketId = message.data['ticketId'] as String?;
 
     if (ticketId != null && ticketId.isNotEmpty) {

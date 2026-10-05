@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:wificare_app/src/app.dart';
 import 'package:wificare_app/src/core/router/app_router.dart';
 import 'package:wificare_app/src/features/tickets/presentation/ticket_new_screen.dart';
@@ -116,6 +117,18 @@ void main() {
     loginStatus = 200;
     loginError = null;
     FlutterSecureStorage.setMockInitialValues({});
+
+    // Version du paquet installé : un test widget n'a pas de plateforme, et la
+    // version affichée doit venir d'elle — c'est tout l'intérêt d'avoir supprimé
+    // le `1.0.0` écrit à la main.
+    PackageInfo.setMockInitialValues(
+      appName: 'WiFi Care',
+      packageName: 'ci.wificare.app',
+      version: '1.6.0',
+      buildNumber: '7',
+      buildSignature: '',
+    );
+
     adapter = FakeHttpAdapter({
       '/auth/login': (_, _) => loginStatus == 403
           ? {'error': loginError ?? 'Ce compte n\'est pas un compte technicien.'}
@@ -671,6 +684,27 @@ void main() {
     );
     await settle(tester);
     expect(find.text('Se déconnecter'), findsOneWidget);
+
+    // La version vient du paquet installé. Elle est ce que l'utilisateur annonce
+    // quand une notification ne se déclenche pas, et ce qui permet de dire quel
+    // APK il tourne : un numéro écrit dans le code resterait faux en silence.
+    expect(find.text('version 1.6.0 (7)'), findsOneWidget);
+  });
+
+  testWidgets('la version de l\'application est lisible avant la connexion', (
+    tester,
+  ) async {
+    await pumpApp(tester);
+
+    // Elle est sur l'écran de connexion parce que c'est le seul endroit visible
+    // sans compte : c'est là qu'on regarde quand l'application fait un truc
+    // bizarre.
+    expect(find.textContaining('version 1.6.0 (7)'), findsOneWidget);
+    expect(
+      find.textContaining('1.0.0'),
+      findsNothing,
+      reason: 'aucun numéro de version ne doit être écrit en dur',
+    );
   });
   testWidgets('déconnexion : deux boutons côte à côte', (tester) async {
     // Copie mutable : la déconnexion réelle vide le stockage simulé.

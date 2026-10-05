@@ -108,6 +108,18 @@ type PushPayload = {
   title: string;
   body: string;
   ticketId?: string;
+  /**
+   * Charge utile additionnelle, à lire par l'application au retour sur la
+   * notification.
+   *
+   * `ticketId` seul ne suffit pas à tout : une demande proposée à un technicien
+   * n'est pas encore la sienne, et ouvrir son détail lui renverrait un refus —
+   * l'API ne lui laisse pas lire une demande qui ne lui est pas affectée. Il lui
+   * faut l'identifiant de la proposition, qu'il n'a pas à deviner. Ce champ
+   * porte ce genre de clé supplémentaire, sans multiplier les canaux pour un
+   * même événement.
+   */
+  extraData?: Record<string, string>;
 };
 
 /**
@@ -226,6 +238,11 @@ export async function notifyPush(
   userIds: string[],
   payload: PushPayload
 ): Promise<void> {
+  const data: Record<string, string> = {
+    ...(payload.extraData ?? {}),
+    ...(payload.ticketId ? { ticketId: payload.ticketId } : {}),
+  };
+
   await sendToDevices(userIds, (tokens) => ({
     tokens,
     notification: { title: payload.title, body: payload.body },
@@ -234,8 +251,10 @@ export async function notifyPush(
       notification: { channelId: "wificare_notifications" },
     },
     // L'application reçoit l'identifiant de la demande et ouvre le détail
-    // quand l'utilisateur tape sur la notification.
-    data: payload.ticketId ? { ticketId: payload.ticketId } : undefined,
+    // quand l'utilisateur tape sur la notification. Les clés additionnelles
+    // éventuelles viennent avant : `ticketId` reste la valeur de référence, et
+    // une clé du même nom fournie par erreur ne doit pas l'écraser.
+    data: Object.keys(data).length > 0 ? data : undefined,
   }));
 }
 
@@ -292,14 +311,16 @@ export async function notifyTrackingUpdate(
   }
 }
 
-/** Demande de réactivation du suivi de position adressée au technicien. */
+/**
+ * Demande de réactivation du suivi de position adressée au technicien.
+ */
 export type TrackingNudgePayload = {
   ticketId: string;
   reference: string;
 };
 
 /**
- * Demande au technicien de réactiver le suivi de position de sa demande.
+ * Informe au technicien de la suite donnée à sa demande.
  *
  * Émis en données seules, comme le suivi lui-même : c'est l'application qui
  * décide de ce qu'elle montre, et un bloc `notification` ferait apparaître en
@@ -310,7 +331,7 @@ export type TrackingNudgePayload = {
  * autres canaux : une seconde initialisation Firebase créerait un second client
  * de messagerie, donc une seconde file d'envoi, sur le même projet.
  *
- * Ne lève jamais, et l'absence de jeton n'est pas distinguished comme un échec :
+ * Ne lève jamais, et l'absence de jeton n'est pas distinguée comme un échec :
  * le technicien peut simplement avoir désinstallé l'application, ce qui ne dit
  * rien de l'état de la demande et ne doit pas faire échouer l'appel du client.
  */

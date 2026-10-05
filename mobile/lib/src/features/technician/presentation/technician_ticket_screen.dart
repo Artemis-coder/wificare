@@ -45,6 +45,14 @@ class _TechnicianTicketScreenState
     extends ConsumerState<TechnicianTicketScreen> {
   bool _busy = false;
 
+  /// La demande vient d'être remise dans le circuit.
+  ///
+  /// Elle n'est plus lisible par l'API — le serveur ne la rend qu'à son
+  /// technicien — et l'écran ne peut donc plus la recharger. Plutôt que de
+  /// laisser une page morte affichant un accès refusé, l'écran bascule sur ce
+  /// qui s'est passé, et le technicien repart par le bouton.
+  bool _released = false;
+
   /// Les pièces jointes sont stockées en URL relative : c'est le serveur qui
   /// décide de l'hôte, pas l'application.
   static String absoluteUrl(String url) =>
@@ -305,6 +313,18 @@ class _TechnicianTicketScreenState
   static bool _canQuote(TicketStatus status) =>
       status == TicketStatus.diagnosing || status == TicketStatus.repairing;
 
+  /// La demande peut-elle encore être remise dans la file ?
+  ///
+  /// Tant que le technicien n'est pas parti, la lui rendre ne gêne personne.
+  /// Après, il y a un déplacement et peut-être des pièces remplacées : ce n'est
+  /// plus une remise mais une annulation, et c'est le serveur qui tranche — il
+  /// refuse aussi une remise à ce stade, l'écran ne propose donc pas un bouton
+  /// qui échouerait.
+  static bool _canRelease(TicketStatus status) =>
+      status == TicketStatus.assigned ||
+      status == TicketStatus.confirmed ||
+      status == TicketStatus.toVerify;
+
   Future<void> _cancel(Ticket ticket) async {
     final confirmed = await confirmDialog(
       context,
@@ -318,12 +338,70 @@ class _TechnicianTicketScreenState
     if (confirmed) await _advance(ticket, TicketStatus.canceled);
   }
 
+  /// Rend la demande au circuit de répartition.
+  ///
+  /// Distinct d'[TicketStatus.canceled], et proposé à côté : « je ne peux pas
+  /// y aller » et « cette panne n'existe pas / n'est pas de mon ressort » sont
+  /// deux décisions différentes, et le client comme la régie doivent pouvoir les
+  /// distinguer. Ici la demande repart chez les techniciens en ligne au lieu
+  /// d'être perdue.
+  ///
+  /// Le serveur n'accepte cette remise qu'avant le départ : une fois sur place,
+  /// il y a un déplacement et peut-être des pièces remplacées, et ce n'est plus
+  /// une remise mais une annulation.
+  Future<void> _release(Ticket ticket) async {
+    final confirmed = await confirmDialog(
+      context,
+      title: 'Remettre dans la file ?',
+      message:
+          '${ticket.reference} sera proposée aux autres techniciens en ligne. '
+          'Elle n\'est pas annulée : le client reste en attente d\'un technicien.',
+      confirmLabel: 'Remettre',
+      cancelLabel: 'Annuler',
+      destructive: true,
+    );
+    if (!confirmed || !mounted) return;
+
+    setState(() => _busy = true);
+
+    try {
+      await ref.read(technicianRepositoryProvider).releaseTicket(ticket.id);
+
+      // Le suivi ne porte plus sur rien : le trajet qu'il suivait n'est plus le
+      // sien, et le client ne doit pas voir une estimation d'arrivée pour un
+      // technicien qui n'est plus attendu.
+      await ref.read(technicianTrackingProvider.notifier).stop(ticket.id);
+
+      ref.invalidate(technicianTicketsProvider);
+
+      if (!mounted) return;
+
+      // La page n'est pas retirée ici. Elle le serait de dessous la boîte de
+      // confirmation, encore en train de sortir : la route disparaîtrait
+      // pendant que la boîte est montée, et Flutter signale alors une
+      // recherche d'ancêtre sur un widget désactivé. L'écran bascule plutôt sur
+      // un état qui explique la remise — et qui n'a, lui, aucun dialogue à
+      // moitié fermé.
+      setState(() => _released = true);
+    } on ApiException catch (error) {
+      if (mounted) showAppSnackBar(context, error.message, isError: true);
+    } catch (_) {
+      if (mounted) {
+        showAppSnackBar(context, 'Remise impossible. Réessayez.', isError: true);
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
     final asyncTicket = ref.watch(
       technicianTicketDetailProvider(widget.ticketId),
     );
+
+    if (_released) return _releasedView(context);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Intervention')),
@@ -773,10 +851,82 @@ data: (ticket) {
                     onPressed: _busy ? null : () => _cancel(ticket),
                   ),
                 ),
+
+              // Une demande déjà prise peut se révéler impossible à faire : le
+              // technicien l'a acceptée puis a constaté qu'il ne peut pas la
+              // traiter (zone hors de sa portée, pas de matériel). L'annulation
+              // ci-dessus supprimerait la demande pour le client ; la remettre
+              // dans la file la rend aux autres techniciens en service. Les
+              // deux actions sont voisines parce qu'elles répondent au même
+              // constat, mais l'une détruit la demande et l'autre la garde.
+              if (_canRelease(ticket.status))
+                Padding(
+                  padding: const EdgeInsets.only(top: AppSpacing.sm),
+                  child: AppButton(
+                    label: 'Remettre à un autre technicien',
+                    icon: Icons.replay_rounded,
+                    variant: AppButtonVariant.outline,
+                    loading: _busy,
+                    onPressed: _busy ? null : () => _release(ticket),
+                  ),
+                ),
               const SizedBox(height: AppSpacing.lg),
             ],
           );
         },
+      ),
+    );
+  }
+
+  /// Ce que devient l'écran d'une demande remise dans la file.
+  ///
+  /// La demande n'est plus la sienne : l'API ne la lui rend plus, et le
+  /// laisser sur un écran d'intervention plein de boutons qui échoueraient
+  /// tous serait un cul-de-sac. Elle est remplacée par le constat — remise, pas
+  /// annulée — et par le seul geste qui reste, revenir à ses demandes.
+  Widget _releasedView(BuildContext context) {
+    final colors = context.colors;
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Intervention')),
+      body: ListView(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        children: [
+          const SizedBox(height: AppSpacing.xl),
+          Icon(
+            Icons.replay_rounded,
+            size: 48,
+            color: colors.primary,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            'Demande remise dans la file',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: colors.onSurface,
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'Elle est proposée aux autres techniciens en ligne. Elle n\'est pas '
+            'annulée : le client reste en attente d\'un technicien.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: colors.onSurfaceVariant,
+              fontSize: 14,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          AppButton(
+            label: 'Retour à mes demandes',
+            icon: Icons.arrow_back_rounded,
+            variant: AppButtonVariant.outline,
+            onPressed: () => Navigator.of(context).maybePop(),
+          ),
+        ],
       ),
     );
   }

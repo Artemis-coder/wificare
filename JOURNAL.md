@@ -4,6 +4,112 @@ Ce qui a changé dans le produit, et pourquoi. Les détails d'implémentation so
 dans l'historique git et le README ; ici, on retient ce qui est utile à savoir
 six mois plus tard.
 
+## 1.6.0 — 5 octobre 2026
+
+Les demandes ne sont plus attribuées au technicien « le moins chargé » : elles
+**circulent**, et le premier technicien disponible qui en accepte une la prend.
+C'est le changement de fond de cette version, et il est décrit ci-dessous
+espace par espace, parce que ce que l'application devient dépend entièrement du
+compte qui s'y connecte.
+
+### Ce que devient l'application selon le compte connecté
+
+Le même APK sert deux espaces qui n'ont plus rien en commun. C'est la
+conséquence directe de la répartition : un client et un technicien n'utilisent
+plus le même produit avec des droits différents, ils n'utilisent pas du tout le
+même produit.
+
+#### Propriétaire de zone (`CLIENT`) — cinq onglets
+
+**Accueil, Pannes, Équipements, Factures, Avis.** Il ne change pas grand-chose
+en `1.6.0`, et c'est volontaire : son métier n'a pas bougé. Il signale une panne,
+suit le technicien, règle son devis, donne son avis.
+
+Ce qui change pour lui est **indirect et invisible** : sa panne n'attend plus
+d'être attribuée. Elle entre dans un circuit, part vers les techniciens en ligne,
+et quelqu'un la prend ou elle passe au suivant. Le compte « Technicien » affiché
+sur sa demande peut donc changer en quelques secondes, ce qui n'était pas
+possible quand l'attribution était automatique et définitive.
+
+Il ne voit rien de la répartition lui-même : ni les autres demandes, ni qui est
+en ligne, ni qui a refusé. Une offre n'est pas une offre *à lui* — elle n'est
+pas une offre du tout.
+
+#### Technicien (`TECHNICIAN`) — trois onglets, et une carte en tête
+
+**Accueil, Demandes, Avis.** Son écran a changé le plus.
+
+Il y a maintenant une **carte de disponibilité en tête d'accueil**, avec une
+bascule. Elle commande tout le reste : hors ligne, le circuit ne lui propose
+rien, et l'écran le dit plutôt que d'afficher un vide qu'il lirait comme une
+panne inexistante. Elle distingue trois états, pas deux — « en ligne »,
+« hors ligne », et « en ligne mais injoignable », ce dernier lorsque son
+application ne parle plus au serveur depuis plus de quinze minutes. La
+disponibilité est une intention, pas une preuve : elle survit à un téléphone
+déchargé, et afficher « disponible » quand plus rien n'arrive est la pire des
+deux réponses.
+
+Une **file de demandes proposées** s'affiche à côté, avec le compte et un bandeau
+d'entrée. Chaque demande y est présentée avec ce qu'il faut pour décider — le
+lieu, la panne, le client, les photos jointes — et non sa seule référence. Il
+ouvre le détail, et prend ou refuse.
+
+S'il **prend**, la demande lui est attribuée et les autres techniciens ne la
+voient plus. S'il la **refuse**, elle repart immédiatement chez ceux qui sont en
+ligne, et ne lui sera plus reproposée : un refus est une décision. S'il **ne
+répond pas**, la proposition expire au bout de quatre-vingt-dix secondes et la
+demande repart — un technicien en ligne dont le téléphone ne sonne pas ne doit
+pas immobiliser la file. Si personne ne la prend, elle est **remise dans le
+circuit** au tour suivant, et le tour suivant arrive cinq secondes plus tard.
+
+Il peut aussi **rendre une demande qu'il a déjà prise**, tant qu'il n'est pas
+parti. C'est le cas qu'aucun écran ne couvrait : il l'accepte, il découvre sur
+place qu'il ne peut pas la faire, et jusqu'ici il ne pouvait que l'annuler —
+supprimant la panne du client. La remise la rend aux autres ; l'annulation
+signale que la panne n'existe pas. Ce sont deux décisions différentes, et le
+client comme la régie doivent pouvoir les distinguer.
+
+Enfin, une **notification push** le prévient même application fermée, avec le
+contenu de la demande. Il n'y a pas de cron toutes les cinq secondes : la
+boucle de répartition est portée par le trafic des applications elles-mêmes, et
+une notification qui ne sonne pas parce que personne n'a ouvert l'application
+serait exactement le défaut que la répartition cherche à éviter.
+
+#### Régie (`SUPER_ADMIN`, back-office web)
+
+Un nouvel écran **`/techniciens`** : qui est en ligne, depuis quand, combien de
+demandes en cours, et où en est la circulation. Le suivi d'une demande affiche
+désormais par qui elle circule. La régie reste le seul espace à voir la
+plateforme entière ; ni le client ni le technicien n'y ont accès, et l'API leur
+refuse les mêmes routes qu'auparavant.
+
+### Corrigé
+
+**Un motif de refus n'arrivait jamais à l'écran.** Quand deux techniciens
+prennent la même demande au même moment, le perdant reçoit un refus du serveur —
+et ce motif était écrit dans l'état, puis effacé par la relecture de la file que
+le refus déclenchait. Il disparaissait donc avant d'avoir été affiché. C'est le
+même défaut, plus large : la boucle de répartition passait toutes les cinq
+secondes et effaçait *tous* les messages, y compris ceux d'une action. Une
+annonce de file est éphémère — elle ne vit qu'un tic. Un motif, non : quelqu'un
+vient d'appuyer sur « Refuser » et lit sa confirmation une seconde plus tard.
+
+**Une page disparaissait sous sa propre boîte de confirmation.** Rendre une
+demande dans la file faisait sortir l'écran d'un coup, pendant que la boîte de
+dialogue était encore en train de se fermer. Flutter signalait alors une
+recherche d'ancêtre sur un widget désactivé — en debug comme en release. L'écran
+affiche maintenant ce qui s'est passé, avec son bouton de retour : le technicien
+voit sa remise plutôt qu'un écran qui s'éteint sans explication.
+
+### Version
+
+**L'application est en `1.6.0+7`.** Le numéro affiché est désormais lu sur le
+paquet installé, et plus écrit en trois endroits : connexion, profil client,
+profil technicien. Tous portaient `1.0.0`, et l'y portent depuis six versions
+livrées. Le numéro n'était pas faux à la compilation — il compilait très bien,
+c'est ce qui l'a laissé passer. Il est maintenant impossible à ne pas mettre à
+jour, puisque personne ne le tape.
+
 ## 1.4.3 — 3 octobre 2026
 
 La régie voit enfin **où l'application est utilisée**.

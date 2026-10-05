@@ -16,10 +16,11 @@ import '../../../core/widgets/states.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../notifications/application/notification_providers.dart';
 import '../../tickets/application/ticket_sync.dart';
+import '../application/availability_controller.dart';
 import '../application/technician_providers.dart';
 
-/// Accueil technicien : ses compteurs, les demandes à traiter et les
-/// prochaines interventions.
+/// Accueil technicien : sa disponibilité, ses compteurs, les demandes à traiter
+/// et les prochaines interventions.
 class TechnicianDashboardScreen extends ConsumerWidget {
   const TechnicianDashboardScreen({super.key});
 
@@ -36,6 +37,12 @@ class TechnicianDashboardScreen extends ConsumerWidget {
     // synchronisation des listes se branche : la notification de statut y est
     // reçue, et la liste du client comme le détail ouvert suivent aussitôt.
     ref.watch(ticketSyncProvider);
+
+    // La disponibilité est lue ici parce que l'accueil est toujours monté : c'est
+    // le seul endroit qui survit à la navigation, et la boucle de répartition
+    // doit tourner même quand le technicien regarde un autre écran de son espace.
+    final availability = ref.watch(availabilityProvider);
+    final availabilityController = ref.read(availabilityProvider.notifier);
 
     // Priorité : ce qui n'est pas encore pris en charge, puis le reste.
     final tickets = [...?asyncTickets.value]
@@ -112,6 +119,19 @@ class TechnicianDashboardScreen extends ConsumerWidget {
               style: TextStyle(color: colors.onSurfaceVariant, fontSize: 13),
             ),
             const SizedBox(height: AppSpacing.md),
+            AvailabilityCard(
+              state: availability,
+              onToggle: (online) =>
+                  availabilityController.setOnline(online),
+            ),
+            if (availability.hasOffers) ...[
+              const SizedBox(height: AppSpacing.md),
+              _OffersBanner(
+                count: availability.offers.length,
+                onTap: () => context.push(TechnicianRoutes.offers),
+              ),
+            ],
+            const SizedBox(height: AppSpacing.md),
             const _WalletSummaryCard(),
             const SizedBox(height: AppSpacing.md),
             Row(
@@ -181,6 +201,152 @@ class TechnicianDashboardScreen extends ConsumerWidget {
                 ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Carte de disponibilité : le geste qui commande toute la répartition.
+///
+/// Elle est en tête d'écran et non dans le profil : sans elle, aucune demande
+/// n'est proposée au technicien, et une option cachée dans un menu dont
+/// personne ne sait qu'il existe ferait d'un circuit de répartition un
+/// mécanisme muet.
+///
+/// L'état affiché est celui du serveur, jamais celui du bouton : « en ligne »
+/// affiché avant que l'appel ne soit passé ferait croire que la répartition
+/// tourne quand elle n'est peut-être jamais partie.
+class AvailabilityCard extends StatelessWidget {
+  const AvailabilityCard({super.key, required this.state, required this.onToggle});
+
+  final AvailabilityState state;
+  final void Function(bool online) onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final presence = state.presence;
+    final online = state.isOnline;
+
+    final (title, subtitle, color) = !online
+        ? (
+            'Vous êtes hors ligne',
+            'Aucune demande ne vous sera proposée. Activez pour recevoir celles qui arrivent.',
+            colors.onSurfaceVariant,
+          )
+        : state.isUnreachable
+            ? (
+                'En ligne, mais injoignable',
+                'Votre application ne parle plus au serveur depuis un moment. Réouvrez-la pour recevoir les demandes.',
+                colors.warning,
+              )
+            : (
+                'Vous êtes en ligne',
+                'Les demandes qui arrivent vous sont notifiées. Vous choisissez celle que vous prenez.',
+                colors.success,
+              );
+
+    return AppCard(
+      borderColor: online ? color.withValues(alpha: 0.4) : null,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                online ? Icons.wifi_tethering_rounded : Icons.wifi_off_rounded,
+                color: color,
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    color: colors.onSurface,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              // Le chargement ne bouge pas le libellé : un bouton qui change de
+              // texte fait croire que l'action a déjà eu lieu.
+              if (state.loading)
+                const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else
+                Switch(value: online, onChanged: onToggle),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            subtitle,
+            style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
+          ),
+          if (presence?.onlineSince != null) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              'En ligne depuis ${Fmt.relativeDay(presence!.onlineSince)}',
+              style: TextStyle(color: colors.onSurfaceVariant, fontSize: 11),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Bandeau d'entrée vers les demandes proposées.
+///
+/// Affiché seulement quand il y en a : un bandeau « 0 demande » sur l'accueil
+/// ferait du vide une information, alors qu'il ne dit rien tant que le circuit
+/// tourne.
+///
+/// Le compte vient de la file, pas du compteur de notifications : une
+/// notification lue ne doit pas laisser croire qu'une demande attend encore.
+class _OffersBanner extends StatelessWidget {
+  const _OffersBanner({required this.count, required this.onTap});
+
+  final int count;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+
+    return AppCard(
+      onTap: onTap,
+      borderColor: colors.primary,
+      child: Row(
+        children: [
+          Icon(Icons.add_task_rounded, color: colors.primary),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  count == 1
+                      ? '1 demande vous est proposée'
+                      : '$count demandes vous sont proposées',
+                  style: TextStyle(
+                    color: colors.onSurface,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Acquirez la plus ancienne avant qu\'un autre ne le fasse.',
+                  style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          Icon(Icons.chevron_right_rounded, color: colors.primary),
+        ],
       ),
     );
   }

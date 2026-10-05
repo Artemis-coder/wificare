@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/config/env.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/system/app_version.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_avatar.dart';
@@ -14,6 +15,7 @@ import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/states.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../notifications/application/notification_providers.dart';
+import '../application/availability_controller.dart';
 import '../application/technician_providers.dart';
 
 /// Profil du technicien.
@@ -39,6 +41,39 @@ class TechnicianProfileScreen extends ConsumerWidget {
     }
   }
 
+  /// Bascule la disponibilité depuis le profil.
+  ///
+  /// Le geste est demandé avant d'être exécuté : se mettre en ligne engage à
+  /// répondre, et une disponibilité posée par erreur ferait au technicien
+  /// attendre des demandes qu'il ne peut pas prendre. Retirer, en revanche, ne
+  /// coûte rien à personne et n'est pas demandé.
+  Future<void> _toggleAvailability(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    final state = ref.read(availabilityProvider);
+
+    if (state.isOnline) {
+      await ref.read(availabilityProvider.notifier).setOnline(false);
+      return;
+    }
+
+    final confirmed = await confirmDialog(
+      context,
+      title: 'Se mettre en ligne ?',
+      message:
+          'Vous recevrez les demandes qui se présentent, sur ce téléphone et '
+          'dans l\'application. Vous pourrez en refuser une si elle ne vous '
+          'convient pas.',
+      confirmLabel: 'Se mettre en ligne',
+      cancelLabel: 'Plus tard',
+    );
+
+    if (!confirmed) return;
+
+    await ref.read(availabilityProvider.notifier).setOnline(true);
+  }
+
   Future<void> _logout(BuildContext context, WidgetRef ref) async {
     final confirmed = await confirmDialog(
       context,
@@ -49,6 +84,20 @@ class TechnicianProfileScreen extends ConsumerWidget {
       destructive: true,
     );
     if (!confirmed) return;
+
+    // Se déconnecter, c'est aussi se retirer du circuit de répartition.
+    // La disponibilité est volontairement durable — elle survit à la fermeture de
+    // l'application, pour un technicien en tournée — mais une session close ne
+    // répond plus à rien. Laisser le compte en ligne ferait porter les demandes
+    // à un téléphone qui ne les verra jamais, et la première d'entre elles
+    // resterait retenue chez lui.
+    //
+    // L'appel précède la destruction de la session, pour la même raison que le
+    // jeton de push : le serveur doit encore reconnaître l'appelant.
+    if (ref.read(availabilityProvider).isOnline) {
+      await ref.read(availabilityProvider.notifier).setOnline(false);
+    }
+
     await ref.read(authControllerProvider.notifier).logout();
   }
 
@@ -149,6 +198,18 @@ class TechnicianProfileScreen extends ConsumerWidget {
                     const Divider(),
                     InfoRow(label: 'Statut', value: user.status.label),
                     const Divider(),
+                    // La disponibilité est reprise ici, et pas seulement sur
+                    // l'accueil : c'est le réglage le pluseasy à vouloir
+                    // retrouver quand on ne sait plus pourquoi aucune demande
+                    // n'arrive. Y mettre un simple lien laisserait la question
+                    // sans réponse.
+                    InfoRow(
+                      label: 'Disponibilité',
+                      value: _availabilityLabel(ref.watch(availabilityProvider)),
+                      icon: Icons.wifi_tethering_rounded,
+                      onTap: () => _toggleAvailability(context, ref),
+                    ),
+                    const Divider(),
                     InfoRow(label: 'Identifiant', value: user.id),
                   ],
                 ),
@@ -163,7 +224,7 @@ class TechnicianProfileScreen extends ConsumerWidget {
                       value: 'WiFi Care Technicien',
                     ),
                     const Divider(),
-                    InfoRow(label: 'Version', value: '1.0.0'),
+                    InfoRow(label: 'Version', valueWidget: const AppVersionText()),
                     const Divider(),
                     ListTile(
                       contentPadding: EdgeInsets.zero,
@@ -261,4 +322,17 @@ onTap: () => context.push(TechnicianRoutes.notifications),
       ),
     );
   }
+}
+
+/// Disponibilité, en toutes lettres.
+///
+/// « Injoignable » est distinct d'« hors ligne » et compte autant que lui : un
+/// technicien qui se croit disponible alors que son téléphone ne parle plus au
+/// serveur depuis un quart d'heure cherchera pourquoi aucune demande n'arrive,
+/// et la vraie réponse est dans ces trois mots.
+String _availabilityLabel(AvailabilityState state) {
+  if (!state.isOnline) return 'Hors ligne';
+  if (state.isUnreachable) return 'En ligne, injoignable';
+
+  return 'En ligne';
 }
