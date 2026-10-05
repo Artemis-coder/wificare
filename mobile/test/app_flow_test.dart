@@ -124,8 +124,8 @@ void main() {
     PackageInfo.setMockInitialValues(
       appName: 'WiFi Care',
       packageName: 'ci.wificare.app',
-      version: '1.6.0',
-      buildNumber: '7',
+      version: '1.6.1',
+      buildNumber: '8',
       buildSignature: '',
     );
 
@@ -688,7 +688,7 @@ void main() {
     // La version vient du paquet installé. Elle est ce que l'utilisateur annonce
     // quand une notification ne se déclenche pas, et ce qui permet de dire quel
     // APK il tourne : un numéro écrit dans le code resterait faux en silence.
-    expect(find.text('version 1.6.0 (7)'), findsOneWidget);
+    expect(find.text('version 1.6.1 (8)'), findsOneWidget);
   });
 
   testWidgets('la version de l\'application est lisible avant la connexion', (
@@ -699,7 +699,7 @@ void main() {
     // Elle est sur l'écran de connexion parce que c'est le seul endroit visible
     // sans compte : c'est là qu'on regarde quand l'application fait un truc
     // bizarre.
-    expect(find.textContaining('version 1.6.0 (7)'), findsOneWidget);
+    expect(find.textContaining('version 1.6.1 (8)'), findsOneWidget);
     expect(
       find.textContaining('1.0.0'),
       findsNothing,

@@ -36,9 +36,6 @@ class TicketDetailScreen extends ConsumerWidget {
     'client_informed': 'Client informé',
   };
 
-  String _absoluteUrl(String url) =>
-      url.startsWith('http') ? url : '${AppConfig.apiBaseUrl}$url';
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final asyncTicket = ref.watch(ticketDetailProvider(ticketId));
@@ -199,7 +196,7 @@ class TicketDetailScreen extends ConsumerWidget {
 
             if (ticket.files.isNotEmpty) ...[
               const SizedBox(height: AppSpacing.md),
-              _FilesCard(files: ticket.files, absoluteUrl: _absoluteUrl),
+              _FilesCard(files: ticket.files, absoluteUrl: AppConfig.absoluteUrl),
             ],
 
             // Le devis apparaît avant le rapport d'intervention : c'est le

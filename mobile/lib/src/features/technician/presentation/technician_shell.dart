@@ -6,10 +6,14 @@ import '../../../core/theme/app_colors.dart';
 
 /// Coquille de l'espace technicien.
 ///
-/// Le technicien a trois sections : ses interventions, les demandes assignées
-/// et les avis que les clients ont laissés sur son travail. Ni zones, ni
-/// équipements, ni factures : ce sont des affaires de propriétaire de zone. Le
-/// profil s'ouvre depuis l'avatar de l'accueil.
+/// Le technicien a quatre sections : l'accueil et ses interventions, le
+/// portefeuille de ses encaissements, et les avis que les clients ont laissés
+/// sur son travail. Ni zones, ni équipements, ni factures : ce sont des affaires
+/// de propriétaire de zone. Le profil s'ouvre depuis l'avatar de l'accueil.
+///
+/// Les quatre sont des choses qu'il vient chercher, pas des places dans un
+/// formulaire : une section absente de la barre n'existe pas pour celui qui
+/// ouvrait l'application sans savoir qu'elle est là.
 class TechnicianShell extends StatelessWidget {
   const TechnicianShell({
     required this.navigation,
@@ -55,6 +59,10 @@ class TechnicianShell extends StatelessWidget {
               label: 'Demandes',
             ),
             NavigationDestination(
+              icon: Icon(Icons.account_balance_wallet_outlined),
+              label: 'Portefeuille',
+            ),
+            NavigationDestination(
               icon: Icon(Icons.star_outline_rounded),
               label: 'Avis',
             ),
@@ -66,7 +74,8 @@ class TechnicianShell extends StatelessWidget {
 
   static int _indexFor(String location) {
     if (location.startsWith('/tech/tickets')) return 1;
-    if (location.startsWith('/tech/reviews')) return 2;
+    if (location.startsWith('/tech/wallet')) return 2;
+    if (location.startsWith('/tech/reviews')) return 3;
     return 0;
   }
 }

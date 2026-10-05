@@ -11,6 +11,7 @@ import { listTechnicians } from '@/lib/technicians';
 import AssignTechnicianForm from './assign-technician-form';
 import QuotePanel from './quote-panel';
 import TechnicianMap from './technician-map';
+import TicketFiles from './ticket-files';
 
 export const dynamic = 'force-dynamic';
 
@@ -119,7 +120,15 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
           status: true,
           technician: { select: { name: true } },
         },
-        orderBy: { offeredAt: "desc" },
+        orderBy: { offeredAt: 'desc' },
+      },
+      // Les pièces jointes sont lues avec le reste : la régie arbitrage une
+      // réclamation de panne sur ce que le client a photographié. La colonne
+      // n'était pas sélectionnée, donc la pièce jointe n'existait que pour le
+      // technicien sur son téléphone.
+      files: {
+        select: { id: true, url: true, fileType: true, size: true, createdAt: true },
+        orderBy: { createdAt: 'asc' },
       },
     },
   });
@@ -226,6 +235,10 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
               </div>
             </div>
           </div>
+
+          {/* Les photos jointes à la demande : ce que le client a constaté,
+              que ni la description ni le rapport du technicien ne disent. */}
+          <TicketFiles files={ticket.files} />
 
           {/* Section 2: Intervention & Diagnostic Technicien */}
           <div className="panel">

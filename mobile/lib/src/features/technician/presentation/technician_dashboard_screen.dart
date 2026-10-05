@@ -132,8 +132,6 @@ class TechnicianDashboardScreen extends ConsumerWidget {
               ),
             ],
             const SizedBox(height: AppSpacing.md),
-            const _WalletSummaryCard(),
-            const SizedBox(height: AppSpacing.md),
             Row(
               children: [
                 Expanded(
@@ -406,66 +404,6 @@ class _UpcomingTile extends StatelessWidget {
             Fmt.relativeDay(ticket.createdAt),
             style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Accès au portefeuille, avec le chiffre du mois courant.
-///
-/// Sur l'accueil et non dans un onglet : un technicien qui veut savoir ce qu'il
-/// a encaissé le regarde au moment d'ouvrir l'application, pas en choisissant
-/// une section. Le montant est celui du mois — le seul chiffre qui serve à
-/// décider — et il mène à l'historique complet.
-class _WalletSummaryCard extends ConsumerWidget {
-  const _WalletSummaryCard();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final colors = context.colors;
-    final async = ref.watch(technicianWalletProvider);
-
-    return AppCard(
-      onTap: () => context.push(TechnicianRoutes.wallet),
-      child: Row(
-        children: [
-          Icon(Icons.account_balance_wallet_outlined, color: colors.success),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Portefeuille',
-                  style: TextStyle(
-                    color: colors.onSurface,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                // Le chargement n'occupe pas la place : un tiret stable vaut
-                // mieux qu'un texte qui saute dès que la donnée arrive.
-                // Le montant est le sujet, il n'accorde pas de participe : «
-                // 12 000 FCFA encaissés » serait faux pour 1 FCFA.
-                Text(
-                  switch (async) {
-                    AsyncData(:final value) =>
-                      '${Fmt.money(value.currentMonthAmount)} · '
-                          '${value.currentMonthLabel}',
-                    AsyncError() => 'Encaissements indisponibles',
-                    _ => 'Chargement du relevé…',
-                  },
-                  style: TextStyle(
-                    color: colors.onSurfaceVariant,
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Icon(Icons.chevron_right_rounded, color: colors.onSurfaceVariant),
         ],
       ),
     );

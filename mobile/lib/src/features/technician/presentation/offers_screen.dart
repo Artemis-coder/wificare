@@ -516,16 +516,10 @@ class _OfferPhoto extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Une URL déjà absolue est renvoyée telle quelle : la préfixer de nouveau
-    // produirait une adresse commençant par `http` qui ne charge rien.
-    final absolute = url.startsWith('http')
-        ? url
-        : '${AppConfig.apiBaseUrl}$url';
-
     return ClipRRect(
       borderRadius: BorderRadius.circular(AppRadius.md),
       child: Image.network(
-        absolute,
+        AppConfig.absoluteUrl(url),
         width: 88,
         height: 88,
         fit: BoxFit.cover,

@@ -477,11 +477,45 @@ model TaskOffer {
 model File {
   id        String   @id @default(uuid())
   ticketId  String
+
+  /// Adresse de lecture du fichier, relative à l'origine du site.
+  ///
+  /// Elle ne pointe pas vers un dossier de l'hébergement mais vers la route qui
+  /// rend les octets, `/api/files/<id>`. Les octets sont en base (§ `content`) :
+  /// un fichier écrit dans le système de fichiers de l'application n'existe que
+  /// le temps de l'instance qui l'a écrit. Sur un hébergeur à instances
+  /// éphémères, il disparaît au démarrage suivant — et l'écriture échoue
+  /// purement et simplement, parce que le disque est en lecture seule.
+  ///
+  /// Une photo de panne que personne ne voit, ni le client, ni le technicien, ni
+  /// la régie, est le pire des cas : elle est partie, et rien ne le dit.
   url       String
+
   fileType  FileType // Photo, Video, Audio
+
+  /// Octets du fichier, en base.
+  ///
+  /// `null` pour un fichier dont le contenu n'a jamais été reçu — une ligne
+  /// créée par un ancien envoi, ou une référence pointant une pièce restée sur
+  /// un hébergeur précédent. La route de lecture répond alors 404 plutôt que de
+  /// renvoyer une image vide.
+  content   Bytes?
+
+  /// Type MIME réellement détecté sur les octets reçus.
+  ///
+  /// Le `Content-Type` annoncé par le client est une déclaration, pas une
+  /// mesure : c'est celui des octets qui décide ce que le navigateur affichera.
+  mimeType  String?
+
+  /// Taille conservée, en octets. La compression est elle-même une information :
+  /// sans elle, rien ne dit si la règle allège les envois ou les alourdit.
+  size      Int?
+
   createdAt DateTime @default(now())
 
-  ticket Ticket @relation(fields: [ticketId], references: [id])
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
 }
 
 enum FileType {

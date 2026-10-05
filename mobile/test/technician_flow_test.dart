@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:wificare_app/src/app.dart';
 import 'package:wificare_app/src/core/network/api_client.dart';
@@ -197,9 +198,12 @@ void main() {
     installAbsentLocationPlatform();
     addTearDown(removeLocationPlatform);
 
-    // Autorisation de localisation accordée par défaut : le suivi la redemande
-    // au moment du départ, et un test qui ne s'en occupe pas doit passer par
-    // là sans être bloqué par une boîte de dialogue qu'aucun écran ne montre.
+    // Localisation accordée, y compris en arrière-plan : le suivi la redemande
+    // au moment du départ, et un test qui ne s'en occupe pas doit passer par là
+    // sans être bloqué par une boîte de dialogue qu'aucun écran ne montre — ni
+    // par l'étape « accordée au premier plan seulement », qui affiche son
+    // explication à la place du suivi. Le test qui vérifie cette étape
+    // réinstalle la localisation avec `whileInUse`.
     installFakeGeolocator();
     addTearDown(removeFakeGeolocator);
     FlutterSecureStorage.setMockInitialValues({});
@@ -208,8 +212,8 @@ void main() {
     PackageInfo.setMockInitialValues(
       appName: 'WiFi Care',
       packageName: 'ci.wificare.app',
-      version: '1.6.0',
-      buildNumber: '7',
+      version: '1.6.1',
+      buildNumber: '8',
       buildSignature: '',
     );
 
@@ -551,6 +555,15 @@ void main() {
       isTrue,
       reason: 'liste restreinte aux demandes du technicien. Appels : ${adapter.calls}',
     );
+
+    // Quatre sections, et quatre seulement : l'accueil, ses demandes, son
+    // portefeuille, les avis qu'il a reçus. Le portefeuille est une section —
+    // on le cherche, on ne le découvre pas.
+    expect(find.byType(NavigationDestination), findsNWidgets(4));
+    expect(find.text('Accueil'), findsOneWidget);
+    expect(find.text('Demandes'), findsOneWidget);
+    expect(find.text('Portefeuille'), findsOneWidget);
+    expect(find.text('Avis'), findsOneWidget);
   });
 
   testWidgets('technicien : KPI et liste de ses demandes assignées', (
@@ -659,21 +672,25 @@ void main() {
     FlutterSecureStorage.setMockInitialValues(Map.of(_session));
     await pumpApp(tester);
 
-    // Le portefeuille est accessible depuis l'accueil, sans onglet : c'est le
-    // premier chiffre que le technicien vient consulter.
+    // Le portefeuille est une section de l'espace, pas une carte de l'accueil :
+    // c'est l'une des quatre choses pour lesquelles le technicien ouvre
+    // l'application, et une carte sur l'accueil la rendait introuvable pour
+    // celui qui ne cherchait que ça.
     expect(find.text('Portefeuille'), findsOneWidget);
+    expect(find.byType(NavigationDestination), findsNWidgets(4));
+
+    // L'accueil ne porte plus de relevé : il dit ce qu'il y a à faire
+    // maintenant. Un montant de mois y prenait la place d'une demande à
+    // traiter, sans qu'on puisse savoir où le retrouver.
+    expect(find.textContaining('55'), findsNothing);
+
     // Le séparateur de milliers est posé par `intl` et varie selon la
     // plateforme : on vérifie le chiffre, pas sa ponctuation.
-    expect(
-      find.textContaining('55'),
-      findsWidgets,
-      reason: "l'accueil doit afficher le montant du mois courant",
-    );
-
     await tester.tap(find.text('Portefeuille'));
     await settle(tester, steps: 20);
 
     expect(find.text('Mon portefeuille'), findsOneWidget);
+    expect(find.textContaining('55'), findsWidgets);
     expect(find.text('Encaissé en février 2026'), findsOneWidget);
     expect(find.textContaining('70'), findsWidgets);
     // Deux mois de relevé, et chacun avec le nombre de règlements qu'il contient.
@@ -1064,6 +1081,53 @@ void main() {
     );
   });
 
+  testWidgets('technicien : localisation au premier plan, le suivi s\'explique', (
+    tester,
+  ) async {
+    // Autorisation accordée au premier plan seulement. C'est le cas réel d'un
+    // technicien qui a dit « oui » à la localisation sans savoir qu'Android
+    // demande une seconde fois pour l'arrière-plan : la plateforme refuse alors
+    // de démarrer, et son refus est incompréhensible — il vient d'autoriser.
+    // L'application doit donc s'arrêter avant d'appeler la plateforme, et
+    // proposer le seul geste qui fonctionne : les réglages du téléphone.
+    installFakeGeolocator(permission: LocationPermission.whileInUse);
+    installLocationPlatform(
+      lastLocation: <String, dynamic>{
+        'latitude': 5.3599,
+        'longitude': -4.0086,
+        'accuracy': 12.0,
+      },
+    );
+
+    FlutterSecureStorage.setMockInitialValues(Map.of(_session));
+    await pumpApp(tester);
+
+    await tester.tap(find.text('Demandes'));
+    await settle(tester);
+    await tester.tap(find.text('#TK-2026-001'));
+    await settle(tester);
+
+    await tester.tap(find.text('Démarrer le déplacement'));
+    await settle(tester, steps: 24);
+
+    // La transition est acquise : le suivi est un confort, pas une condition
+    // pour travailler.
+    expect(adapter.calls, contains('PATCH /tickets/t-tech-1/status'));
+
+    // Aucun point n'est posté : la plateforme n'a même pas été appelée, et un
+    // point sans suivi ouvert serait refusé par le serveur.
+    expect(
+      adapter.calls,
+      isNot(contains('POST /tickets/t-tech-1/tracking')),
+      reason: 'un point posté sans suivi ouvert serait rejeté par le serveur',
+    );
+
+    // L'écran explique, et donne le geste qui débloque.
+    expect(find.textContaining('Autorisez « tout le temps »'), findsWidgets);
+    expect(find.text('Ouvrir les réglages'), findsOneWidget);
+    expect(find.text('Suivi de position'), findsOneWidget);
+  });
+
   testWidgets('technicien : profil sans zone, ouvert depuis l\'avatar', (
     tester,
   ) async {
@@ -1087,12 +1151,12 @@ void main() {
 
     // Même version que celle du profil client : c'est le même APK.
     await tester.scrollUntilVisible(
-      find.text('version 1.6.0 (7)'),
+      find.text('version 1.6.1 (8)'),
       150,
       scrollable: find.byType(Scrollable).last,
     );
     await settle(tester);
-    expect(find.text('version 1.6.0 (7)'), findsOneWidget);
+    expect(find.text('version 1.6.1 (8)'), findsOneWidget);
   });
 
   testWidgets('technicien : les avis reçus sont visibles, en lecture seule', (

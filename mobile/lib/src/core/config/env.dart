@@ -37,6 +37,29 @@ class AppConfig {
 
   static const String appName = 'WiFi Care';
 
+  /// Origine du site, déduite de l'adresse de l'API.
+  ///
+  /// Les adresses de fichier sont relatives à l'origine, pas à l'API : une photo
+  /// servie par `/api/files/x` ne se lit pas à `…/api/api/files/x`. Les deux
+  /// écrans qui affichent les pièces jointes construisaient l'adresse en
+  /// collant l'URL relative à `apiBaseUrl`, qui se termine déjà par `/api` —
+  /// l'adresse obtenue ne pointait donc nulle part, et aucune photo ne
+  /// s'affichait, ni pour le client, ni pour le technicien.
+  static String get origin {
+    final base = apiBaseUrl.endsWith('/api')
+        ? apiBaseUrl.substring(0, apiBaseUrl.length - 4)
+        : apiBaseUrl;
+
+    return base.endsWith('/') ? base.substring(0, base.length - 1) : base;
+  }
+
+  /// Adresse complète d'une ressource relative au site.
+  ///
+  /// Les adresses déjà absolues sont rendues telles quelles : une URL stockée en
+  /// base peut venir d'un autre hébergeur.
+  static String absoluteUrl(String url) =>
+      url.startsWith('http') ? url : '$origin$url';
+
   // La version de l'application n'est pas déclarée ici. Elle est lue sur le
   // paquet installé (`core/system/app_version.dart`) : une constante écrite à la
   // main dans ce fichier est restée à `1.0.0` pendant six versions, sur trois

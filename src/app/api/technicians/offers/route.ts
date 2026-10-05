@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { TaskOfferStatus } from "@prisma/client";
+import { TaskOfferStatus, TicketStatus } from "@prisma/client";
 
 import { requireTechnician } from "@/lib/api-auth";
 import { dispatchPendingTickets, OFFER_TTL_MS } from "@/lib/dispatch";
@@ -54,6 +54,15 @@ export async function GET(request: NextRequest) {
           technicianId: auth.user.userId,
           status: TaskOfferStatus.PENDING,
           offeredAt: { gte: new Date(now.getTime() - OFFER_TTL_MS) },
+          // Une proposition ne vaut que tant que la demande est libre. La prise
+          // referme déjà les propositions concurrentes, et la désignation par
+          // la régie les supprime : ce filtre est le filet qui rend l'invariant
+          // vrai par lui-même, quel que soit le chemin par lequel la demande a
+          // quitté le circuit. Sans lui, une ligne restée ouverte — un incident
+          // de mise à jour, une affectation écrite ailleurs — se lirait comme
+          // une demande encore disponible, et le technicien partirait sur place
+          // pour une panne déjà prise en charge.
+          ticket: { technicianId: null, status: TicketStatus.NEW },
         },
         select: {
           id: true,

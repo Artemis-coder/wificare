@@ -6,6 +6,7 @@ import 'core/providers/infra_providers.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/application/auth_controller.dart';
+import 'features/technician/application/tracking_controller.dart';
 
 /// Racine de l'application : thème Material 3 + `GoRouter`.
 class WiFiCareApp extends ConsumerStatefulWidget {
@@ -40,6 +41,13 @@ class _WiFiCareAppState extends ConsumerState<WiFiCareApp>
     // L'utilisateur a tapé sur la notification alors que l'application était
     // fermée : Android la réveille et l'event arrive ici.
     if (state == AppLifecycleState.resumed) {
+      // L'utilisateur peut aussi revenir des réglages du téléphone, où il vient
+      // d'accorder la localisation en arrière-plan. Cette autorisation n'est
+      // lisible qu'à son retour, et le suivi en dépend : sans cette relecture,
+      // le technicien repartait devant le même message, et le client n'aurait
+      // jamais vu d'ETA.
+      ref.read(technicianTrackingProvider.notifier).resume();
+
       _openTicketFromNotification();
     }
   }

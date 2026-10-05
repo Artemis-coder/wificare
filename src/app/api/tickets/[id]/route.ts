@@ -75,7 +75,15 @@ export async function GET(
         },
         technician: { select: PUBLIC_USER_SELECT },
         intervention: true,
-        files: true,
+        // Les octets ne voyagent jamais dans le JSON : la réponse décrit la
+        // pièce, et c'est `url` qui la sert. Un `files: true` renvoyait
+        // l'image entière encodée dans la réponse — sur une demande à six
+        // photos, la réponse pesait plusieurs mégaoctets pour afficher des
+        // vignettes, et le technicien en connexion faible la payait deux fois.
+        files: {
+          select: { id: true, url: true, fileType: true, size: true, createdAt: true },
+          orderBy: { createdAt: "asc" },
+        },
         quoteInvoice: {
           include: {
             lines: true,

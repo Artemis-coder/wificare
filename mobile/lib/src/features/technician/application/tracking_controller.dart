@@ -20,6 +20,7 @@ class TechnicianTrackingState {
     this.distanceMeters,
     this.etaMinutes,
     this.message,
+    this.needsBackgroundSettings = false,
   });
 
   /// La plateforme Android répond : le suivi est possible en principe.
@@ -40,6 +41,14 @@ class TechnicianTrackingState {
   /// mal passé. `null` tant que tout va bien.
   final String? message;
 
+  /// La localisation est permise au premier plan, mais pas en arrière-plan.
+  ///
+  /// Le suivi n'a pas démarré : Android refuse d'ouvrir un service de premier
+  /// plan de type localisation sans cette autorisation. Le choix ne se fait pas
+  /// dans un dialogue — il se fait dans les réglages du téléphone — donc l'écran
+  /// doit proposer d'y aller, et relire l'autorisation au retour.
+  final bool needsBackgroundSettings;
+
   /// Au moins une position a atteint le serveur.
   bool get hasSentPosition => lastSentAt != null;
 
@@ -51,6 +60,7 @@ class TechnicianTrackingState {
     double? distanceMeters,
     int? etaMinutes,
     String? message,
+    bool? needsBackgroundSettings,
     bool clearMessage = false,
   }) {
     return TechnicianTrackingState(
@@ -61,6 +71,8 @@ class TechnicianTrackingState {
       distanceMeters: distanceMeters ?? this.distanceMeters,
       etaMinutes: etaMinutes ?? this.etaMinutes,
       message: clearMessage ? null : (message ?? this.message),
+      needsBackgroundSettings:
+          needsBackgroundSettings ?? this.needsBackgroundSettings,
     );
   }
 }
@@ -114,6 +126,22 @@ class TechnicianTrackingController extends Notifier<TechnicianTrackingState> {
         available: grant.deniedForever || !grant.servicesDisabled,
         ticketId: ticketId,
         message: grant.message,
+      );
+      return;
+    }
+
+    // Premier plan accordé, arrière-plan non : le service refusera de démarrer,
+    // et son refus est incompréhensible pour le technicien — il vient
+    // d'autoriser la localisation, et l'écran dit « indisponible ».
+    //
+    // L'appli s'arrête donc ici, sur une information qu'elle seule peut
+    // expliquer, et propose le seul geste qui fonctionne : aller dans les
+    // réglages du téléphone. `[resume]` y relit l'autorisation.
+    if (grant.needsBackgroundSettings) {
+      state = TechnicianTrackingState(
+        ticketId: ticketId,
+        message: grant.message,
+        needsBackgroundSettings: true,
       );
       return;
     }
@@ -189,6 +217,38 @@ class TechnicianTrackingController extends Notifier<TechnicianTrackingState> {
     }
 
     state = const TechnicianTrackingState();
+  }
+
+  /// Relit l'autorisation au retour des réglages du téléphone.
+  ///
+  /// Appelé au retour au premier plan (`app.dart`). Sans ce passage, le
+  /// technicien qui vient d'accorder « tout le temps » dans les réglages
+  /// reviendrait devant le même message, et devrait repartir en route à la main
+  /// — le suivi n'aurait jamais démarré, alors qu'il vient de donner tout ce
+  /// qu'il fallait pour qu'il fonctionne.
+  ///
+  /// Ne fait rien si le suivi tourne déjà, ou si aucun écran n'attend
+  /// d'autorisation : la méthode est appelée à chaque reprise, y compris après
+  /// une simple extinction d'écran.
+  Future<void> resume() async {
+    final pendingTicketId = state.needsBackgroundSettings
+        ? state.ticketId
+        : null;
+
+    if (pendingTicketId == null) return;
+
+    final grant = await PermissionsService.checkLocation();
+
+    // Toujours pas accordée : on ne relance rien. Android ne rouvre plus de
+    // dialogue pour l'arrière-plan, et insister ne rendrait pas la demande.
+    if (!grant.background) {
+      state = state.copyWith(message: grant.message, clearMessage: false);
+      return;
+    }
+
+    state = state.copyWith(clearMessage: true);
+
+    await start(pendingTicketId);
   }
 
   void _onEvent(LocationTrackingEvent event) {

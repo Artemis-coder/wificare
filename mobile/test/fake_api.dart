@@ -529,11 +529,19 @@ static Map<String, dynamic> emptyWallet() => {
 /// sans passer par un canal natif : c'est le seul moyen de faire croire à
 /// l'application qu'une autorisation a été accordée, un test widget n'ayant
 /// aucun accès au PermissionDialog d'Android.
+///
+/// L'autorisation par défaut est `always`, c'est-à-dire l'état dans lequel le
+/// suivi fonctionne : `whileInUse` fait échouer `PermissionsService` avec
+/// « position autorisée au premier plan », et l'application s'arrête là avant
+/// d'appeler la plateforme. Un test qui cherche cette étape doit donc demander
+/// `whileInUse` explicitement, et c'est ce qu'il faut qu'il fasse : c'est le
+/// cas réel d'un technicien qui a accordé la localisation sans grant le suivi
+/// en arrière-plan.
 class FakeGeolocator extends GeolocatorPlatform
     with MockPlatformInterfaceMixin {
   FakeGeolocator({
     this.serviceEnabled = true,
-    this.permission = LocationPermission.whileInUse,
+    this.permission = LocationPermission.always,
   });
 
   bool serviceEnabled;
@@ -561,9 +569,14 @@ class FakeGeolocator extends GeolocatorPlatform
 
 /// Installe une localisation simulée, et rend l'instance pour pouvoir la muter
 /// en cours de test. À retirer avec [removeFakeGeolocator].
+///
+/// L'autorisation est `always` par défaut : c'est l'état qui laisse le suivi
+/// aller jusqu'à la plateforme. Passer `whileInUse` produit le cas « autorisé au
+/// premier plan seulement », que l'application doit expliquer plutôt que subir
+/// silencieusement.
 FakeGeolocator installFakeGeolocator({
   bool serviceEnabled = true,
-  LocationPermission permission = LocationPermission.whileInUse,
+  LocationPermission permission = LocationPermission.always,
 }) {
   final fake = FakeGeolocator(
     serviceEnabled: serviceEnabled,

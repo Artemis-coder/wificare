@@ -237,7 +237,7 @@ function offerKey(ticketId: string, technicianId: string): string {
   return `${ticketId}:${technicianId}`;
 }
 
-type KnownOffer = {
+export type KnownOffer = {
   status: TaskOfferStatus;
   offeredAt: Date;
   respondedAt: Date | null;
@@ -283,8 +283,12 @@ async function loadKnownOffers(
  * pas répondu, n'est pas un refus : la demande doit continuer de circuler, et
  * c'est le temps qui décide — si elle est encore là au passage suivant, elle
  * repart.
+ *
+ * Exportée pour être testée seule : c'est la seule règle du module qui décide
+ * seule d'un sort, sans lecture de base, et celle dont une erreur enverrait une
+ * demande déjà refusée chez quelqu'un qui a dit non.
  */
-function isEligible(offer: KnownOffer | undefined, now: Date): boolean {
+export function isEligible(offer: KnownOffer | undefined, now: Date): boolean {
   if (!offer) {
     return true;
   }
@@ -305,12 +309,34 @@ function isEligible(offer: KnownOffer | undefined, now: Date): boolean {
 }
 
 /**
- * Crée les propositions et renvoie celles qui ont réellement été écrites.
+ * Réponses qui ferment une proposition : une décision, pas une absence.
  *
- * `skipDuplicates` sert de verrou : deux passages simultanés calculent les mêmes
- * destinataires, et celui qui arrive le second ne réécrit rien. Sans cette
- * option, la contrainte unique lèverait une erreur qui ferait échouer tout le
- * passage, y compris les propositions légitimes destinées aux autres demandes.
+ * Un `Set` plutôt qu'un tableau : `readonly ["ACCEPTED", "DECLINED"]` fait
+ * inférer à TypeScript un type de deux membres, et `includes` refuse alors le
+ * reste de l'énumération — ce qui oblige à revenir au tableau à chaque fois que
+ * le type change.
+ */
+const DECISIONS: ReadonlySet<TaskOfferStatus> = new Set([
+  TaskOfferStatus.ACCEPTED,
+  TaskOfferStatus.DECLINED,
+]);
+
+/**
+ * Écris les propositions et renvoie celles qui l'ont été.
+ *
+ * Une proposition existante n'est pas recréée : la contrainte unique porte sur le
+ * couple demande / technicien, donc une ligne déjà présente empêche toute
+ * écriture. Une proposition expirée ou retirée bloquerait ainsi définitivement
+ * toute nouvelle proposition au même technicien, et une demande que personne n'a
+ * prise deviendrait impossible à faire circuler davantage.
+ *
+ * Elle est donc **réouverte sur sa ligne**, ce qui laisse en outre la trace du
+ * passage précédent.
+ *
+ * Seule une prise ou un refus ferme une proposition : ce sont des décisions, et
+ * la demande ne reviendra pas à ces techniciens. Tout le reste — retirée parce
+ * qu'un autre l'a prise, restée sans réponse — rouvre la porte au tour suivant,
+ * après le délai de redistribution.
  */
 async function createOffers(
   ticket: DispatchableTicket,
@@ -318,27 +344,66 @@ async function createOffers(
   now: Date
 ): Promise<{ id: string; technicianId: string }[]> {
   return prisma.$transaction(async (tx) => {
-    const { count } = await tx.taskOffer.createMany({
-      data: recipients.map((technician) => ({
-        ticketId: ticket.id,
-        technicianId: technician.id,
-        status: TaskOfferStatus.PENDING,
-        offeredAt: now,
-      })),
-      skipDuplicates: true,
+    const technicianIds = recipients.map((technician) => technician.id);
+
+    const known = await tx.taskOffer.findMany({
+      where: { ticketId: ticket.id, technicianId: { in: technicianIds } },
+      select: { id: true, technicianId: true, status: true },
     });
 
-    if (count === 0) {
-      return [];
+    const decided = new Set(
+      known.filter((offer) => DECISIONS.has(offer.status)).map((offer) => offer.technicianId)
+    );
+
+    // Une ligne déjà connue et non tranchée est rouverte ; elle n'est pas
+    // recréée, et c'est cette réécriture qui lui rend son horodatage.
+    const reopenIds: string[] = [];
+    const knownIds = new Set<string>();
+
+    for (const offer of known) {
+      if (decided.has(offer.technicianId)) continue;
+      knownIds.add(offer.technicianId);
+      reopenIds.push(offer.id);
+    }
+
+    if (reopenIds.length > 0) {
+      await tx.taskOffer.updateMany({
+        where: { id: { in: reopenIds } },
+        data: {
+          status: TaskOfferStatus.PENDING,
+          offeredAt: now,
+          respondedAt: null,
+        },
+      });
+    }
+
+    const toCreate = technicianIds.filter(
+      (technicianId) => !decided.has(technicianId) && !knownIds.has(technicianId)
+    );
+
+    if (toCreate.length > 0) {
+      await tx.taskOffer.createMany({
+        data: toCreate.map((technicianId) => ({
+          ticketId: ticket.id,
+          technicianId,
+          status: TaskOfferStatus.PENDING,
+          offeredAt: now,
+        })),
+        // Verrou : deux passages simultanés calculent les mêmes destinataires,
+        // et celui qui arrive le second ne doit pas échouer sur la contrainte
+        // unique. Sans cela, il perdrait les propositions légitimes destinées
+        // aux autres demandes du même passage.
+        skipDuplicates: true,
+      });
     }
 
     // `createMany` ne rend pas les lignes écrites : elles sont relues pour
-    // pouvoir prévenir précisément ceux qui viennent d'être servis. Le filtre sur
-    // l'horodatage isole ce passage du précédent.
+    // prévenir précisément ceux qui viennent d'être servis. L'horodatage isole
+    // ce passage du précédent.
     return tx.taskOffer.findMany({
       where: {
         ticketId: ticket.id,
-        technicianId: { in: recipients.map((technician) => technician.id) },
+        technicianId: { in: technicianIds },
         status: TaskOfferStatus.PENDING,
         offeredAt: { gte: now },
       },

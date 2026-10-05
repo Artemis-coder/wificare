@@ -166,7 +166,7 @@ La connexion dispatche sur deux espaces distincts, selon le rôle du compte :
 | Rôle | Espace | Onglets |
 | --- | --- | --- |
 | `CLIENT` (propriétaire de zone) | `/home/...` | Accueil, Pannes, Équipements, Factures, Avis |
-| `TECHNICIAN` | `/tech/...` | Accueil, Demandes, Avis |
+| `TECHNICIAN` | `/tech/...` | Accueil, Demandes, Portefeuille, Avis |
 
 Un utilisateur connecté qui ouvre l'URL de l'espace de l'autre rôle est
 redirigé vers le sien (`redirect` du `GoRouter`). L'API applique la même règle :
@@ -186,6 +186,10 @@ l'API les lui refuse.
   transitions autorisées par `TicketStatus.transitionsFrom`, libellées en
   verbs d'action (« Démarrer le déplacement », « Passer en réparation »).
 - Son profil affiche son activité, pas ses zones.
+- Le **portefeuille est une section**, pas une carte de l'accueil : ce qu'il a
+  encaissé ce mois se consulte, il ne se découvre pas en passant. Un relevé
+  mensuel posé sur l'accueil y prenait la place d'une demande à traiter, et il
+  n'était atteignable que par quelqu'un qui savait déjà qu'il existait.
 - L'onglet « Avis » est **en lecture seule** : le technicien subit la note, il
   ne la rédige pas. `GET /api/evaluations` le borne à `technicianId`, sans quoi
   il pourrait lire ce que les clients ont pensé d'un collègue.
@@ -217,6 +221,35 @@ Le technicien **repose la question au départ**, dans
 `TechnicianTrackingController.start` : il vient d'appuyer sur « Démarrer le
 déplacement », donc le suivi est précisément ce qu'il demande. La demande est
 posée là où elle a du sens, et non au premier lancement seulement.
+
+Android demande la localisation **deux fois**, et cette seconde étape est celle
+qui casse tout : une fois pour l'application, une fois pour l'arrière-plan — la
+seule qui autorise un service de premier plan de type localisation. Un
+technicien qui accorde la première se voit demander la seconde, et Android ne
+transforme pas un refus en `denied` : il rend `whileInUse`, ce qui ressemble à
+une autorisation accordée. Le service refuse alors de démarrer, et son refus est
+incompréhensible pour quelqu'un qui vient d'autoriser.
+
+Trois conséquences, à ne pas défaire :
+
+- `LocationGrant.needsBackgroundSettings` (`granted && !background`) est la seule
+  information qui décrit ce cas. `start` **s'arrête dessus avant d'appeler la
+  plateforme** : un point posté sans suivi ouvert serait refusé par le serveur,
+  et le technicien partirait sur une panne déjà prise en charge ;
+- l'écran ne peut pas régler cela — le choix se fait dans les réglages du
+  téléphone, pas dans un dialogue. Il explique, et il propose « Ouvrir les
+  réglages ». Redemander depuis l'écran ne rouvrirait rien sur Android 11 et
+  suivants ;
+- l'autorisation n'est relue qu'**au retour** de l'application
+  (`TechnicianTrackingController.resume`, appelé par `didChangeAppLifecycleState`),
+  par `PermissionsService.checkLocation`, qui n'ouvre aucune fenêtre. Sans ce
+  passage, le technicien qui vient d'accorder « tout le temps » revient devant le
+  même message et le suivi n'a jamais démarré.
+
+Un test qui simule la localisation doit donc utiliser `LocationPermission.always`
+pour vérifier le suivi (`installFakeGeolocator()`), et `whileInUse` pour vérifier
+cette étape-là. `whileInUse` n'est plus un raccourci pour « localisation
+autorisée » : c'est précisément le cas que le suivi ne peut pas servir.
 
 La carte (`core/widgets/trip_map_card.dart`) est **partagée par les deux
 espaces** : le technicien et le client voient le même trajet, avec le point A
@@ -391,12 +424,36 @@ flutter run --dart-define=API_BASE_URL=http://10.0.2.2:3000/api
 ```
 
 `10.0.2.2` est l'alias de la machine hôte depuis l'émulateur Android. Depuis un
-téléphone physique, utiliser l'IP LAN du serveur. Les URLs relatives renvoyées
-par l'API (pièces jointes) sont préfixées par `AppConfig.apiBaseUrl`.
+téléphone physique, utiliser l'IP LAN du serveur.
+
+Les URLs relatives renvoyées par l'API (pièces jointes) sont préfixées par
+`AppConfig.absoluteUrl`, qui utilise `AppConfig.origin` — **l'origine du site,
+pas l'adresse de l'API**. `apiBaseUrl` se termine déjà par `/api`, et une photo
+servie par `/api/files/x` ne se lit pas à `…/api/api/files/x`. La fonction
+existe précisément parce que cette erreur était écrite à la main à trois
+endroits : elle donnait une adresse qui ne pointait nulle part, et aucune photo
+ne s'affichait, ni pour le client, ni pour le technicien, ni dans la file des
+propositions. **Ne plus reconstruire d'adresse de fichier localement.**
 
 Le backend est l'application Next.js à la **racine du dépôt** (`..`),
 qui sert `/api/...`. L'application vit donc dans un sous-dossier du
 monodépôt : ses chemins relatifs ne remontent que d'un niveau.
+
+### Pièces jointes
+
+Les photos d'une panne sont **en base**, rendues par `GET /api/files/:id`, et
+`File.url` vaut `/api/files/<id>`. Rien n'est écrit dans le système de fichiers
+de l'application : sur un hébergeur à instances éphémères, le disque est en
+lecture seule, l'envoi échoue, et la demande part sans sa photo sans qu'aucun
+écran ne le dise. C'était exactement ce qui arrivait — le client, le technicien
+et la régie ne voyaient rien, et rien dans l'application ne laissait croire que
+la photo avait été perdue.
+
+Le type MIME est lu **sur les octets** et non sur le `Content-Type` annoncé par
+le client : c'est le format réel qui décide de ce que le navigateur affichera,
+et une image déclarée `application/octet-stream` n'était ni compressée ni
+affichable. La compression de `lib/images` s'applique donc sur la seule
+reconnaissance de format, et sa sortie (JPEG) est le type annoncé en base.
 
 ## Commandes
 

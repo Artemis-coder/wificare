@@ -55,9 +55,6 @@ class _TechnicianTicketScreenState
 
   /// Les pièces jointes sont stockées en URL relative : c'est le serveur qui
   /// décide de l'hôte, pas l'application.
-  static String absoluteUrl(String url) =>
-      url.startsWith('http') ? url : '${AppConfig.apiBaseUrl}$url';
-
   /// Fait avancer la demande, et suit le déplacement qui va avec.
   ///
   /// Le partage de position est lié à `EN_ROUTE` : il démarre quand la demande
@@ -183,7 +180,7 @@ class _TechnicianTicketScreenState
   static void _openPhoto(BuildContext context, String url) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => _PhotoViewer(url: absoluteUrl(url)),
+        builder: (_) => _PhotoViewer(url: AppConfig.absoluteUrl(url)),
       ),
     );
   }
@@ -618,7 +615,7 @@ data: (ticket) {
                               child: ClipRRect(
                                 borderRadius: BorderRadius.circular(AppRadius.md),
                                 child: CachedNetworkImage(
-                                  imageUrl: absoluteUrl(file.url),
+                                  imageUrl: AppConfig.absoluteUrl(file.url),
                                   width: 88,
                                   height: 88,
                                   fit: BoxFit.cover,

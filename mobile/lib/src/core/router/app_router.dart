@@ -76,10 +76,12 @@ abstract final class TechnicianRoutes {
 
   /// Encaissements du technicien, mois par mois.
   ///
-  /// Page enfant de l'accueil, comme le profil : un portefeuille n'est pas une
-  /// tâche de terrain, et lui donner un onglet de plus chargerait une barre
-  /// déjà encombrée.
-  static const wallet = '/tech/dashboard/wallet';
+  /// Une section, et non une carte de l'accueil. Le portefeuille est l'une des
+  /// quatre choses pour lesquelles un technicien ouvre l'application : ce qu'il
+  /// a encaissé ce mois se consulte, il ne se découvre pas en passant. Et
+  /// l'accueil a un autre métier — dire ce qu'il y a à faire maintenant ; un
+  /// relevé mensuel y prend la place d'une demande à traiter.
+  static const wallet = '/tech/wallet';
 
   /// Demandes que le circuit propose au technicien, en attente qu'il en
   /// prenne une.
@@ -93,7 +95,7 @@ abstract final class TechnicianRoutes {
   /// file contient cette proposition.
   static const offers = '/tech/dashboard/offers';
 
-  static const List<String> branches = ['dashboard', 'tickets', 'reviews'];
+  static const List<String> branches = ['dashboard', 'tickets', 'wallet', 'reviews'];
 }
 
 /// Clé de navigation typée pour les onglets.
@@ -322,11 +324,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                     builder: (_, _) => const NotificationsScreen(),
                   ),
                   GoRoute(
-                    name: 'tech-wallet',
-                    path: 'wallet',
-                    builder: (_, _) => const TechnicianWalletScreen(),
-                  ),
-                  GoRoute(
                     name: 'tech-offers',
                     path: 'offers',
                     builder: (_, state) => OffersScreen(
@@ -352,6 +349,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                     ),
                   ),
                 ],
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                name: 'tech-wallet',
+                path: TechnicianRoutes.wallet,
+                builder: (_, _) => const TechnicianWalletScreen(),
               ),
             ],
           ),

@@ -4,6 +4,86 @@ Ce qui a changé dans le produit, et pourquoi. Les détails d'implémentation so
 dans l'historique git et le README ; ici, on retient ce qui est utile à savoir
 six mois plus tard.
 
+## 1.6.1 — 5 octobre 2026
+
+Une version de corrections : deux défauts visibles — les photos des pannes, et le
+suivi de position — et le numéro de version qui suit.
+
+### Corrigé
+
+**Les photos jointes à une panne ne s'affichaient nulle part.** Ni chez le client,
+ni chez le technicien qui se déplace pour cela, ni à la régie. Le serveur
+n'écrivait plus ses pièces jointes sur le disque de l'application : il les garde
+en base et les rend par `GET /api/files/:id`. Un hébergeur à instances
+éphémères a un disque en lecture seule, l'envoi échouait, et la demande partait
+**sans sa photo, sans qu'aucun écran ne le dise**. Le technicien arrivait sans
+voir la panne qu'il venait corriger.
+
+Trois défauts se sont alignés sur ce même symptôme, et il a fallu les regarder
+tous les trois :
+
+- l'adresse d'une photo était reconstruite en collant l'URL relative à l'adresse
+  de l'API, qui se termine déjà par `/api`. L'adresse obtenue contenait
+  `/api/api/files/x` et ne pointait nulle part ;
+- le type MIME était lu sur l'en-tête annoncé par le client plutôt que sur les
+  octets. Un téléphone qui annonce `application/octet-stream` pour un JPEG
+  produisait une image ni compressible ni affichable ;
+- le back-office affichait ses pièces jointes par une route d'API qui n'existait
+  pas.
+
+La compression des images ne s'applique plus que sur la reconnaissance réelle du
+format, et la sortie — du JPEG — est le type annoncé en base.
+
+Une pièce jointe est servie **sans jeton**, comme elle l'était dans
+`public/uploads` : son adresse est un UUID, elle ne se devine pas. Exiger une
+authentification obligerait à envoyer un en-tête sur chaque affichage d'image,
+ce qui transforme une image oubliée en image cassée. Si ces photos sont un jour
+jugées sensibles, le passage à des adresses signées se fait à cet seul endroit.
+
+**Le suivi de position s'arrêtait sur une étape que rien n'expliquait.** Android
+demande la localisation **deux fois** : une fois pour l'application, une fois pour
+l'arrière-plan. Un technicien qui accorde la première se voit demander la seconde,
+et Android répond un refus si elle est refusée. L'application écrivait alors
+« Suivi de position indisponible : le client ne verra pas votre arrivée
+estimée » — un message incomprehensible pour quelqu'un qui vient d'autoriser, et
+qui n'avait aucun moyen de rétablir le suivi sans deviner qu'il fallait aller
+dans les réglages du téléphone.
+
+L'application distingue maintenant les deux autorisations. Accordée au premier
+plan seulement, elle **s'arrête avant d'appeler la plateforme** — un point posté
+sans suivi ouvert serait refusé par le serveur —, elle explique ce qu'il manque,
+et propose le bouton qui mène au bon écran des réglages. Accordée en arrière-plan,
+elle relance le suivi **au retour dans l'application** : personne ne relisait
+l'autorisation à ce moment-là, et le service refusait de démarrer indéfiniment
+avec un message demandant d'aller dans les réglages — depuis l'application,
+sans bouton pour y aller.
+
+La transition de statut, elle, n'a jamais dépendu du suivi : le départ reste
+acquis même sans position partagée. L'ETA est un confort, pas une condition pour
+travailler.
+
+### Vérifié
+
+Deux vérifications automatiques, parce que la lecture du code ne suffit pas pour
+deux règles qui sont deux pièges différents :
+
+- `scripts/probe-dispatch.ts` interroge l'API locale de bout en bout et vérifie
+  l'invariant de circulation — **une demande prise ne revient plus à personne**,
+  et une demande rendue dans la file redevient disponible. Il crée un technicien
+  jetable, puis le supprime ;
+- `scripts/dispatch-eligibility.test.ts` vérifie seule la règle qui décide du sort
+  d'une proposition, sans base ni serveur : un refus est définitif, une prise
+  l'est aussi, et tout le reste redevient éligible après cinq secondes.
+
+La seconde vérifie ce que la première ne peut pas voir : une ré-offre faite
+pendant la fenêtre de cinq secondes, entre deux passages de la boucle.
+
+### Version
+
+**L'application est en `1.6.1+8`.** Le `versionCode` passe de `7` à `8` : Android
+refuse d'installer par-dessus un APK dont il n'a pas augmenté, et le numéro
+affiché est lu sur le paquet installé.
+
 ## 1.6.0 — 5 octobre 2026
 
 Les demandes ne sont plus attribuées au technicien « le moins chargé » : elles
@@ -35,9 +115,9 @@ Il ne voit rien de la répartition lui-même : ni les autres demandes, ni qui es
 en ligne, ni qui a refusé. Une offre n'est pas une offre *à lui* — elle n'est
 pas une offre du tout.
 
-#### Technicien (`TECHNICIAN`) — trois onglets, et une carte en tête
+#### Technicien (`TECHNICIAN`) — quatre onglets, et une carte en tête
 
-**Accueil, Demandes, Avis.** Son écran a changé le plus.
+**Accueil, Demandes, Portefeuille, Avis.** Son écran a changé le plus.
 
 Il y a maintenant une **carte de disponibilité en tête d'accueil**, avec une
 bascule. Elle commande tout le reste : hors ligne, le circuit ne lui propose
@@ -82,6 +162,16 @@ demandes en cours, et où en est la circulation. Le suivi d'une demande affiche
 désormais par qui elle circule. La régie reste le seul espace à voir la
 plateforme entière ; ni le client ni le technicien n'y ont accès, et l'API leur
 refuse les mêmes routes qu'auparavant.
+
+### Changé
+
+**Le portefeuille du technicien est une section, plus une carte de l'accueil.**
+L'espace technicien compte quatre onglets — Accueil, Demandes, Portefeuille,
+Avis — au lieu de trois. Le relevé était une carte sur l'accueil, et une carte
+se découvre : elle n'existe pour personne qui ne cherchait pas déjà le chiffre.
+Un technicien qui ouvre l'application « pour voir ce qu'il a encaissé » ne
+trouvait rien qui l'y mène, et un relevé mensuel prenait sur l'accueil la place
+d'une demande à traiter.
 
 ### Corrigé
 

@@ -110,6 +110,46 @@ class PermissionsService {
     }
   }
 
+  /// Lit l'état de l'autorisation de localisation, **sans rien demander**.
+  ///
+  /// Utilisé au retour des réglages du téléphone : l'utilisateur a quitté
+  /// l'application pour basculer « Autoriser tout le temps », et personne ne
+  /// relit l'autorisation à son retour. Le service refusait alors de démarrer
+  /// indéfiniment, avec un message demandant d'aller dans les réglages — depuis
+  /// l'application, sans bouton pour y aller.
+  ///
+  /// Aucune fenêtre n'est ouverte ici, et c'est délibéré : sur Android 11 et
+  /// suivants, une demande d'arrière-plan faite depuis le dialogue ne rouvre
+  /// rien ; seul un choix explicite dans les réglages l'accorde. Redemander
+  /// produirait donc un dialogue vide, ou un nouveau renvoi vers les réglages,
+  /// sans jamais rien accorder.
+  static Future<LocationGrant> checkLocation() async {
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        return const LocationGrant(servicesDisabled: true);
+      }
+
+      final permission = await Geolocator.checkPermission();
+
+      return switch (permission) {
+        LocationPermission.always => const LocationGrant(
+          granted: true,
+          background: true,
+        ),
+        LocationPermission.whileInUse => const LocationGrant(granted: true),
+        LocationPermission.deniedForever => const LocationGrant(
+          deniedForever: true,
+        ),
+        // `denied` ici signifie « pas encore demandé », pas « refusé » : on ne
+        // le distingue pas, et c'est sans conséquence — le prochain appel de
+        // demande rouvrira la fenêtre.
+        _ => const LocationGrant(),
+      };
+    } catch (_) {
+      return const LocationGrant(unavailable: true);
+    }
+  }
+
   /// Ouvre les réglages de l'application.
   ///
   /// Seul recours quand Android a fermé la boîte de dialogue pour de bon. Sans
@@ -156,6 +196,14 @@ class LocationGrant {
   /// technicien croira partager sa position pendant tout le trajet et constatera
   /// que le client ne voit plus rien.
   final bool background;
+
+  /// Le premier plan est accordé, l'arrière-plan non.
+  ///
+  /// C'est le seul cas où l'application peut agir : le choix se fait dans les
+  /// réglages du téléphone, et il faut y conduire le technicien jusqu'à eux —
+  /// puis relire l'autorisation à son retour. Aucun dialogue ne peut régler
+  /// cela depuis l'écran.
+  bool get needsBackgroundSettings => granted && !background;
 
   bool get isGranted => granted;
 

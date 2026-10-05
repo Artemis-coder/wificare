@@ -8,6 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
+    "test": "tsx --test scripts/*.test.ts",
+    "dispatch:probe": "tsx scripts/probe-dispatch.ts",
     "postinstall": "prisma generate",
     "phones:generate": "tsx scripts/generate-phone-countries.ts",
     "phones:check": "tsx scripts/check-phone-countries.ts",
