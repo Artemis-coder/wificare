@@ -8,7 +8,7 @@ import AppShell from './shell/app-shell';
 import { PostHogIdentity } from './posthog-identity';
 
 export const metadata: Metadata = {
-  title: 'WiFi Zone Assist - Dashboard',
+  title: 'WifiCare - Dashboard',
   description: 'Plateforme de gestion pour propriétaires de Wi-Fi Zones',
 };
 
