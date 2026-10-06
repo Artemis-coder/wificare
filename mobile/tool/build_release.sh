@@ -30,7 +30,7 @@ cd "$APP_DIR"
 # android/app/src/main/AndroidManifest.xml (`android:label`) et à la marque
 # affichée par le site.
 APP_NAME="WiFiCare"
-DEFAULT_API_BASE_URL="https://wificare-web.vercel.app/api"
+DEFAULT_API_BASE_URL="https://www.wificare.site/api"
 
 if ! command -v flutter >/dev/null 2>&1; then
   echo "flutter est introuvable dans le PATH." >&2

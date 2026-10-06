@@ -31,7 +31,7 @@ jobs:
     steps:
       - name: Envoyer les campagnes dues
         env:
-          URL: https://wificare-web.vercel.app/api/cron/broadcasts
+          URL: https://www.wificare.site/api/cron/broadcasts
           CRON_SECRET: ${{ secrets.BROADCAST_CRON_SECRET }}
         run: |
           curl --silent --show-error --fail-with-body \
