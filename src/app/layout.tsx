@@ -10,6 +10,9 @@ import { PostHogIdentity } from './posthog-identity';
 export const metadata: Metadata = {
   title: 'WifiCare - Dashboard',
   description: 'Plateforme de gestion pour propriétaires de Wi-Fi Zones',
+  icons: {
+    icon: '/logo-wificare.png',
+  },
 };
 
 export default async function RootLayout({
